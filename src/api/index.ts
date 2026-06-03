@@ -14,6 +14,7 @@ import { auditMiddleware } from './middleware/audit';
 import { calculateRoutes } from './routes/calculate';
 import { daysRoutes } from './routes/days';
 import { residencyRoutes } from './routes/residency';
+import { formsRoutes } from './routes/forms';
 import adminRoutes from './routes/admin';
 
 export interface Bindings {
@@ -99,6 +100,7 @@ app.use('/api/admin/*', auditMiddleware());
 app.route('/api/calculate', calculateRoutes);
 app.route('/api/days', daysRoutes);
 app.route('/api/residency', residencyRoutes);
+app.route('/api/forms', formsRoutes);
 app.route('/api/admin', adminRoutes);
 
 // ── 404 fallback ────────────────────────────────────────────────────────────
