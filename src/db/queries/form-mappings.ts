@@ -11,9 +11,9 @@
  *   db.select().from(formFieldMappings).where(withActiveFilter(eq(...)))
  */
 
-import { isNull, and, type SQL } from 'drizzle-orm';
+import { isNull, and, desc, eq, type SQL } from 'drizzle-orm';
 import type { createDb } from '../index';
-import { formFieldMappings } from '../schema';
+import { formFieldMappings, formMappingVersions } from '../schema';
 
 type Db = ReturnType<typeof createDb>;
 
@@ -45,4 +45,53 @@ export function activeFormMappingsSelect(
 export function withActiveFilter(extra: SQL): SQL {
   // biome-ignore lint/style/noNonNullAssertion: and() with two args always returns SQL, not undefined
   return and(isNull(formFieldMappings.deletedAt), extra)!;
+}
+
+// ─── W4 T0.5 — mapping version lookup ──────────────────────────────────────
+
+/**
+ * Shape returned by `currentMappingVersion()`.
+ * Mirrors the columns we actually need downstream (cache seed + audit).
+ */
+export interface CurrentMappingVersion {
+  version: number;
+  contentHash: string;
+  createdAt: number; // unix ms
+}
+
+/**
+ * Return the latest version row for a given (country, formType, taxYear)
+ * tuple, or `null` if the form has never been ingested.
+ *
+ * Used by the W4 cache layer: the returned `contentHash` is the cache-key
+ * seed for ETag headers and Workers Cache lookups, so the cache invalidates
+ * automatically when ingest writes a new version.
+ *
+ * NOTE: this query does NOT filter out anything — every row in
+ * `form_mapping_versions` is meaningful. Soft-delete on `form_field_mappings`
+ * is a separate concern.
+ */
+export async function currentMappingVersion(
+  db: Db,
+  country: string,
+  formType: string,
+  taxYear: number,
+): Promise<CurrentMappingVersion | null> {
+  const rows = await db
+    .select({
+      version: formMappingVersions.version,
+      contentHash: formMappingVersions.contentHash,
+      createdAt: formMappingVersions.createdAt,
+    })
+    .from(formMappingVersions)
+    .where(
+      and(
+        eq(formMappingVersions.country, country),
+        eq(formMappingVersions.formType, formType),
+        eq(formMappingVersions.taxYear, taxYear),
+      ),
+    )
+    .orderBy(desc(formMappingVersions.version))
+    .limit(1);
+  return rows[0] ?? null;
 }

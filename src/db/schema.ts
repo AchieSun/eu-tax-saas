@@ -263,6 +263,43 @@ export const taxFilings = sqliteTable(
   }),
 );
 
+// W4 T0.5 — mapping version ledger.
+// Every ingest run that produces a *new* content hash gets a new row here, so
+// `(country, form_type, tax_year, version)` is a monotonic sequence per form.
+// The latest row's `content_hash` seeds the cache-key for ETag headers and
+// Workers Cache lookups, giving us automatic invalidation when a mapping
+// changes.
+export const formMappingVersions = sqliteTable(
+  'form_mapping_versions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    country: text('country').notNull(),
+    formType: text('form_type').notNull(),
+    taxYear: integer('tax_year').notNull(),
+    // Monotonic per (country, form_type, tax_year). Starts at 1.
+    version: integer('version').notNull(),
+    // Hex sha256 of canonical (key-sorted) JSON of the parsed FormMapping.
+    contentHash: text('content_hash').notNull(),
+    // Unix ms — set by ingest, not by DB default, so tests can pin it.
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    uniqueVersion: uniqueIndex('idx_fmv_unique').on(
+      t.country,
+      t.formType,
+      t.taxYear,
+      t.version,
+    ),
+    // Lookup pattern: latest version for a given (country, year, form_type).
+    lookup: index('idx_fmv_lookup').on(
+      t.country,
+      t.taxYear,
+      t.formType,
+      t.version,
+    ),
+  }),
+);
+
 export const formFieldMappings = sqliteTable(
   'form_field_mappings',
   {
@@ -286,6 +323,9 @@ export const formFieldMappings = sqliteTable(
     yCoord: real('y_coord'), // PDF page y coordinate
     fontSize: real('font_size'), // null = use mapping default (e.g. 10pt)
     fieldKind: text('field_kind').notNull().default('acroform'), // 'acroform' | 'coordinate'
+    // W4 T0.5: which mapping version produced this row.
+    // NULL for rows ingested before T0.5 (backward-compat).
+    versionId: integer('version_id').references(() => formMappingVersions.id),
   },
   (t) => ({
     uniqueField: uniqueIndex('idx_form_field_unique').on(
@@ -333,3 +373,5 @@ export type ResidencyAssessment = typeof residencyAssessments.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;
 export type NewAuditLog = typeof auditLog.$inferInsert;
 export type FormFieldMapping = typeof formFieldMappings.$inferSelect;
+export type FormMappingVersion = typeof formMappingVersions.$inferSelect;
+export type NewFormMappingVersion = typeof formMappingVersions.$inferInsert;

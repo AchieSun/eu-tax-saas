@@ -31,6 +31,7 @@ import { join, resolve, dirname } from 'node:path';
 import { argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseFormMapping } from '../src/forms/load';
+import { canonicalJSONHash } from '../src/forms/hash';
 import type { FormMapping } from '../src/forms/types';
 
 // ─── SQL value helpers ──────────────────────────────────────────────────────
@@ -163,6 +164,127 @@ export function generateIngestSql(mappings: FormMapping[]): string {
   return [...header, ...body, ...footer].join('\n');
 }
 
+// ─── W4 T0.5 — version row + version_id back-fill (pure SQL emitters) ──────
+
+/**
+ * Emit the SQL that, executed against D1, conditionally inserts a new row
+ * into `form_mapping_versions` for `mapping` with `contentHash`.
+ *
+ * Semantics enforced in SQL (no DB roundtrip needed at emit time):
+ *   - `version` = (current MAX(version) for the (country, form_type, tax_year)
+ *     tuple) + 1, falling back to 1 when no prior row exists.
+ *   - If the LATEST existing row for this tuple already has `content_hash`
+ *     equal to `contentHash`, **no row is inserted** (idempotent re-ingest).
+ *   - `created_at` is taken from `nowMs` (caller passes Date.now() — kept
+ *     injectable so tests get deterministic output).
+ *
+ * Returns one SQL statement; the new row's id can be retrieved by
+ * `(SELECT id FROM form_mapping_versions WHERE country=… ORDER BY version DESC LIMIT 1)`
+ * — which is exactly what `emitVersionIdUpdate()` uses to back-fill the
+ * `version_id` column on the field rows.
+ */
+export function emitVersionInsert(
+  mapping: FormMapping,
+  contentHash: string,
+  nowMs: number,
+): string {
+  if (!/^[0-9a-f]{64}$/.test(contentHash)) {
+    throw new Error(
+      `emitVersionInsert: contentHash must be a 64-char hex SHA-256 digest, got '${contentHash.slice(0, 32)}…'`,
+    );
+  }
+  if (!Number.isInteger(nowMs) || nowMs < 0) {
+    throw new Error(`emitVersionInsert: nowMs must be a non-negative integer, got ${nowMs}`);
+  }
+  const country = sqlEscape(mapping.country);
+  const formType = sqlEscape(mapping.form);
+  const taxYear = mapping.year;
+  const hash = sqlEscape(contentHash);
+  // SQLite trick: INSERT ... SELECT ... WHERE NOT EXISTS lets us bake the
+  // "skip if latest hash matches" guard into a single statement, so the
+  // emitted script stays connection-free.
+  return (
+    `INSERT INTO form_mapping_versions ` +
+    `(country, form_type, tax_year, version, content_hash, created_at) ` +
+    `SELECT ${country}, ${formType}, ${taxYear}, ` +
+    `COALESCE((SELECT MAX(version) FROM form_mapping_versions ` +
+    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear}), 0) + 1, ` +
+    `${hash}, ${nowMs} ` +
+    `WHERE NOT EXISTS (` +
+    `SELECT 1 FROM form_mapping_versions ` +
+    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
+    `AND content_hash = ${hash} ` +
+    `AND version = (SELECT MAX(version) FROM form_mapping_versions ` +
+    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear})` +
+    `);`
+  );
+}
+
+/**
+ * Emit the SQL that back-fills the `version_id` column on every
+ * `form_field_mappings` row belonging to `mapping`, pointing them at the
+ * currently-latest version for the same (country, form_type, tax_year) tuple.
+ *
+ * Designed to run AFTER `emitVersionInsert()` in the same transaction:
+ *   - If a new version row was just inserted → field rows get the new id.
+ *   - If the version row was skipped (identical content) → field rows get
+ *     the same id they already had → effective no-op.
+ *
+ * We do NOT touch soft-deleted rows (deleted_at IS NOT NULL); their
+ * `version_id` is left as-is to preserve audit history.
+ */
+export function emitVersionIdUpdate(mapping: FormMapping): string {
+  const country = sqlEscape(mapping.country);
+  const formType = sqlEscape(mapping.form);
+  const taxYear = mapping.year;
+  return (
+    `UPDATE form_field_mappings SET version_id = (` +
+    `SELECT id FROM form_mapping_versions ` +
+    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
+    `ORDER BY version DESC LIMIT 1` +
+    `) ` +
+    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
+    `AND deleted_at IS NULL;`
+  );
+}
+
+/**
+ * Version-aware variant of `generateIngestSql`. Wraps the per-mapping
+ * field-INSERTs with:
+ *   1. `emitVersionInsert(mapping, hash, nowMs)` — conditional version row
+ *   2. existing field-row INSERTs (unchanged column list, idempotent)
+ *   3. `emitVersionIdUpdate(mapping)` — back-fill version_id on field rows
+ *
+ * The result is one BEGIN/COMMIT transaction. Hashes are computed with
+ * `canonicalJSONHash()` so they are stable across key-order permutations.
+ */
+export async function generateIngestSqlWithVersions(
+  mappings: FormMapping[],
+  nowMs: number,
+): Promise<string> {
+  const fieldTotal = mappings.reduce((s, m) => s + m.fields.length, 0);
+  const header = [
+    '-- Auto-generated by app/scripts/ingest-form-mappings.ts (W4 T0.5 version-aware)',
+    `-- ${mappings.length} mapping(s), ${fieldTotal} field(s) total`,
+    '-- Idempotent: safe to re-run. New version row inserted only when content hash changes.',
+    '-- Unique key: (country, form_type, tax_year, field_name) — see schema.ts idx_form_field_unique.',
+    '',
+    'BEGIN TRANSACTION;',
+    '',
+  ];
+  const body: string[] = [];
+  for (const m of mappings) {
+    const hash = await canonicalJSONHash(m);
+    body.push(`-- ${m.country} ${m.year} ${m.form} (${m.fields.length} field(s)) hash=${hash}`);
+    body.push(emitVersionInsert(m, hash, nowMs));
+    body.push(...mappingToSql(m));
+    body.push(emitVersionIdUpdate(m));
+    body.push('');
+  }
+  const footer = ['COMMIT;', ''];
+  return [...header, ...body, ...footer].join('\n');
+}
+
 // ─── Filesystem loader (Node, no Vite) ──────────────────────────────────────
 
 /**
@@ -242,7 +364,9 @@ export function parseCliArgs(args: string[], scriptDir: string): CliOptions {
 export async function main(args: string[], scriptDir: string): Promise<void> {
   const opts = parseCliArgs(args, scriptDir);
   const mappings = await loadProductionMappings(opts.formsRoot);
-  const sql = generateIngestSql(mappings);
+  // W4 T0.5: version-aware emission. `Date.now()` is captured once per run
+  // so every version row from the same ingest shares the same `created_at`.
+  const sql = await generateIngestSqlWithVersions(mappings, Date.now());
   if (opts.outPath) {
     await writeFile(opts.outPath, sql);
     // Status goes to stderr so stdout stays pure SQL when piped.

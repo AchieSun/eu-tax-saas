@@ -13,11 +13,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateIngestSql,
+  generateIngestSqlWithVersions,
+  emitVersionInsert,
+  emitVersionIdUpdate,
   mappingToSql,
   sqlEscape,
   sqlValue,
   parseCliArgs,
 } from './ingest-form-mappings';
+import { canonicalJSONHash } from '../src/forms/hash';
 import type { FormMapping } from '../src/forms/types';
 
 // ─── Fixture ────────────────────────────────────────────────────────────────
@@ -233,5 +237,157 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--out', '--something'], '/scripts')).toThrow(
       /Missing value/,
     );
+  });
+});
+
+// ─── W4 T0.5 — mapping versions ─────────────────────────────────────────────
+
+describe('generateIngestSqlWithVersions — version row + version_id back-fill', () => {
+  // Fixed clock so the generated SQL is byte-deterministic across calls.
+  const FIXED_NOW = 1_780_000_000_000;
+
+  it('fresh ingest emits a version-insert + field INSERTs + version_id back-fill UPDATE', async () => {
+    const sql = await generateIngestSqlWithVersions([fixtureMapping], FIXED_NOW);
+    const hash = await canonicalJSONHash(fixtureMapping);
+
+    // 1. Version-insert statement is present, scoped to (DE, test-form, 2024)
+    //    and carries the canonical content_hash + created_at = FIXED_NOW.
+    expect(sql).toContain('INSERT INTO form_mapping_versions');
+    expect(sql).toContain(`'${hash}'`);
+    expect(sql).toContain(String(FIXED_NOW));
+    expect(sql).toContain("country = 'DE'");
+    expect(sql).toContain("form_type = 'test-form'");
+    expect(sql).toContain('tax_year = 2024');
+    // 2. Idempotency guard baked in (WHERE NOT EXISTS w/ latest-hash check).
+    expect(sql).toContain('WHERE NOT EXISTS');
+    expect(sql).toContain('MAX(version)');
+    // 3. Field-row INSERTs still emitted (one per field) and column shape
+    //    is UNCHANGED — version_id is set by the trailing UPDATE.
+    const fieldInserts = sql.match(/INSERT INTO form_field_mappings/g) ?? [];
+    expect(fieldInserts.length).toBe(fixtureMapping.fields.length);
+    // 4. UPDATE form_field_mappings ... SET version_id = (SELECT id ...) is
+    //    emitted after the field INSERTs.
+    expect(sql).toMatch(
+      /UPDATE form_field_mappings SET version_id = \(SELECT id FROM form_mapping_versions/,
+    );
+    // 5. The back-fill targets the same (country, form_type, tax_year) tuple
+    //    and skips soft-deleted rows.
+    expect(sql).toContain('deleted_at IS NULL');
+    // 6. Transaction wrapping preserved.
+    expect(sql.match(/BEGIN TRANSACTION;/g)?.length).toBe(1);
+    expect(sql.match(/^COMMIT;$/gm)?.length).toBe(1);
+  });
+
+  it('re-ingesting IDENTICAL content produces byte-identical SQL with the same hash and the NOT-EXISTS guard preventing duplicate rows', async () => {
+    // Same input + same clock → byte-identical output. The NOT EXISTS guard
+    // in `emitVersionInsert` is what prevents a second version row from being
+    // written when this SQL is executed against an already-populated D1.
+    const sqlA = await generateIngestSqlWithVersions([fixtureMapping], FIXED_NOW);
+    const sqlB = await generateIngestSqlWithVersions([fixtureMapping], FIXED_NOW);
+    expect(sqlA).toBe(sqlB);
+
+    // Sanity: re-ordering object keys at the YAML→object boundary must not
+    // change the emitted hash (covered exhaustively in hash.test.ts; we
+    // re-check end-to-end here that ingest plumbing preserves that).
+    const reorderedFixture: FormMapping = {
+      fields: fixtureMapping.fields,
+      form: fixtureMapping.form,
+      formTitle: fixtureMapping.formTitle,
+      sourceUrl: fixtureMapping.sourceUrl,
+      sourceVersion: fixtureMapping.sourceVersion,
+      year: fixtureMapping.year,
+      country: fixtureMapping.country,
+    };
+    const sqlReordered = await generateIngestSqlWithVersions(
+      [reorderedFixture],
+      FIXED_NOW,
+    );
+    const hash = await canonicalJSONHash(fixtureMapping);
+    expect(sqlReordered).toContain(`'${hash}'`);
+    expect(sqlA).toContain(`'${hash}'`);
+
+    // The NOT-EXISTS guard literally references the same hash, so when the
+    // latest stored row's content_hash matches, the INSERT ... SELECT yields
+    // zero rows and no version row is appended.
+    expect(sqlA).toMatch(
+      /WHERE NOT EXISTS \(SELECT 1 FROM form_mapping_versions WHERE [^)]+content_hash = '[0-9a-f]{64}'/,
+    );
+  });
+
+  it('re-ingesting CHANGED content emits a different hash; back-fill UPDATE then re-points field rows at the new version', async () => {
+    const mutated: FormMapping = {
+      ...fixtureMapping,
+      fields: [
+        {
+          ...fixtureMapping.fields[0],
+          // Flip a leaf value — must change the canonical hash.
+          citation: 'BMF Mantelbogen 2024 page 1 — REVISED',
+        } as FormMapping['fields'][number],
+        fixtureMapping.fields[1],
+      ],
+    };
+
+    const hashOriginal = await canonicalJSONHash(fixtureMapping);
+    const hashMutated = await canonicalJSONHash(mutated);
+    expect(hashOriginal).not.toBe(hashMutated);
+
+    const sqlOriginal = await generateIngestSqlWithVersions(
+      [fixtureMapping],
+      FIXED_NOW,
+    );
+    const sqlMutated = await generateIngestSqlWithVersions([mutated], FIXED_NOW);
+
+    // The new SQL carries the new hash, not the old one.
+    expect(sqlMutated).toContain(`'${hashMutated}'`);
+    expect(sqlMutated).not.toContain(`'${hashOriginal}'`);
+
+    // Both runs emit the same back-fill UPDATE (it points at "latest
+    // version" via subquery, so the same DDL works for v1 and v2 alike).
+    const backfillRe =
+      /UPDATE form_field_mappings SET version_id = \(SELECT id FROM form_mapping_versions WHERE country = 'DE' AND form_type = 'test-form' AND tax_year = 2024 ORDER BY version DESC LIMIT 1\)/;
+    expect(sqlOriginal).toMatch(backfillRe);
+    expect(sqlMutated).toMatch(backfillRe);
+
+    // emitVersionInsert directly: changed input → different statement bytes.
+    const stmtOriginal = emitVersionInsert(
+      fixtureMapping,
+      hashOriginal,
+      FIXED_NOW,
+    );
+    const stmtMutated = emitVersionInsert(mutated, hashMutated, FIXED_NOW);
+    expect(stmtOriginal).not.toBe(stmtMutated);
+  });
+
+  it('emitVersionInsert validates inputs and yields deterministic, escape-safe SQL', async () => {
+    const hash = await canonicalJSONHash(fixtureMapping);
+
+    // Determinism: same inputs → byte-identical statement.
+    const a = emitVersionInsert(fixtureMapping, hash, FIXED_NOW);
+    const b = emitVersionInsert(fixtureMapping, hash, FIXED_NOW);
+    expect(a).toBe(b);
+
+    // Hash is a 64-char hex SHA-256 digest — anything else must be rejected
+    // (catches us if a caller ever passes a truncated / base64 / labelled
+    // hash by mistake).
+    expect(() => emitVersionInsert(fixtureMapping, 'not-a-hash', FIXED_NOW)).toThrow(
+      /64-char hex/,
+    );
+    expect(() =>
+      emitVersionInsert(fixtureMapping, hash.toUpperCase(), FIXED_NOW),
+    ).toThrow(/64-char hex/);
+
+    // nowMs must be a non-negative integer.
+    expect(() => emitVersionInsert(fixtureMapping, hash, -1)).toThrow(/non-negative/);
+    expect(() => emitVersionInsert(fixtureMapping, hash, 1.5)).toThrow(/non-negative/);
+
+    // emitVersionIdUpdate is a single UPDATE statement scoped by the tuple
+    // and the soft-delete filter.
+    const upd = emitVersionIdUpdate(fixtureMapping);
+    expect(upd.startsWith('UPDATE form_field_mappings SET version_id = ')).toBe(true);
+    expect(upd).toContain("country = 'DE'");
+    expect(upd).toContain("form_type = 'test-form'");
+    expect(upd).toContain('tax_year = 2024');
+    expect(upd).toContain('deleted_at IS NULL');
+    expect(upd.trim().endsWith(';')).toBe(true);
   });
 });
