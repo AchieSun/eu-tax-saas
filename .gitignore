@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.solid/
+.vinxi/
+.output/
+
+# Cloudflare
+.wrangler/
+.dev.vars
+wrangler.toml.local
+
+# Drizzle
+drizzle/migrations/meta/
+
+# Test
+coverage/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Husky
+.husky/_

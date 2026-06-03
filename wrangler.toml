@@ -1,0 +1,76 @@
+name = "eu-tax-saas"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 - Primary database (SQLite at the edge)
+[[d1_databases]]
+binding = "DB"
+database_name = "eu-tax-saas-db"
+database_id = "REPLACE_WITH_D1_ID_AFTER_CREATE"
+migrations_dir = "drizzle/migrations"
+
+# KV - Cache and rate limiter storage (Better Auth requires this)
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_ID_AFTER_CREATE"
+
+# R2 - PDF storage (tax form templates + generated PDFs)
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "eu-tax-saas-pdfs"
+
+# Vectorize - RAG index (for future F5 AI Q&A, not used in MVP)
+# [[vectorize]]
+# binding = "VECTORIZE"
+# index_name = "tax-law"
+
+# Workers AI - For toMarkdown PDF parsing and BGE-M3 embeddings (future)
+[ai]
+binding = "AI"
+
+# Queues - Async work (email sending, PDF generation)
+[[queues.producers]]
+binding = "QUEUE"
+queue = "eu-tax-saas-jobs"
+
+[[queues.consumers]]
+queue = "eu-tax-saas-jobs"
+max_batch_size = 10
+max_batch_timeout = 30
+
+# Vars (non-secret config)
+[vars]
+ENVIRONMENT = "development"
+APP_URL = "http://localhost:8787"
+
+# Observability
+[observability]
+enabled = true
+
+# Limits
+[limits]
+cpu_ms = 50
+
+# === Staging environment ===
+[env.staging]
+name = "eu-tax-saas-staging"
+[env.staging.vars]
+ENVIRONMENT = "staging"
+APP_URL = "https://staging.eu-tax-saas.com"
+
+# === Production environment ===
+[env.production]
+name = "eu-tax-saas-prod"
+[env.production.vars]
+ENVIRONMENT = "production"
+APP_URL = "https://eu-tax-saas.com"
+
+# Secrets (set via `wrangler secret put`):
+# - BETTER_AUTH_SECRET (32+ char random string)
+# - PADDLE_API_KEY
+# - PADDLE_WEBHOOK_SECRET
+# - CREEM_API_KEY
+# - DEEPSEEK_API_KEY (via AI Gateway)
+# - AI_GATEWAY_ACCOUNT_ID
+# - AI_GATEWAY_NAME
