@@ -18,7 +18,15 @@
  * block scoped via filing-* classnames. No external CSS-in-JS library.
  */
 
-import { type Component, For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  type Component,
+  For,
+  Show,
+  createMemo,
+  createResource,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { blobToObjectUrl, downloadBlob, fetchFormMetadata, renderForm } from './filing/api';
 import {
   type FieldMeta,
@@ -137,6 +145,22 @@ const FilingDraftView: Component = () => {
 
   const [previewUrl, setPreviewUrl] = createSignal<string | null>(null);
 
+  // ── Oracle P0-1 (W4 review): admin gate ───────────────────────────────
+  // The DRAFT watermark toggle is admin-only. We fetch /api/me once on
+  // mount and default to non-admin on 401 / network error / parse failure
+  // so the toggle stays hidden for anon + non-admin users.
+  const [me] = createResource(async () => {
+    try {
+      const res = await fetch('/api/me', { credentials: 'include' });
+      if (!res.ok) return { role: 'user' as const };
+      const body = (await res.json()) as { userId?: string; role?: string };
+      return { role: body.role === 'admin' ? ('admin' as const) : ('user' as const) };
+    } catch {
+      return { role: 'user' as const };
+    }
+  });
+  const isAdmin = createMemo(() => me()?.role === 'admin');
+
   // ── Picker helpers ───────────────────────────────────────────────────────
   // Distinct value sets driven entirely by SUPPORTED_FORMS so adding a new
   // entry surfaces in the dropdowns automatically.
@@ -204,8 +228,11 @@ const FilingDraftView: Component = () => {
     setRenderLoading(true);
     setRenderError(null);
     try {
+      // Oracle P0-1 (W4 review): only admins may opt out of the watermark.
+      // For non-admins we always omit the field so the server defaults ON.
+      const wantWatermarkOff = isAdmin() && !includeWatermark();
       const result = await renderForm(picker(), formData(), {
-        watermark: includeWatermark() ? undefined : false,
+        watermark: wantWatermarkOff ? false : undefined,
       });
       // Revoke any previous preview URL before swapping in the new one to
       // avoid leaking blob: handles across regenerations.
@@ -413,14 +440,26 @@ const FilingDraftView: Component = () => {
 
             {/* Action row ─────────────────────────────────────────── */}
             <div class="filing-action-row">
-              <label class="filing-watermark-toggle">
-                <input
-                  type="checkbox"
-                  checked={includeWatermark()}
-                  onChange={(e) => setIncludeWatermark(e.currentTarget.checked)}
-                />
-                Include DRAFT watermark
-              </label>
+              {/* Oracle P0-1 (W4 review): admin-only watermark toggle.
+                  Non-admins see a static help line instead so they know
+                  the feature exists but is gated. */}
+              <Show
+                when={isAdmin()}
+                fallback={
+                  <span class="filing-watermark-disabled">
+                    Drafts are always watermarked (admin-only feature).
+                  </span>
+                }
+              >
+                <label class="filing-watermark-toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeWatermark()}
+                    onChange={(e) => setIncludeWatermark(e.currentTarget.checked)}
+                  />
+                  Include DRAFT watermark
+                </label>
+              </Show>
               <button
                 type="button"
                 class="filing-btn-primary"
@@ -587,6 +626,11 @@ const filingStyles = `
 }
 .filing-watermark-toggle input {
   accent-color: #2563eb;
+}
+.filing-watermark-disabled {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-style: italic;
 }
 .filing-btn-primary {
   font-family: inherit;

@@ -57,6 +57,25 @@ export interface FillFormInput {
    *   - `WatermarkOptions`    → ON with overrides (custom text, opacity, etc.).
    */
   watermark?: false | WatermarkOptions;
+  /**
+   * Oracle P0-4 (W4 review) — embed mapping + render provenance into the
+   * PDF's built-in metadata slots (Producer / Creator / Subject / Keywords
+   * / CreationDate / ModDate) so the artifact is self-describing after it
+   * leaves the worker. All fields optional; omit to leave pdf-lib defaults
+   * untouched (callers that don't care — e.g. unit tests — needn't pay
+   * for the extra dictionary writes).
+   */
+  metadata?: {
+    mappingVersion: number;
+    mappingHash: string;
+    country: string;
+    taxYear: number;
+    formType: string;
+    /** ISO-8601 string. Defaults to `new Date().toISOString()` if omitted. */
+    renderedAt?: string;
+    /** Short SHA-256 prefix of the user id (or 'anonymous' / omitted). */
+    userIdHash?: string;
+  };
 }
 
 export interface FillFormResult {
@@ -141,6 +160,35 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
   if (input.watermark !== false) {
     const overrides = typeof input.watermark === 'object' ? input.watermark : {};
     await applyWatermark(doc, { font: helvetica, ...overrides });
+  }
+
+  // Oracle P0-4 (W4 review): if the caller supplied provenance metadata,
+  // write it into the PDF's built-in metadata slots so the artifact is
+  // self-describing after it leaves the worker. We deliberately keep this
+  // OUT of the render hot-path's exception surface — pdf-lib's setters
+  // throw only on invalid types, not on user data, so wrapping is overkill.
+  if (input.metadata) {
+    const m = input.metadata;
+    const renderedAt = m.renderedAt ?? new Date().toISOString();
+    const shortHash = m.mappingHash.slice(0, 16);
+    doc.setProducer(
+      `eu-tax-saas/${m.country}/${m.taxYear}/${m.formType} mapping v${m.mappingVersion} ${shortHash}`,
+    );
+    doc.setCreator('eu-tax-saas render core T3.1a');
+    doc.setSubject(`${m.country} ${m.taxYear} ${m.formType} draft`);
+    const keywords = [
+      `country:${m.country}`,
+      `year:${m.taxYear}`,
+      `form:${m.formType}`,
+      `mapping-version:${m.mappingVersion}`,
+      `mapping-hash:${m.mappingHash}`,
+      `rendered-at:${renderedAt}`,
+    ];
+    if (m.userIdHash) keywords.push(`user-id-hash:${m.userIdHash}`);
+    doc.setKeywords(keywords);
+    const now = new Date();
+    doc.setCreationDate(now);
+    doc.setModificationDate(now);
   }
 
   // Deliberately NOT calling form.flatten(): users may re-edit the output.

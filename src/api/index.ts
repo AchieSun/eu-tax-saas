@@ -3,19 +3,36 @@
  * Wires Better Auth (per-request) + F1 calculator routes.
  *
  * Compatible with both raw Workers and SolidStart server middleware.
+ *
+ * Oracle P0-3 (W4 review): the CORS layer used to echo `Origin` back
+ * verbatim with `credentials: true`, meaning any attacker site could ride
+ * the user's session cookie into POST /render. The new gate computes an
+ * allowlist per request from `c.env.APP_URL` (+ localhost in development),
+ * so unknown origins receive NO `Access-Control-Allow-Origin` header at
+ * all — the browser then refuses the cross-origin response.
  */
 
+import type {
+  Ai,
+  D1Database,
+  IncomingRequestCfProperties,
+  KVNamespace,
+  Queue,
+  R2Bucket,
+} from '@cloudflare/workers-types';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import type { D1Database, KVNamespace, R2Bucket, Ai, Queue, IncomingRequestCfProperties } from '@cloudflare/workers-types';
-import { createAuth, type Auth } from '../auth/auth';
+import { type Auth, createAuth } from '../auth/auth';
+import { createDb } from '../db';
+import { users } from '../db/schema';
 import { auditMiddleware } from './middleware/audit';
+import adminRoutes from './routes/admin';
 import { calculateRoutes } from './routes/calculate';
 import { daysRoutes } from './routes/days';
-import { residencyRoutes } from './routes/residency';
 import { formsRoutes } from './routes/forms';
-import adminRoutes from './routes/admin';
+import { residencyRoutes } from './routes/residency';
 
 export interface Bindings {
   DB: D1Database;
@@ -43,15 +60,34 @@ export interface Variables {
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('*', logger());
-app.use(
-  '*',
+
+// ── Oracle P0-3 (W4 review): per-request CORS allowlist ─────────────────────
+// Builds the allowed-origin set from `c.env.APP_URL` at request time (Workers
+// resolves env per-request, not at module init). The origin function returns
+// `null` for unknown origins, which tells hono/cors to omit the ACAO header
+// entirely — the browser then refuses the cross-origin response. We never
+// echo `Origin` back verbatim when `credentials: true`.
+function allowOrigin(env: Bindings, origin: string | undefined): string | null {
+  if (!origin) return null;
+  const allowed = new Set<string>();
+  if (env.APP_URL) allowed.add(env.APP_URL);
+  if (env.ENVIRONMENT === 'development') {
+    allowed.add('http://localhost:3000');
+    allowed.add('http://localhost:8787');
+    allowed.add('http://127.0.0.1:3000');
+    allowed.add('http://127.0.0.1:8787');
+  }
+  return allowed.has(origin) ? origin : null;
+}
+
+app.use('*', (c, next) =>
   cors({
-    origin: (origin) => origin,
+    origin: (origin) => allowOrigin(c.env, origin),
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     maxAge: 600,
-  }),
+  })(c, next),
 );
 
 // ── Workaround #4: per-request Better Auth instance ─────────────────────────
@@ -85,6 +121,23 @@ app.get('/api/health', (c) =>
     version: '0.1.0',
   }),
 );
+
+// ── Oracle P0-1 (W4 review): GET /api/me ──────────────────────────────────
+// Tiny endpoint the FilingDraftView mounts on load so the UI can hide the
+// "Include DRAFT watermark" toggle from non-admins. Authed users get
+// `{ userId, role }`; anon gets 401. Deliberately NOT mounted under audit
+// middleware — it's a session-echo, not a state-changing operation.
+app.get('/api/me', async (c) => {
+  const session = c.get('session');
+  if (!session?.user?.id) return c.json({ error: 'unauthorized' }, 401);
+  const db = createDb(c.env.DB);
+  const [row] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  return c.json({ userId: session.user.id, role: row?.role ?? 'user' });
+});
 
 // ── Hash-only audit logging (Oracle P1#9) — mounts AFTER auth middleware ────
 app.use('/api/calculate', auditMiddleware());

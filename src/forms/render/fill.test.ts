@@ -702,3 +702,116 @@ describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
     expect(pdf.getPageCount()).toBe(1);
   });
 });
+
+// ── Oracle P0-4 (W4 review): PDF metadata provenance ──────────────────
+describe('fillForm — PDF metadata embedding (Oracle P0-4)', () => {
+  it('leaves metadata slots untouched when no metadata option is supplied', async () => {
+    const before = await PDFDocument.load(mantelPdf);
+    const beforeProducer = before.getProducer();
+    const beforeSubject = before.getSubject();
+
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'A',
+            lastName: 'B',
+            taxId: 'C',
+            address: { line1: 'D' },
+            isMarried: true,
+          },
+        },
+      },
+    });
+
+    const after = await PDFDocument.load(result.pdfBytes);
+    // Producer is whatever pdf-lib injects on save; the important thing is
+    // that we did NOT write our custom "eu-tax-saas/..." string.
+    const afterProducer = after.getProducer();
+    expect(afterProducer ?? '').not.toContain('eu-tax-saas/');
+    expect(after.getSubject() ?? '').toBe(beforeSubject ?? '');
+    // Sanity: pdf-lib still sets *some* producer string by default.
+    expect(afterProducer).toBeDefined();
+    void beforeProducer;
+  });
+
+  it('writes Producer/Creator/Subject/Keywords when metadata is provided', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'A',
+            lastName: 'B',
+            taxId: 'C',
+            address: { line1: 'D' },
+            isMarried: true,
+          },
+        },
+      },
+      metadata: {
+        mappingVersion: 7,
+        mappingHash: 'deadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00d',
+        country: 'DE',
+        taxYear: 2024,
+        formType: 'mantelbogen',
+        renderedAt: '2026-06-03T12:00:00.000Z',
+        userIdHash: '0123456789abcdef',
+      },
+    });
+
+    // updateMetadata:false so PDFDocument.load() doesn't clobber our Producer
+    // with pdf-lib's default string before we can read it back.
+    const pdf = await PDFDocument.load(result.pdfBytes, { updateMetadata: false });
+    const producer = pdf.getProducer() ?? '';
+    expect(producer).toContain('eu-tax-saas/DE/2024/mantelbogen');
+    expect(producer).toContain('mapping v7');
+    expect(producer).toContain('deadbeefcafef00d'); // short hash prefix
+    expect(pdf.getCreator()).toBe('eu-tax-saas render core T3.1a');
+    expect(pdf.getSubject()).toBe('DE 2024 mantelbogen draft');
+
+    const keywords = pdf.getKeywords() ?? '';
+    expect(keywords).toContain('country:DE');
+    expect(keywords).toContain('year:2024');
+    expect(keywords).toContain('form:mantelbogen');
+    expect(keywords).toContain('mapping-version:7');
+    expect(keywords).toContain(
+      'mapping-hash:deadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00d',
+    );
+    expect(keywords).toContain('rendered-at:2026-06-03T12:00:00.000Z');
+    expect(keywords).toContain('user-id-hash:0123456789abcdef');
+  });
+
+  it('omits user-id-hash keyword when userIdHash is not provided', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'A',
+            lastName: 'B',
+            taxId: 'C',
+            address: { line1: 'D' },
+            isMarried: false,
+          },
+        },
+      },
+      metadata: {
+        mappingVersion: 1,
+        mappingHash: 'aaaabbbbccccdddd1111222233334444aaaabbbbccccdddd1111222233334444',
+        country: 'ES',
+        taxYear: 2024,
+        formType: 'modelo_100',
+      },
+    });
+    const pdf = await PDFDocument.load(result.pdfBytes, { updateMetadata: false });
+    const keywords = pdf.getKeywords() ?? '';
+    expect(keywords).not.toContain('user-id-hash:');
+    // renderedAt defaults to "now"-shaped ISO string when omitted.
+    expect(keywords).toMatch(/rendered-at:\d{4}-\d{2}-\d{2}T/);
+  });
+});

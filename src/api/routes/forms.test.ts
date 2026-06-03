@@ -64,11 +64,14 @@ let mockFields: FieldRow[] = [];
 function resetMocks() {
   mockVersion = null;
   mockFields = [];
+  resetDbMocks();
 }
 
-// Mock the two helpers the route imports from db/queries/form-mappings:
+// Mock the helpers the route imports from db/queries/form-mappings:
 //   - `currentMappingVersion(db, country, form, year)` → version row or null
-//   - `withActiveFilter(extra)` → opaque SQL composite (we just pass-through)
+//   - `eqAllActive(predicates)` → opaque SQL composite (we just pass-through;
+//     the in-memory mock fakes the `deletedAt IS NULL` narrowing itself)
+//   - `withActiveFilter(extra)` → kept for tests that still reach for it
 // And mock `createDb` so `db.select().from(formFieldMappings).where(...)`
 // resolves to our in-memory `mockFields` (already filtered for deletedAt).
 vi.mock('../../db/queries/form-mappings', () => ({
@@ -85,21 +88,78 @@ vi.mock('../../db/queries/form-mappings', () => ({
       return mockVersion;
     },
   ),
-  // Pass-through: the real impl returns SQL; the route just hands it to
+  // Pass-throughs: the real impls return SQL; the route just hands it to
   // .where() which our mock ignores.
+  eqAllActive: vi.fn((preds: unknown) => preds),
   withActiveFilter: vi.fn((extra: unknown) => extra),
 }));
 
+// Drizzle chain mock — supports:
+//   - db.select().from(table).where(cond) → Promise<rows[]>
+//   - db.select(cols).from(users).where(cond).limit(N) → Promise<rows[]>
+//     (used by requireAdminIfWatermarkOff() for role lookup)
+//   - db.insert(auditLog).values(row) → Promise<void>
+//     (used by the watermark-off audit row write)
+let mockUserRoles: Map<string, 'admin' | 'user'> = new Map();
+const insertedAuditRows: Array<Record<string, unknown>> = [];
+
+function resetDbMocks() {
+  mockUserRoles = new Map();
+  insertedAuditRows.length = 0;
+}
+
 vi.mock('../../db', () => {
-  // Drizzle chain: db.select().from(table).where(cond) → Promise<rows[]>
-  const where = vi.fn(async (_cond: unknown) => {
-    // Mimic the real `withActiveFilter` semantics: exclude soft-deleted.
-    return mockFields.filter((r) => r.deletedAt === null);
+  // `from(table)` returns an object that resolves to either the field rows
+  // or the users role row depending on which table was passed. We detect
+  // "users" by sniffing the proxy's own internal id; the simplest reliable
+  // approach is checking whether the chain ends with .limit() — only the
+  // users role lookup calls .limit(1) before awaiting.
+  const makeChain = (resolver: () => Promise<unknown>) => {
+    const where = vi.fn(async (_cond: unknown) => resolver());
+    const limit = vi.fn(async (_n: number) => resolver());
+    return {
+      where: vi.fn((_cond: unknown) => ({
+        limit,
+        // Allow direct `await` too (for the field-row path that has no .limit()).
+        // biome-ignore lint/suspicious/noThenProperty: thenable shape is required to mimic drizzle's awaitable query builder
+        then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+          resolver().then(onFulfilled, onRejected),
+      })),
+      // Direct .where invocation that immediately awaits (no .limit())
+      __where: where,
+    };
+  };
+
+  const fromFieldMappings = () => Promise.resolve(mockFields.filter((r) => r.deletedAt === null));
+  // Users-role lookups: pull from mockUserRoles. The session id is keyed by
+  // the value in the WHERE clause — but our mock doesn't unpack SQL, so we
+  // collapse to "first matching role". Tests inject either zero or one row.
+  const fromUsers = () => {
+    const entries = [...mockUserRoles.entries()];
+    if (entries.length === 0) return Promise.resolve([]);
+    const [, role] = entries[0] as [string, string];
+    return Promise.resolve([{ role }]);
+  };
+
+  let nextResolver: () => Promise<unknown> = fromFieldMappings;
+  const from = vi.fn((table: unknown) => {
+    // Heuristic table sniff: drizzle table objects expose a Symbol.for('drizzle:Name')
+    const name = String((table as { [k: symbol]: unknown })[Symbol.for('drizzle:Name')] ?? '');
+    nextResolver = name === 'users' ? fromUsers : fromFieldMappings;
+    return makeChain(() => nextResolver());
   });
-  const from = vi.fn((_table: unknown) => ({ where }));
   const select = vi.fn((_cols?: unknown) => ({ from }));
+
+  // db.insert(table).values(row) — capture audit rows; ignore others.
+  const insert = vi.fn((table: unknown) => ({
+    values: vi.fn(async (row: Record<string, unknown>) => {
+      const name = String((table as { [k: symbol]: unknown })[Symbol.for('drizzle:Name')] ?? '');
+      if (name === 'audit_log') insertedAuditRows.push(row);
+    }),
+  }));
+
   return {
-    createDb: vi.fn(() => ({ select })),
+    createDb: vi.fn(() => ({ select, insert })),
   };
 });
 
@@ -673,7 +733,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(body.error).toBe('rate_limited');
   });
 
-  it('8. watermark:false produces a PDF that does NOT contain "DRAFT" text', async () => {
+  it('8. watermark:false (admin) produces a PDF that does NOT contain "DRAFT" text + audit row + header', async () => {
     mockVersion = makeVersion();
     mockFields = [
       makeField({
@@ -685,6 +745,8 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         yCoord: null,
       }),
     ];
+    // Oracle P0-1 (W4 review): admin role required for watermark:false.
+    mockUserRoles.set('user-1', 'admin');
     const fakeKv = makeFakeKv();
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp();
@@ -695,6 +757,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { KV: fakeKv.kv, R2: fakeR2 },
     );
     expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-watermark')).toBe('off');
     const bytes = new Uint8Array(await res.arrayBuffer());
     const pdf = await PDFDocument.load(bytes);
     let foundDraft = false;
@@ -706,6 +769,86 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       }
     }
     expect(foundDraft).toBe(false);
+    // Exactly one audit row for the off-watermark render.
+    expect(insertedAuditRows).toHaveLength(1);
+    expect(insertedAuditRows[0]?.source).toBe('render-watermark-off');
+    expect(insertedAuditRows[0]?.statusCode).toBe(200);
+    expect(insertedAuditRows[0]?.userIdOrNull).toBe('user-1');
+  });
+
+  it('8a. watermark:false (non-admin) returns 403 watermark_off_admin_only + no audit row + no quota burn', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    mockUserRoles.set('user-1', 'user'); // explicitly non-admin
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } }, watermark: false },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe('watermark_off_admin_only');
+    // No audit row + KV never touched (gate runs BEFORE rateLimit).
+    expect(insertedAuditRows).toHaveLength(0);
+    expect(fakeKv.puts).toHaveLength(0);
+  });
+
+  it('8b. watermark:false (anon) returns 403 watermark_off_admin_only (gate runs before rateLimit)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [makeField({ fieldKind: 'acroform', xCoord: null, yCoord: null })];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp(null); // no session
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {}, watermark: false },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe('watermark_off_admin_only');
+    expect(fakeKv.puts).toHaveLength(0);
+  });
+
+  it('8c. watermark omitted (any user) → 200 + X-Render-Watermark: on + no extra audit row', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    mockUserRoles.set('user-1', 'user'); // non-admin still fine because no opt-out
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } }, // no watermark field
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-watermark')).toBe('on');
+    expect(insertedAuditRows).toHaveLength(0);
   });
 
   it('9. unknown PDF field surfaces as X-Render-Warnings: 1 / Filled-Fields: 0', async () => {
@@ -837,5 +980,97 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(res.headers.get('content-disposition')).toBe(
       'attachment; filename="DE-2024-mantelbogen-draft.pdf"',
     );
+  });
+
+  // ── Oracle P0-2 (W4 review): TBD_* placeholder refusal ───────────────
+  it('13. mapping with any TBD_* acroform field returns 422 mapping_unverified + X-Render-Mapping-Status: placeholder', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_real_field',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+      makeField({
+        id: 'tbd-1',
+        fieldName: 'TBD_unknown_widget',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.foo',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(422);
+    expect(res.headers.get('x-render-mapping-status')).toBe('placeholder');
+    const body = (await res.json()) as {
+      error?: string;
+      placeholderFieldCount?: number;
+      sample?: string[];
+    };
+    expect(body.error).toBe('mapping_unverified');
+    expect(body.placeholderFieldCount).toBe(1);
+    expect(body.sample).toEqual(['TBD_unknown_widget']);
+  });
+
+  it('14. mapping with NO TBD_* fields still renders 200 (TBD check is additive)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-mapping-status')).toBeNull();
+  });
+
+  it('15. coordinate field named TBD_xxx is NOT refused (only acroform placeholders matter)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'TBD_coord_anchor',
+        fieldKind: 'coordinate',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: 100,
+        yCoord: 100,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
   });
 });

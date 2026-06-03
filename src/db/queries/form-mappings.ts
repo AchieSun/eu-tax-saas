@@ -11,7 +11,7 @@
  *   db.select().from(formFieldMappings).where(withActiveFilter(eq(...)))
  */
 
-import { isNull, and, desc, eq, type SQL } from 'drizzle-orm';
+import { type SQL, and, desc, eq, isNull } from 'drizzle-orm';
 import type { createDb } from '../index';
 import { formFieldMappings, formMappingVersions } from '../schema';
 
@@ -38,13 +38,37 @@ export function activeFormMappingsSelect(
 }
 
 /**
- * Combine the soft-delete filter with caller-supplied conditions in a single `.where()`.
- * Use this when you need AND with the soft-delete filter at the same level
- * (e.g. when you cannot chain because you need both conditions in one `.where()` call).
+ * Combine the soft-delete filter with one or more caller-supplied predicates
+ * in a single `.where()`. Refuses an empty predicate list at runtime to make
+ * silent cross-form leaks impossible — every caller MUST narrow by at least
+ * (country, formType, taxYear) or some explicit row identifier.
+ *
+ * Oracle P0-5 (W4 review): the typing here is strict — `predicates` is
+ * `Array<SQL>` so `undefined` results from e.g. `eq()` of a nullable column
+ * can't sneak past the typechecker. The runtime check exists for the
+ * downstream JS callers that might pass `[]`.
+ */
+export function eqAllActive(predicates: SQL[]): SQL {
+  if (predicates.length === 0) {
+    // Programming error — leaving this unguarded would return
+    // `isNull(deletedAt)` and silently match EVERY active row across every
+    // country/form/year combination. Loud throw beats silent leak.
+    throw new Error('eqAllActive: at least one narrowing predicate is required');
+  }
+  // and() with 2+ defined SQL args always returns a defined SQL. The
+  // runtime check above guarantees we have >= 2 args here (deletedAt + 1+
+  // caller predicates), so the non-null assertion is mathematically sound.
+  // biome-ignore lint/style/noNonNullAssertion: see comment above
+  return and(isNull(formFieldMappings.deletedAt), ...predicates)!;
+}
+
+/**
+ * @deprecated Prefer `eqAllActive([extra])`. Kept as a thin wrapper for
+ * backward compatibility with the W4 ingest paths that still pass a single
+ * pre-AND'd SQL clob.
  */
 export function withActiveFilter(extra: SQL): SQL {
-  // biome-ignore lint/style/noNonNullAssertion: and() with two args always returns SQL, not undefined
-  return and(isNull(formFieldMappings.deletedAt), extra)!;
+  return eqAllActive([extra]);
 }
 
 // ─── W4 T0.5 — mapping version lookup ──────────────────────────────────────

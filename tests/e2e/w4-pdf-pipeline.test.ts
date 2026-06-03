@@ -330,4 +330,64 @@ describe('W4 T5.1 — end-to-end PDF render pipeline', () => {
       expect(txt.includes('DRAFT'), `page ${p} missing DRAFT watermark`).toBe(true);
     }
   });
+
+  // ── Oracle P0-4 (W4 review): end-to-end metadata provenance ────────
+  it('embeds mapping provenance metadata that survives the synth → fill → save round-trip', async () => {
+    const synth = await buildSynthPdfWithAcroForm({
+      pageCount: 1,
+      pageWidth: 595,
+      pageHeight: 842,
+      fields: defaultMantelStyleFields(),
+    });
+    const mapping = buildE2EMapping();
+
+    const result = await fillForm({
+      pdfBytes: synth,
+      mapping,
+      data: {
+        taxpayer: {
+          firstName: 'Erika',
+          lastName: 'Mustermann',
+          taxId: '11 234 567 890',
+          addressLine1: 'Musterstraße 1',
+          married: true,
+        },
+      },
+      metadata: {
+        mappingVersion: 42,
+        mappingHash: 'cafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeef',
+        country: 'DE',
+        taxYear: 2024,
+        formType: 'mantelbogen',
+        renderedAt: '2026-06-03T12:34:56.000Z',
+        userIdHash: 'fedcba9876543210',
+      },
+    });
+
+    // Read back without letting pdf-lib's constructor clobber Producer.
+    const reloaded = await PDFDocument.load(result.pdfBytes, { updateMetadata: false });
+    const producer = reloaded.getProducer() ?? '';
+    expect(producer).toContain('eu-tax-saas/DE/2024/mantelbogen');
+    expect(producer).toContain('mapping v42');
+    expect(producer).toContain('cafebabedeadbeef'); // short hash (first 16)
+
+    expect(reloaded.getCreator()).toBe('eu-tax-saas render core T3.1a');
+    expect(reloaded.getSubject()).toBe('DE 2024 mantelbogen draft');
+
+    const keywords = reloaded.getKeywords() ?? '';
+    expect(keywords).toContain('country:DE');
+    expect(keywords).toContain('year:2024');
+    expect(keywords).toContain('form:mantelbogen');
+    expect(keywords).toContain('mapping-version:42');
+    expect(keywords).toContain(
+      'mapping-hash:cafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeef',
+    );
+    expect(keywords).toContain('rendered-at:2026-06-03T12:34:56.000Z');
+    expect(keywords).toContain('user-id-hash:fedcba9876543210');
+
+    // Watermark is still applied (default-on); metadata didn't replace it.
+    const decoded = decodePageContentStream(reloaded, 0);
+    const txt = extractTjStrings(decoded);
+    expect(txt.includes('DRAFT')).toBe(true);
+  });
 });

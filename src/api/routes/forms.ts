@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 /**
  * W4 T2.1 — GET /api/forms/:country/:year/:form
  * W4 T3.2 — POST /api/forms/:country/:year/:form/render
@@ -17,6 +17,21 @@ import { and, eq } from 'drizzle-orm';
  * endpoint owns auth + rate limiting + audit).
  *
  * POST /render is the user-facing draft-PDF builder:
+ *   - Oracle P0-1 (W4 review): watermark:false gated to admin via
+ *     `requireAdminIfWatermarkOff()` mounted BEFORE rateLimit so refused
+ *     misuse doesn't burn a quota slot. Every off-watermark render also
+ *     writes a dedicated audit_log row (source='render-watermark-off')
+ *     for post-hoc tracing.
+ *   - Oracle P0-2 (W4 review): refuses to render mappings whose active
+ *     rows still carry TBD_* placeholder pdf field names — the legal /
+ *     audit anchor must be a real widget, not a stub.
+ *   - Oracle P0-4 (W4 review): embeds mapping provenance (version, hash,
+ *     country/year/form, render timestamp, user-id hash) into the PDF's
+ *     built-in metadata via pdf-lib's set* methods so the artifact is
+ *     self-describing after leaving the worker.
+ *   - Oracle P0-5 (W4 review): uses `eqAllActive([...])` instead of
+ *     `withActiveFilter(and(...))` so the (country, form, year) narrowing
+ *     can never silently degrade to a global match.
  *   - Auth-required (refused 401 by `rateLimit({requireSession:true})`)
  *   - Per-user rate-limited (10/day default via KV-backed sliding bucket)
  *   - Pulls the same active mapping rows as GET, then either fetches the
@@ -29,8 +44,8 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { createDb } from '../../db';
-import { currentMappingVersion, withActiveFilter } from '../../db/queries/form-mappings';
-import { formFieldMappings } from '../../db/schema';
+import { currentMappingVersion, eqAllActive } from '../../db/queries/form-mappings';
+import { auditLog, formFieldMappings } from '../../db/schema';
 import { fillForm } from '../../forms/render/fill';
 import {
   type FieldSpec,
@@ -40,6 +55,8 @@ import {
 import type { Field, FormMapping } from '../../forms/types';
 import type { Bindings, Variables } from '../index';
 import { rateLimit } from '../middleware/rate-limit';
+import { requireAdminIfWatermarkOff } from '../middleware/require-admin-if-watermark-off';
+import { MAX_HASH_BYTES, sha256Hex } from '../middleware/sha256';
 
 export const formsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -91,20 +108,18 @@ formsRoutes.get('/:country/:year/:form', async (c) => {
   }
 
   // 5. Fetch all active field rows for this (country, form, year).
-  // withActiveFilter() composes `deleted_at IS NULL` with the caller's
-  // conditions in a single WHERE clause — required because Drizzle's
-  // SQLiteSelect does not allow chaining `.where()` twice.
+  // Oracle P0-5 (W4 review): use eqAllActive([...]) — the helper throws on
+  // an empty predicate list so the (country, form, year) narrowing can
+  // never silently degrade to a "match every active row" query.
   const rows = await db
     .select()
     .from(formFieldMappings)
     .where(
-      withActiveFilter(
-        and(
-          eq(formFieldMappings.country, country),
-          eq(formFieldMappings.formType, form),
-          eq(formFieldMappings.taxYear, year),
-        )!,
-      ),
+      eqAllActive([
+        eq(formFieldMappings.country, country),
+        eq(formFieldMappings.formType, form),
+        eq(formFieldMappings.taxYear, year),
+      ]),
     );
 
   // 6. Build JSON response (camelCase mirrors schema TS column names).
@@ -166,6 +181,11 @@ const RENDER_MAX_PER_WINDOW = 10;
 
 formsRoutes.post(
   '/:country/:year/:form/render',
+  // Oracle P0-1 (W4 review): admin gate runs BEFORE rateLimit so a refused
+  // non-admin watermark:false call does not burn one of the user's daily
+  // 10 render slots. The middleware peeks at body via Request.clone() and
+  // is a no-op for any body that doesn't carry `watermark: false`.
+  requireAdminIfWatermarkOff(),
   rateLimit({
     windowSeconds: RENDER_WINDOW_SECONDS,
     max: RENDER_MAX_PER_WINDOW,
@@ -207,20 +227,46 @@ formsRoutes.post(
     }
 
     // 4. Pull active field rows (same query path as GET).
+    // Oracle P0-5 (W4 review): eqAllActive([...]) replaces the prior
+    // withActiveFilter(and(...)!) so an empty narrowing list throws loudly
+    // instead of silently widening the query.
     const rows = await db
       .select()
       .from(formFieldMappings)
       .where(
-        withActiveFilter(
-          and(
-            eq(formFieldMappings.country, country),
-            eq(formFieldMappings.formType, form),
-            eq(formFieldMappings.taxYear, year),
-          )!,
-        ),
+        eqAllActive([
+          eq(formFieldMappings.country, country),
+          eq(formFieldMappings.formType, form),
+          eq(formFieldMappings.taxYear, year),
+        ]),
       );
     if (rows.length === 0) {
       return c.json({ error: 'no_active_mapping_fields', country, year, form }, 422);
+    }
+
+    // 4b. Oracle P0-2 (W4 review): refuse to render mappings whose active
+    //     acroform rows still carry TBD_* placeholder field names. A
+    //     placeholder means the mapping hasn't been verified against a real
+    //     PDF — rendering it would silently produce a doc with no fields
+    //     filled (best case) or fill into a stale widget that no longer
+    //     matches the legal layout (worst case). 422 with a sample of the
+    //     offending names lets the operator pinpoint the gap.
+    const placeholders = rows.filter(
+      (r) => r.fieldKind === 'acroform' && r.fieldName.startsWith('TBD_'),
+    );
+    if (placeholders.length > 0) {
+      c.header('X-Render-Mapping-Status', 'placeholder');
+      return c.json(
+        {
+          error: 'mapping_unverified',
+          country,
+          year,
+          form,
+          placeholderFieldCount: placeholders.length,
+          sample: placeholders.slice(0, 3).map((r) => r.fieldName),
+        },
+        422,
+      );
     }
 
     // 5. Build FormMapping object the render core expects.
@@ -321,12 +367,86 @@ formsRoutes.post(
     }
 
     // 7. Render.
+    // Oracle P0-1 (W4 review): watermarkOff is computed once and used to
+    // (a) write the post-render audit_log row, (b) flip the
+    // X-Render-Watermark response header. By the time we get here the
+    // requireAdminIfWatermarkOff() middleware has already verified the
+    // caller is an admin if watermarkOff is true.
+    // Oracle P0-4 (W4 review): userIdHash is a short (16-hex-char) prefix
+    // of the SHA-256 of the user id — enough entropy to be collision-
+    // resistant for audit but short enough to live inside PDF Keywords
+    // without bloating it. The session is always present here because the
+    // rateLimit middleware refuses anon with 401 above.
+    const watermarkOff = body.watermark === false;
+    const session = c.get('session');
+    const sessionUserId = session?.user?.id ?? '';
+    const userIdHash = sessionUserId ? (await sha256Hex(sessionUserId)).slice(0, 16) : 'anonymous';
+    const renderedAt = new Date().toISOString();
+
     const result = await fillForm({
       pdfBytes,
       mapping,
       data: body.data,
       watermark: body.watermark,
+      // Oracle P0-4: embed mapping provenance + render trace into the PDF
+      // metadata slots so the artifact carries its origin everywhere.
+      metadata: {
+        mappingVersion: version.version,
+        mappingHash: version.contentHash,
+        country,
+        taxYear: year,
+        formType: form,
+        renderedAt,
+        userIdHash,
+      },
     });
+
+    // 7b. Oracle P0-1: every off-watermark render leaves a dedicated audit
+    //     trail. Fire-and-forget via executionCtx.waitUntil when available
+    //     (matches the global audit middleware's pattern); falls back to
+    //     synchronous await in test envs without Workers runtime.
+    if (watermarkOff && c.env?.DB) {
+      const inputHash = await sha256Hex(
+        `${country}/${year}/${form}|v${version.version}|${version.contentHash}|watermark:off`,
+      );
+      const slice =
+        result.pdfBytes.byteLength > MAX_HASH_BYTES
+          ? result.pdfBytes.slice(0, MAX_HASH_BYTES)
+          : result.pdfBytes;
+      const resultHash = await sha256Hex(slice);
+      const promise = db
+        .insert(auditLog)
+        .values({
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          userIdOrNull: sessionUserId || null,
+          route: new URL(c.req.url).pathname,
+          method: 'POST',
+          inputHash,
+          resultHash,
+          statusCode: 200,
+          source: 'render-watermark-off',
+        })
+        .then(
+          () => {},
+          (err: unknown) => {
+            // biome-ignore lint/suspicious/noConsoleLog: audit write failure must surface
+            console.error('watermark-off audit write failed', err);
+          },
+        );
+      let hasWaitUntil = false;
+      try {
+        hasWaitUntil = typeof c.executionCtx?.waitUntil === 'function';
+      } catch {
+        // Not in Workers runtime — fall through to await.
+      }
+      if (hasWaitUntil) {
+        // biome-ignore lint/style/noNonNullAssertion: probed via try above
+        c.executionCtx!.waitUntil(promise);
+      } else {
+        await promise;
+      }
+    }
 
     // 8. Respond with PDF bytes + diagnostic headers. Cache-Control is
     //    `no-store, private` because every render embeds user data.
@@ -336,6 +456,7 @@ formsRoutes.post(
     c.header('X-Render-Filled-Fields', String(result.filledFieldCount));
     c.header('X-Render-Mapping-Version', String(version.version));
     c.header('X-Render-Mapping-Hash', version.contentHash);
+    c.header('X-Render-Watermark', watermarkOff ? 'off' : 'on');
     c.header('Cache-Control', 'no-store, private');
     return c.body(result.pdfBytes, 200);
   },
