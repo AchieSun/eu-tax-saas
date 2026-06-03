@@ -1,0 +1,13 @@
+country: DE
+year: 2024
+form: test-invalid-no-citation
+formTitle: Test Form (Missing Citation)
+sourceUrl: https://example.com/test.pdf
+sourceVersion: TEST-2024-01-01
+fields:
+  - kind: acroform
+    pdfField: SomeField
+    sourcePath: user.profile.name
+    type: text
+    transform: none
+    # citation field intentionally omitted — Zod must reject

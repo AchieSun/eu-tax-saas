@@ -1,0 +1,27 @@
+country: DE
+year: 2024
+form: test-valid
+formTitle: Test Form (Valid Fixture)
+sourceUrl: https://example.com/test.pdf
+sourceVersion: TEST-2024-01-01
+fields:
+  - kind: acroform
+    pdfField: TaxpayerName
+    sourcePath: user.profile.name
+    type: text
+    transform: none
+    citation: Test fixture — no real source
+  - kind: acroform
+    pdfField: GrossIncome
+    sourcePath: calculation.de.income.gross
+    type: number
+    transform: format-currency-no-symbol
+    citation: Test fixture — BMF Mantelbogen 2024 page 3 box 17a
+  - kind: coordinate
+    sourcePath: user.profile.address.city
+    type: text
+    page: 0
+    x: 150.5
+    y: 700.0
+    fontSize: 10
+    citation: Test fixture — coordinate variant
