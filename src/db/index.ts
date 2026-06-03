@@ -1,0 +1,15 @@
+/**
+ * Drizzle D1 connection helper.
+ * MUST be called per-request (D1 binding only exists in request scope).
+ */
+
+import { drizzle } from 'drizzle-orm/d1';
+import type { D1Database } from '@cloudflare/workers-types';
+import * as schema from './schema';
+
+export function createDb(d1: D1Database) {
+  return drizzle(d1, { schema, logger: false });
+}
+
+export type Db = ReturnType<typeof createDb>;
+export { schema };
