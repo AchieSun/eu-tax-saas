@@ -242,3 +242,18 @@ describe('applyWatermark — edge cases', () => {
     await expect(applyWatermark(doc1, { opacity: 1 })).resolves.toBeUndefined();
   });
 });
+
+describe('applyWatermark — WinAnsi guard (T3.1c)', () => {
+  it('default text uses a U+2014 em-dash internally but renders as an ASCII hyphen', async () => {
+    // The constant in watermark.ts is `'DRAFT — NOT FOR FILING'` (em-dash).
+    // After the WinAnsi guard, it must hit drawText as `'DRAFT - NOT FOR FILING'`
+    // (hyphen) and never throw. We verify by scanning the decoded Tj stream.
+    const pdf = await buildSynthPdfCoordOnly();
+    const withHyphen = await applyAndScan(pdf, 'DRAFT - NOT FOR FILING');
+    expect(withHyphen.contains).toBe(true);
+
+    // And the literal em-dash bytes must NOT appear (guard actually ran).
+    const withEmDash = await applyAndScan(pdf, 'DRAFT \u2014 NOT FOR FILING');
+    expect(withEmDash.contains).toBe(false);
+  });
+});

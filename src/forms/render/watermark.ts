@@ -12,10 +12,12 @@
  *   - Idempotent shape: re-running stacks an additional watermark — that is
  *     the *intended* behaviour. Callers that need exactly-once semantics
  *     must track it themselves.
- *   - WinAnsi-safe only in this milestone: the default text deliberately uses
- *     an ASCII hyphen (`-`), NOT an em-dash, because pdf-lib's Helvetica is
- *     WinAnsi-encoded and would throw on `—`. Proper transliteration /
- *     non-Latin support is T3.1c.
+ *   - WinAnsi-safe via `toWinAnsi` (T3.1c): the supplied text is run through
+ *     the WinAnsi transliteration guard before measurement and draw. The
+ *     default text intentionally uses an em-dash (`—`) which transliterates
+ *     to an ASCII hyphen — this is the canonical end-to-end proof that the
+ *     guard is wired up. Watermark-text replacements are NOT surfaced as
+ *     warnings (watermark is internal, not user data).
  *   - Performance: callers may supply a pre-embedded `font` to amortise the
  *     `embedFont(Helvetica)` cost across many renders (e.g. fill.ts already
  *     embeds Helvetica for coordinate draws and reuses it here).
@@ -29,6 +31,7 @@
  */
 
 import { type PDFDocument, type PDFFont, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { toWinAnsi } from './winansi';
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -52,10 +55,12 @@ export interface WatermarkOptions {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 /**
- * Default text. ASCII hyphen on purpose — see file header. T3.1c will swap in
- * the proper em-dash once the Unicode/transliteration pass is wired up.
+ * Default text. Uses a U+2014 em-dash; the WinAnsi guard transliterates
+ * this to an ASCII hyphen at render time, so the on-page output is still
+ * `DRAFT - NOT FOR FILING`. Keeping the source-of-truth as an em-dash
+ * proves the guard is wired up end-to-end (regression-canary).
  */
-const DEFAULT_TEXT = 'DRAFT - NOT FOR FILING';
+const DEFAULT_TEXT = 'DRAFT — NOT FOR FILING';
 const DEFAULT_OPACITY = 0.25;
 const DEFAULT_ROTATION_DEG = 45;
 const DEFAULT_COLOR = { r: 0.5, g: 0.5, b: 0.5 } as const;
@@ -88,7 +93,7 @@ export async function applyWatermark(
   doc: PDFDocument,
   options: WatermarkOptions = {},
 ): Promise<void> {
-  const text = options.text ?? DEFAULT_TEXT;
+  const rawText = options.text ?? DEFAULT_TEXT;
   const opacity = options.opacity ?? DEFAULT_OPACITY;
   const rotation = options.rotationDegrees ?? DEFAULT_ROTATION_DEG;
   const color = options.color ?? DEFAULT_COLOR;
@@ -97,6 +102,11 @@ export async function applyWatermark(
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
     throw new RangeError(`applyWatermark: opacity must be in [0, 1], got ${String(opacity)}`);
   }
+
+  // WinAnsi guard (T3.1c). Watermark text is internal — we silently
+  // transliterate any non-encodable codepoints rather than surfacing
+  // warnings (callers can't fix the watermark text per-render anyway).
+  const { text } = toWinAnsi(rawText);
 
   // Visual no-ops short-circuit before we pay the font-embed cost.
   if (text === '') return;

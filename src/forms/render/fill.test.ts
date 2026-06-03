@@ -103,7 +103,7 @@ describe('fillForm — AcroForm happy path', () => {
             firstName: 'Anna',
             lastName: 'Schmidt',
             taxId: 'DE123456789',
-            address: { line1: 'Hauptstraße 1' },
+            address: { line1: 'Hauptstrasse 1' },
             isMarried: true,
           },
         },
@@ -130,7 +130,7 @@ describe('fillForm — AcroForm happy path', () => {
             firstName: 'Anna',
             lastName: 'Schmidt',
             taxId: 'DE123456789',
-            address: { line1: 'Hauptstraße 1' },
+            address: { line1: 'Hauptstrasse 1' },
             isMarried: false,
           },
         },
@@ -142,7 +142,7 @@ describe('fillForm — AcroForm happy path', () => {
     expect(form.getTextField('txt_first_name').getText()).toBe('Anna');
     expect(form.getTextField('txt_last_name').getText()).toBe('Schmidt');
     expect(form.getTextField('txt_tax_id').getText()).toBe('DE123456789');
-    expect(form.getTextField('txt_address_line1').getText()).toBe('Hauptstraße 1');
+    expect(form.getTextField('txt_address_line1').getText()).toBe('Hauptstrasse 1');
   });
 
   it('checks the checkbox when boolean-x transform yields "X"', async () => {
@@ -576,5 +576,129 @@ describe('fillForm — watermark integration (T3.1b)', () => {
 
     expect(await pdfContainsText(result.pdfBytes, 'TEST DRAFT')).toBe(true);
     expect(result.filledFieldCount).toBe(5);
+  });
+});
+
+describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
+  it('renders a German name with ü, emits a single dedup-summary warning, and round-trips as transliterated text', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Müller',
+            lastName: 'Schmidt',
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: false,
+          },
+        },
+      },
+    });
+
+    expect(result.filledFieldCount).toBe(5);
+    // Exactly one warning, attributed to the first-name field, listing [ü].
+    const warn = result.warnings.find((w) => w.includes('txt_first_name'));
+    expect(warn).toBeDefined();
+    expect(warn).toMatch(/replaced 1 non-WinAnsi char\(s\) \[ü\]/);
+
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('Mueller');
+  });
+
+  it('does NOT throw on Chinese input — falls back to "?" and warns', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: '北京',
+            lastName: 'Schmidt',
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: false,
+          },
+        },
+      },
+    });
+
+    expect(result.filledFieldCount).toBe(5);
+    const warn = result.warnings.find((w) => w.includes('txt_first_name'));
+    expect(warn).toBeDefined();
+    expect(warn).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
+    // Output must remain a re-parseable PDF.
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('??');
+  });
+
+  it('mixed input "Café Müller" emits ONE warning per field summarising both unique chars', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Café Müller',
+            lastName: 'Schmidt',
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: false,
+          },
+        },
+      },
+    });
+
+    expect(result.filledFieldCount).toBe(5);
+    const matches = result.warnings.filter((w) => w.includes('txt_first_name'));
+    // Single per-field warning line, even though there are two distinct
+    // non-WinAnsi chars in the value.
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
+    expect(matches[0]).toContain('é');
+    expect(matches[0]).toContain('ü');
+
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('Cafe Mueller');
+  });
+
+  it('coordinate-draw path also benefits from the guard (no throw on em-dash)', async () => {
+    const mapping: FormMapping = {
+      country: 'DE',
+      year: 2024,
+      form: 'coord-winansi',
+      formTitle: 'Coord WinAnsi guard',
+      sourceUrl: SOURCE_URL,
+      sourceVersion: SOURCE_VERSION,
+      fields: [
+        {
+          kind: 'coordinate',
+          sourcePath: 'value',
+          type: 'text',
+          transform: 'none',
+          citation: 'test',
+          page: 0,
+          x: 100,
+          y: 700,
+          fontSize: 12,
+        },
+      ],
+    };
+
+    const result = await fillForm({
+      pdfBytes: coordPdf,
+      mapping,
+      // em-dash + smart-quotes + ü → all transliterated before drawText
+      data: { value: 'A\u2014B \u201Chi\u201D Müller' },
+    });
+
+    expect(result.filledFieldCount).toBe(1);
+    // One per-field summary covering the three distinct non-WinAnsi chars.
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/replaced \d+ non-WinAnsi char\(s\)/);
+    // PDF must still load.
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getPageCount()).toBe(1);
   });
 });

@@ -17,8 +17,10 @@
  *     standard PDF reader (this is an explicit product decision).
  *   - No I/O: the function takes bytes in and returns bytes out so it can
  *     run in a Worker, in Node, or in a unit test pool worker identically.
- *   - WinAnsi-only fonts in this milestone (StandardFonts.Helvetica). The
- *     transliteration / non-Latin support is T3.1c.
+ *   - WinAnsi-only fonts in this milestone (StandardFonts.Helvetica). User
+ *     data is run through `toWinAnsi` (T3.1c) before every setText/drawText
+ *     so non-WinAnsi codepoints (ü, ö, ß, —, …, emoji) are deterministically
+ *     transliterated instead of crashing pdf-lib's encoder.
  *   - Watermarking (T3.1b) runs as the final pass before save. Default ON;
  *     opt out per-call with `watermark: false`, or override defaults by
  *     passing a `WatermarkOptions` object.
@@ -28,6 +30,7 @@ import { PDFDocument, type PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import type { Field, FormMapping } from '../types';
 import { type SourceValue, applyTransform } from './transforms';
 import { type WatermarkOptions, applyWatermark } from './watermark';
+import { toWinAnsi } from './winansi';
 
 // Re-exported so downstream callers (T3.2 API surface) can type their input
 // against the consolidated fill.ts module without an extra import.
@@ -99,13 +102,26 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
 
     // 2. Apply transform. Catch defensively so one bad value never
     //    poisons the rest of the render.
-    let text: string;
+    let rawText: string;
     try {
-      text = applyTransform(rawValue as SourceValue, field.transform);
+      rawText = applyTransform(rawValue as SourceValue, field.transform);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       warnings.push(`field ${fieldLabel} transform '${field.transform}' failed: ${msg}`);
       continue;
+    }
+
+    // 2b. WinAnsi safety pass (T3.1c). Helvetica throws on out-of-range
+    //     codepoints; we transliterate first and surface a per-field
+    //     summary warning when anything was rewritten. Originals are
+    //     deduped in the message so "Müller Straße" reads as one entry
+    //     listing [ü,ß] rather than five.
+    const { text, replacements } = toWinAnsi(rawText);
+    if (replacements.length > 0) {
+      const uniqueOriginals = [...new Set(replacements.map((r) => r.original))];
+      warnings.push(
+        `field ${fieldLabel} replaced ${replacements.length} non-WinAnsi char(s) [${uniqueOriginals.join(',')}]`,
+      );
     }
 
     // 3. Dispatch on field kind.
