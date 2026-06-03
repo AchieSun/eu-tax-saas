@@ -1,0 +1,159 @@
+# DE 2024 Einkommensteuer Hauptvordruck (Mantelbogen) ESt 1 A — field mapping
+#
+# Source of truth: docs/forms/de-2024-mantelbogen-fields.md (T1.3a research).
+# 20 fields covering Page 1 + signature (Page 2 final line).
+#
+# All fields use kind=acroform with a `TBD_<key>` placeholder pdfField name,
+# because the real BMF blank PDF (https://www.formulare-bfinv.de/ffw/action/invoke.do?id=034037_24)
+# has not yet been acquired. Once obtained, tools/extract-acroform-fields.ts will
+# discover the real AcroForm widget names and a follow-up PR will replace the
+# TBD_ placeholders (or convert to kind=coordinate with measured x/y if the
+# blank PDF turns out to be flat). Until then, coordinates are intentionally
+# UNVERIFIED — see `sourceVersion`.
+country: DE
+year: 2024
+form: mantelbogen
+formTitle: Einkommensteuer Hauptvordruck (Mantelbogen) ESt 1 A 2024
+sourceUrl: https://www.formulare-bfinv.de/ffw/action/invoke.do?id=034037_24
+sourceVersion: BMF 2024 Rev 2024ESt1A011NET (Sep 2024) — coordinates UNVERIFIED until real PDF acquired
+fields:
+  # ── Zeile 1 — Art der Erklärung (Einkommensteuererklärung) ───────────────
+  - kind: acroform
+    pdfField: TBD_art_einkommensteuererklaerung
+    sourcePath: userResidency.filingType
+    type: checkbox
+    transform: boolean-x
+    citation: § 25 EStG — Veranlagungszeitraum & Erklärungspflicht (Zeile 1)
+  # ── Zeile 2 — Antrag auf Arbeitnehmer-Sparzulage ─────────────────────────
+  - kind: acroform
+    pdfField: TBD_art_arbeitnehmer_sparzulage
+    sourcePath: user.profile.applyForSparzulage
+    type: checkbox
+    transform: boolean-x
+    citation: § 14 5. VermBG — Arbeitnehmer-Sparzulage (Zeile 2)
+  # ── Zeile 3 — Zuständiges Finanzamt ──────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_finanzamt
+    sourcePath: userResidency.finanzamt
+    type: text
+    transform: none
+    citation: § 19 AO — örtliche Zuständigkeit der Finanzämter (Zeile 3)
+  # ── Zeile 4 — Steuernummer ───────────────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_steuernummer
+    sourcePath: user.profile.steuernummer
+    type: text
+    transform: none
+    citation: § 8 AO i.V.m. § 139a AO — Steuernummer (Zeile 4)
+  # ── Zeile 5 — Bisheriges Finanzamt (Wohnsitzwechsel) ─────────────────────
+  - kind: acroform
+    pdfField: TBD_bisheriges_finanzamt
+    sourcePath: userResidency.previousFinanzamt
+    type: text
+    transform: none
+    citation: § 19 AO — örtliche Zuständigkeit bei Wohnsitzwechsel (Zeile 5)
+  # ── Zeile 7 — Telefonische Rückfragen tagsüber ───────────────────────────
+  - kind: acroform
+    pdfField: TBD_telefon
+    sourcePath: user.profile.phone
+    type: text
+    transform: none
+    citation: § 25 EStG — Allgemeine Angaben zur Steuererklärung (Zeile 7, administrativ)
+  # ── Zeile 8 — Identifikationsnummer (Person A) ───────────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_identifikationsnummer
+    sourcePath: user.profile.identifikationsnummer
+    type: text
+    transform: none
+    citation: § 139b AO — persönliche Identifikationsnummer (Zeile 8, Person A)
+  # ── Zeile 8 — Geburtsdatum (Person A) ────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_geburtsdatum
+    sourcePath: user.profile.dateOfBirth
+    type: date
+    transform: format-date-de
+    citation: § 25 EStG — Allgemeine Angaben zur Steuerpflichtigen Person (Zeile 8, Person A)
+  # ── Zeile 9 — Familienname (Person A) ────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_familienname
+    sourcePath: user.profile.lastName
+    type: text
+    transform: none
+    citation: § 25 EStG — Allgemeine Angaben zur Steuerpflichtigen Person (Zeile 9, Person A, administrativ)
+  # ── Zeile 10 — Vorname (Person A) ────────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_vorname
+    sourcePath: user.profile.firstName
+    type: text
+    transform: none
+    citation: § 25 EStG — Allgemeine Angaben zur Steuerpflichtigen Person (Zeile 10, Person A, administrativ)
+  # ── Zeile 11 — Titel / akademischer Grad (Person A) ──────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_titel
+    sourcePath: user.profile.academicTitle
+    type: text
+    transform: none
+    citation: § 25 EStG — Allgemeine Angaben zur Steuerpflichtigen Person (Zeile 11, Person A, administrativ)
+  # ── Zeile 12 — Ausgeübter Beruf (Person A) ───────────────────────────────
+  - kind: acroform
+    pdfField: TBD_person_a_beruf
+    sourcePath: user.income.employment.occupation
+    type: text
+    transform: none
+    citation: § 25 EStG — Allgemeine Angaben zur Steuerpflichtigen Person (Zeile 12, Person A, administrativ)
+  # ── Zeile 13 — Straße (Anschrift) ────────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_strasse
+    sourcePath: user.profile.address.street
+    type: text
+    transform: none
+    citation: § 8 AO — Wohnsitz (Zeile 13, Anschrift Straße)
+  # ── Zeile 14 — Hausnummer (Anschrift) ────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_hausnummer
+    sourcePath: user.profile.address.houseNumber
+    type: text
+    transform: none
+    citation: § 8 AO — Wohnsitz (Zeile 14, Hausnummer + Hausnummerzusatz)
+  # ── Zeile 15 — Postleitzahl (Inland) ─────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_plz
+    sourcePath: user.profile.address.postalCode
+    type: text
+    transform: none
+    citation: § 8 AO — Wohnsitz (Zeile 15, Postleitzahl Inland)
+  # ── Zeile 15 — Wohnort ───────────────────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_wohnort
+    sourcePath: user.profile.address.city
+    type: text
+    transform: none
+    citation: § 8 AO — Wohnsitz (Zeile 15, Wohnort)
+  # ── Zeile 16 — Adressergänzung ───────────────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_adressergaenzung
+    sourcePath: user.profile.address.addressLine2
+    type: text
+    transform: none
+    citation: § 8 AO — Wohnsitz (Zeile 16, Adressergänzung, administrativ)
+  # ── Zeile 17 — Staat (Auslandsanschrift) ─────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_anschrift_staat
+    sourcePath: userResidency.foreignCountry
+    type: text
+    transform: none
+    citation: § 1 Abs. 1 EStG — unbeschränkte Steuerpflicht & Wohnsitz im Ausland (Zeile 17, Staat)
+  # ── Zeile 18 — Familienstand (+ Datum) ───────────────────────────────────
+  - kind: acroform
+    pdfField: TBD_familienstand
+    sourcePath: user.profile.maritalStatus
+    type: text
+    transform: none
+    citation: § 26 EStG — Ehegattenveranlagung (Zeile 18, Familienstand)
+  # ── Signatur (Page 2 ~Zeile 49–50) — Datum der Unterschrift ──────────────
+  - kind: acroform
+    pdfField: TBD_unterschrift_datum
+    sourcePath: user.profile.signature.date
+    type: date
+    transform: format-date-de
+    citation: § 25 Abs. 3 EStG i.V.m. § 150 Abs. 3 AO — Unterschriftspflicht (Page 2 Unterschriftsblock)

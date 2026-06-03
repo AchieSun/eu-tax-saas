@@ -127,4 +127,42 @@ fields:
 `;
     expect(() => parseFormMapping(invalidYaml)).toThrow();
   });
+
+  // ── W4 T1.3b — DE 2024 Mantelbogen real mapping ──────────────────────────
+  describe('DE/2024/mantelbogen.yml (W4 T1.3b)', () => {
+    it('loads via loadFormMapping and validates against FormMappingSchema', () => {
+      const mapping = loadFormMapping('DE', 2024, 'mantelbogen');
+      expect(mapping).not.toBeNull();
+      // Re-running schema.parse against the already-parsed object is the
+      // defence-in-depth check the task spec asked for.
+      expect(() => FormMappingSchema.parse(mapping!)).not.toThrow();
+    });
+
+    it('declares country=DE, year=2024, form=mantelbogen', () => {
+      const mapping = loadFormMapping('DE', 2024, 'mantelbogen')!;
+      expect(mapping.country).toBe('DE');
+      expect(mapping.year).toBe(2024);
+      expect(mapping.form).toBe('mantelbogen');
+    });
+
+    it('contains at least the 20 fields documented in T1.3a', () => {
+      const mapping = loadFormMapping('DE', 2024, 'mantelbogen')!;
+      expect(mapping.fields.length).toBeGreaterThanOrEqual(20);
+    });
+
+    it('every field carries a non-empty citation (legal/audit anchor)', () => {
+      const mapping = loadFormMapping('DE', 2024, 'mantelbogen')!;
+      for (const f of mapping.fields) {
+        expect(f.citation.trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    it('ships in the production set returned by loadAllMappings()', () => {
+      const all = loadAllMappings();
+      const found = all.find(
+        (m) => m.country === 'DE' && m.year === 2024 && m.form === 'mantelbogen',
+      );
+      expect(found).toBeDefined();
+    });
+  });
 });

@@ -391,3 +391,57 @@ describe('generateIngestSqlWithVersions — version row + version_id back-fill',
     expect(upd.trim().endsWith(';')).toBe(true);
   });
 });
+
+// ─── W4 T1.3b — DE Mantelbogen end-to-end SQL emission ──────────────────────
+
+describe('generateIngestSqlWithVersions — DE 2024 Mantelbogen (W4 T1.3b)', () => {
+  const FIXED_NOW = 1_780_000_000_000;
+
+  // 20-field mapping mirroring app/src/forms/DE/2024/mantelbogen.yml. Inlined
+  // here so the test does not need filesystem I/O (this file is the unit-test
+  // for the pure emitter); end-to-end YAML loading is covered by load.test.ts.
+  const mantelbogenMapping: FormMapping = {
+    country: 'DE',
+    year: 2024,
+    form: 'mantelbogen',
+    formTitle: 'Einkommensteuer Hauptvordruck (Mantelbogen) ESt 1 A 2024',
+    sourceUrl:
+      'https://www.formulare-bfinv.de/ffw/action/invoke.do?id=034037_24',
+    sourceVersion:
+      'BMF 2024 Rev 2024ESt1A011NET (Sep 2024) — coordinates UNVERIFIED until real PDF acquired',
+    fields: Array.from({ length: 20 }, (_, i) => ({
+      kind: 'acroform' as const,
+      pdfField: `TBD_field_${i + 1}`,
+      sourcePath: `user.profile.field${i + 1}`,
+      type: 'text' as const,
+      transform: 'none' as const,
+      citation: `§ 25 EStG — Zeile ${i + 1} (T1.3b)`,
+    })),
+  };
+
+  it('emits version-insert + ≥20 field INSERTs + version_id UPDATE in one transaction', async () => {
+    const sql = await generateIngestSqlWithVersions(
+      [mantelbogenMapping],
+      FIXED_NOW,
+    );
+
+    // 1. Single version-insert statement scoped to (DE, mantelbogen, 2024).
+    expect(sql.match(/INSERT INTO form_mapping_versions/g)?.length).toBe(1);
+    expect(sql).toContain("country = 'DE'");
+    expect(sql).toContain("form_type = 'mantelbogen'");
+    expect(sql).toContain('tax_year = 2024');
+
+    // 2. At least 20 field INSERTs (one per documented Mantelbogen field).
+    const fieldInserts = sql.match(/INSERT INTO form_field_mappings/g) ?? [];
+    expect(fieldInserts.length).toBeGreaterThanOrEqual(20);
+
+    // 3. Trailing version_id back-fill UPDATE present and tuple-scoped.
+    expect(sql).toMatch(
+      /UPDATE form_field_mappings SET version_id = \(SELECT id FROM form_mapping_versions WHERE country = 'DE' AND form_type = 'mantelbogen' AND tax_year = 2024 ORDER BY version DESC LIMIT 1\)/,
+    );
+
+    // 4. One BEGIN / COMMIT pair wraps everything.
+    expect(sql.match(/BEGIN TRANSACTION;/g)?.length).toBe(1);
+    expect(sql.match(/^COMMIT;$/gm)?.length).toBe(1);
+  });
+});
