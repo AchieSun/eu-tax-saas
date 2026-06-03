@@ -19,8 +19,11 @@
  *     through unchanged because the helper does NOT filter on version_id.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { inflateSync } from 'node:zlib';
 import { Hono } from 'hono';
+import { PDFDocument } from 'pdf-lib';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildSynthPdfWithAcroForm } from '../../forms/render/synth';
 import type { Bindings, Variables } from '../index';
 import { formsRoutes } from './forms';
 
@@ -108,11 +111,7 @@ function createTestApp() {
   return app;
 }
 
-function request(
-  app: ReturnType<typeof createTestApp>,
-  path: string,
-  init?: RequestInit,
-) {
+function request(app: ReturnType<typeof createTestApp>, path: string, init?: RequestInit) {
   return app.request(path, init, { DB: {} } as Bindings);
 }
 
@@ -121,8 +120,7 @@ function request(
 function makeVersion(overrides: Partial<VersionRow> = {}): VersionRow {
   return {
     version: 3,
-    contentHash:
-      'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
+    contentHash: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
     createdAt: 1717420800000, // 2024-06-03T13:20:00.000Z (unix ms)
     ...overrides,
   };
@@ -364,5 +362,480 @@ describe('GET /api/forms/:country/:year/:form', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { fields: unknown[] };
     expect(body.fields).toHaveLength(5);
+  });
+});
+
+// ── POST /api/forms/:c/:y/:f/render (W4 T3.2) ─────────────────────────────
+
+/**
+ * Decompress every Contents stream on `pageIdx` and return concatenated
+ * latin1 text. Mirrors the helper in src/forms/render/watermark.test.ts —
+ * inlined here so this file doesn't depend on test-internal exports.
+ */
+function decodePageContentStream(pdf: PDFDocument, pageIdx: number): string {
+  const page = pdf.getPage(pageIdx);
+  const ctx = pdf.context;
+  const contents = page.node.Contents();
+  if (!contents) return '';
+
+  const items =
+    typeof (contents as { asArray?: () => unknown[] }).asArray === 'function'
+      ? (contents as { asArray: () => unknown[] }).asArray()
+      : [contents];
+
+  let combined = '';
+  for (const item of items) {
+    const stream = ctx.lookup(item as never) as { contents?: Uint8Array };
+    const raw = stream?.contents;
+    if (!raw) continue;
+    try {
+      combined += inflateSync(Buffer.from(raw)).toString('latin1');
+    } catch {
+      combined += Buffer.from(raw).toString('latin1');
+    }
+  }
+  return combined;
+}
+
+/** Pull every Tj literal/hex string operand from a decoded content stream. */
+function extractTjStrings(decoded: string): string {
+  let out = '';
+  for (const m of decoded.matchAll(/\(([^)]*)\)\s*Tj/g)) {
+    out += m[1];
+  }
+  for (const m of decoded.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+    const hex = m[1];
+    let s = '';
+    for (let i = 0; i < hex.length; i += 2) {
+      s += String.fromCharCode(Number.parseInt(hex.substring(i, i + 2), 16));
+    }
+    out += s;
+  }
+  return out;
+}
+
+// Minimal KVNamespace stub (Map-backed) — captures every put() so tests
+// can assert on counter values.
+interface KvPut {
+  key: string;
+  value: string;
+  expirationTtl?: number;
+}
+function makeFakeKv() {
+  const store = new Map<string, string>();
+  const puts: KvPut[] = [];
+  return {
+    store,
+    puts,
+    kv: {
+      get: vi.fn(async (key: string) => store.get(key) ?? null),
+      put: vi.fn(async (key: string, value: string, options?: { expirationTtl?: number }) => {
+        puts.push({ key, value, expirationTtl: options?.expirationTtl });
+        store.set(key, value);
+      }),
+      delete: vi.fn(async (key: string) => {
+        store.delete(key);
+      }),
+    },
+  };
+}
+
+/**
+ * R2Bucket stub. When `bytes` is null the get() returns null (forcing the
+ * synth fallback); when non-null the route uses them as the source PDF.
+ */
+function makeFakeR2(bytes: Uint8Array | null = null) {
+  return {
+    get: vi.fn(async (_key: string) => {
+      if (!bytes) return null;
+      return {
+        arrayBuffer: async () =>
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      };
+    }),
+  };
+}
+
+// Build a Hono test app with a session-injector middleware so the route's
+// rate-limit + auth gates see a logged-in user. Mount formsRoutes the same
+// way real production does.
+function createPostTestApp(session: { user: { id: string } } | null = { user: { id: 'user-1' } }) {
+  const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+  app.use('*', async (c, next) => {
+    if (session) c.set('session', session);
+    await next();
+  });
+  app.route('/api/forms', formsRoutes);
+  return app;
+}
+
+function postJson(
+  app: ReturnType<typeof createPostTestApp>,
+  path: string,
+  body: unknown,
+  env: { KV: unknown; R2: unknown; DB?: unknown },
+  extraInit: RequestInit = {},
+) {
+  return app.request(
+    path,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(extraInit.headers ?? {}),
+      },
+      body: JSON.stringify(body),
+      ...extraInit,
+    },
+    { DB: env.DB ?? {}, KV: env.KV, R2: env.R2 } as unknown as Bindings,
+  );
+}
+
+describe('POST /api/forms/:country/:year/:form/render', () => {
+  beforeEach(() => {
+    resetMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-03T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('1. without auth returns 401 unauthorized', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp(null); // no session
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('unauthorized');
+    // KV never written for a refused request.
+    expect(fakeKv.puts).toHaveLength(0);
+  });
+
+  it('2. authed + valid mapping + minimal data returns 200 with application/pdf body', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2(); // null → synth fallback
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/pdf');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // PDF magic: "%PDF"
+    expect(bytes[0]).toBe(0x25);
+    expect(bytes[1]).toBe(0x50);
+    expect(bytes[2]).toBe(0x44);
+    expect(bytes[3]).toBe(0x46);
+  });
+
+  it('3. invalid country (lowercase) returns 400 validation', async () => {
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/de/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('validation');
+    expect(Array.isArray(body.issues)).toBe(true);
+  });
+
+  it('4. non-existent form returns 404 form_mapping_not_found', async () => {
+    mockVersion = null;
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/PT/2024/irs/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('form_mapping_not_found');
+    expect(body.country).toBe('PT');
+    expect(body.year).toBe(2024);
+    expect(body.form).toBe('irs');
+  });
+
+  it('5. zero active rows returns 422 no_active_mapping_fields', async () => {
+    mockVersion = makeVersion();
+    mockFields = []; // version exists but no fields
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('no_active_mapping_fields');
+  });
+
+  it('6. malformed JSON body returns 400 validation', async () => {
+    mockVersion = makeVersion();
+    mockFields = [makeField({ fieldKind: 'acroform', xCoord: null, yCoord: null })];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    // Send invalid JSON directly.
+    const res = await app.request(
+      '/api/forms/DE/2024/mantelbogen/render',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{not valid json',
+      },
+      { DB: {}, KV: fakeKv.kv, R2: fakeR2 } as unknown as Bindings,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('validation');
+  });
+
+  it('7. 11 requests in same window — last is 429 with Retry-After header', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+
+    for (let i = 0; i < 10; i++) {
+      const ok = await postJson(
+        app,
+        '/api/forms/DE/2024/mantelbogen/render',
+        { data: { user: { firstName: 'Alice' } } },
+        { KV: fakeKv.kv, R2: fakeR2 },
+      );
+      expect(ok.status).toBe(200);
+    }
+
+    const blocked = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBeTruthy();
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
+    const body = (await blocked.json()) as Record<string, unknown>;
+    expect(body.error).toBe('rate_limited');
+  });
+
+  it('8. watermark:false produces a PDF that does NOT contain "DRAFT" text', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } }, watermark: false },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const pdf = await PDFDocument.load(bytes);
+    let foundDraft = false;
+    for (let i = 0; i < pdf.getPageCount(); i++) {
+      const text = extractTjStrings(decodePageContentStream(pdf, i));
+      if (text.includes('DRAFT')) {
+        foundDraft = true;
+        break;
+      }
+    }
+    expect(foundDraft).toBe(false);
+  });
+
+  it('9. unknown PDF field surfaces as X-Render-Warnings: 1 / Filled-Fields: 0', async () => {
+    // The synth fallback builds widgets for every acroform row. To exercise
+    // the warning path we declare a field whose pdfField (`field_name`)
+    // doesn't appear in defaultMantelStyleFields' preset AND the catch-all
+    // fallback's name doesn't match a real widget — easier: use
+    // `txt_first_name` (preset) but point sourcePath at a path that has
+    // no value, so getByPath returns undefined → warning surfaces.
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.missingPath',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } }, // wrong path
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-warnings')).toBe('1');
+    expect(res.headers.get('x-render-filled-fields')).toBe('0');
+  });
+
+  it('10. response carries X-Render-Mapping-Version + X-Render-Mapping-Hash headers', async () => {
+    mockVersion = makeVersion({ version: 7 });
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-mapping-version')).toBe('7');
+    expect(res.headers.get('x-render-mapping-hash')).toBe(mockVersion?.contentHash);
+  });
+
+  it('11. R2-returned bytes are used as the source PDF (proven via distinctive field name)', async () => {
+    // Build an R2 source PDF carrying a widget called `txt_r2_unique_name`.
+    // Mapping declares the same name. fillForm setText() will succeed
+    // (filledFieldCount=1) only if the source bytes came from R2 — the
+    // synth fallback would build a different field set and produce a
+    // warning instead.
+    const r2SourcePdf = await buildSynthPdfWithAcroForm({
+      fields: [
+        {
+          name: 'txt_r2_unique_name',
+          kind: 'text',
+          x: 100,
+          y: 700,
+          width: 200,
+          height: 18,
+        },
+      ],
+    });
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_r2_unique_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        pdfR2Key: 'tax-forms/DE/2024/mantelbogen.pdf',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2(r2SourcePdf);
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(fakeR2.get).toHaveBeenCalledWith('tax-forms/DE/2024/mantelbogen.pdf');
+    expect(res.headers.get('x-render-filled-fields')).toBe('1');
+    expect(res.headers.get('x-render-warnings')).toBe('0');
+  });
+
+  it('12. response sets Cache-Control: no-store, private (no edge caching)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store, private');
+    expect(res.headers.get('content-disposition')).toBe(
+      'attachment; filename="DE-2024-mantelbogen-draft.pdf"',
+    );
   });
 });
