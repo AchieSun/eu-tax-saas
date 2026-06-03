@@ -15,6 +15,7 @@ export default defineConfig({
       'scripts/**/*.test.ts',
       'tools/**/*.test.ts',
       'tests/fixtures/**/*.test.ts',
+      'tests/e2e/**/*.test.ts',
     ],
     exclude: ['node_modules', 'dist', '.wrangler', 'tests/workers/**'],
     globals: true,
