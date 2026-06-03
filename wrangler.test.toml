@@ -1,0 +1,51 @@
+# Test-only wrangler config for @cloudflare/vitest-pool-workers.
+#
+# Miniflare ignores the real database/bucket IDs and provisions ephemeral
+# in-memory equivalents per test run (see vitest.workers.config.ts —
+# d1Persist / r2Persist / kvPersist all = false). The placeholder IDs below
+# only need to satisfy wrangler's TOML schema validation.
+#
+# DO NOT use these credentials for anything other than `vitest --config
+# vitest.workers.config.ts`.
+
+name = "eu-tax-saas-test"
+main = "src/api/index.ts"
+compatibility_date = "2024-12-30"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 — ephemeral (Miniflare in-memory)
+[[d1_databases]]
+binding = "DB"
+database_name = "test-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# KV — ephemeral
+[[kv_namespaces]]
+binding = "KV"
+id = "test-kv-namespace-id"
+
+# R2 — ephemeral
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "test-pdfs"
+
+# Workers AI binding intentionally OMITTED here.
+# `@cloudflare/vitest-pool-workers@0.6.0` + Miniflare 3.20241230 cannot wire
+# the AI binding (workerd: "wrapped binding module can't be resolved …
+# __WRANGLER_EXTERNAL_AI_WORKER"). Tests that need AI must mock it manually.
+# The Hono Bindings type still declares `AI: Ai` — code paths that read
+# `c.env.AI` will fail at runtime in the harness; W4 PDF rendering does NOT
+# touch AI so this is safe for the targeted use case.
+
+# Queues — producer only (no consumer needed in tests; consumer requires a
+# matching producer and would otherwise spin up a worker).
+[[queues.producers]]
+binding = "QUEUE"
+queue = "eu-tax-saas-test-jobs"
+
+# Non-secret vars
+[vars]
+ENVIRONMENT = "test"
+APP_URL = "http://localhost:8787"
+BETTER_AUTH_SECRET = "test-secret-do-not-use-in-prod-min-32-chars-xxx"
+BETTER_AUTH_URL = "http://localhost:8787"
