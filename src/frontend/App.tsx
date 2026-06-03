@@ -6,9 +6,13 @@
  * router is necessary for two top-level views.
  */
 
-import { type Component, createResource, createSignal, Show } from 'solid-js';
-import CompareView from './CompareView';
+import { type Component, Show, Suspense, createResource, createSignal, lazy } from 'solid-js';
 import CalendarView from './CalendarView';
+import CompareView from './CompareView';
+
+// Lazy-loaded — the PDF preview tab pulls in pdf-lib via the render path
+// so we keep it out of the initial bundle until the user opts in.
+const FilingDraftView = lazy(() => import('./FilingDraftView'));
 
 interface HealthResponse {
   status: string;
@@ -22,7 +26,7 @@ async function fetchHealth(): Promise<HealthResponse> {
   return r.json() as Promise<HealthResponse>;
 }
 
-type Tab = 'compare' | 'calendar';
+type Tab = 'compare' | 'calendar' | 'filing';
 
 const App: Component = () => {
   const [health] = createResource(fetchHealth);
@@ -100,6 +104,7 @@ const App: Component = () => {
       <nav class="app-tabs" aria-label="主导航">
         {tabBtn('compare', '5 国对比')}
         {tabBtn('calendar', '居留日历')}
+        {tabBtn('filing', '税务草稿')}
       </nav>
 
       {/* Active view */}
@@ -108,6 +113,15 @@ const App: Component = () => {
       </Show>
       <Show when={tab() === 'calendar'}>
         <CalendarView />
+      </Show>
+      <Show when={tab() === 'filing'}>
+        <Suspense
+          fallback={
+            <p style={{ color: '#6b7280', 'font-size': '0.875rem' }}>Loading filing draft view…</p>
+          }
+        >
+          <FilingDraftView />
+        </Suspense>
       </Show>
 
       {/* Implementation status — collapsed by default */}
@@ -188,8 +202,13 @@ const App: Component = () => {
             </tr>
             <tr>
               <td style={{ padding: '0.375rem 0' }}>F3 field guide</td>
-              <td>⏳ W4</td>
+              <td>✅ W4</td>
               <td>—</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.375rem 0' }}>F3 PDF draft generation</td>
+              <td>✅ W4 (DE Mantelbogen)</td>
+              <td>BMF</td>
             </tr>
             <tr>
               <td style={{ padding: '0.375rem 0' }}>F4 strategy + harness</td>
