@@ -22,6 +22,11 @@ and reviewers auditing the audit/legal posture of the render path.
 | `GET /api/forms/...` mapping metadata + ETag cache | ✅ T2.1 |
 | DE/2024 Mantelbogen YAML mapping (20 fields, BMF cited) | ✅ T1.3b |
 | End-to-end in-process pipeline smoke test | ✅ T5.1 |
+| Watermark-off admin gate + audit-log (Oracle P0-1) | ✅ W4-G3 |
+| `TBD_` placeholder refusal — 422 `mapping_unverified` (P0-2) | ✅ W4-G3 |
+| CORS allowlist (APP_URL + dev localhost only) (P0-3) | ✅ W4-G3 |
+| PDF metadata provenance (mapping version + hash + userIdHash) (P0-4) | ✅ W4-G3 |
+| Typed `eqAllActive` cross-form leak guard (P0-5) | ✅ W4-G3 |
 
 **Not yet in W4** (deferred to W5+):
 - Real BMF Mantelbogen PDF acquisition + AcroForm field-name resolution
@@ -138,7 +143,14 @@ applyWatermark(doc, options?: {
 ```
 
 - **Default ON** on every render. Opt-out requires explicit
-  `watermark: false` on the route body — there is no global kill switch.
+  `watermark: false` on the route body **and** the caller must have
+  `users.role === 'admin'` (Oracle P0-1). Non-admins sending
+  `watermark:false` get `403 watermark_off_admin_only`. Every
+  successful watermark-off render writes an `audit_log` row with
+  `source:'render-watermark-off'` (via `executionCtx.waitUntil`) and
+  surfaces `X-Render-Watermark: off` on the response. The
+  `FilingDraftView` toggle is hidden for non-admin sessions via the
+  new `GET /api/me` resource. There is no global kill switch.
 - **Auto-sized** to ~70% of the page diagonal, clamped `[16, 200]` pt.
 - **Per-page**, even for 100-page PDFs.
 - Internal text is silently transliterated via `toWinAnsi` so the
@@ -224,6 +236,27 @@ POST response headers:
 - `X-Render-Warnings` — count of best-effort skip/transliteration warnings
 - `X-Render-Mapping-Version` — `form_mapping_versions.version`
 - `X-Render-Mapping-Hash` — `form_mapping_versions.content_hash`
+- `X-Render-Watermark` — `on` (default) or `off` (admin opt-out, audited)
+- `X-Render-Mapping-Status: placeholder` — present only when the render is
+  refused (422) because the active mapping still contains `TBD_*`
+  acroform `pdfField`s (Oracle P0-2). The body is
+  `{error:'mapping_unverified', sampleFields:[…up to 3], message}`.
+  Coordinate-kind `TBD_*` names are anchor labels and are allowed.
+
+Embedded PDF metadata (Oracle P0-4), set via pdf-lib's
+`doc.setProducer/setCreator/setSubject/setKeywords/setCreationDate/setModificationDate`
+before save:
+
+- **Producer**: `eu-tax-saas/<COUNTRY>/<YEAR>/<form> mapping v<N> <shortHash16>`
+- **Creator**: `eu-tax-saas render pipeline`
+- **Subject**: human-readable form title from the mapping
+- **Keywords**: `country:`, `year:`, `form:`, `mapping-version:`,
+  `mapping-hash:` (full), `rendered-at:` (ISO), `user-id-hash:`
+  (first 16 hex of `sha256(session.user.id)` — never the raw id)
+- **CreationDate / ModificationDate**: server clock at render time
+
+These let any downstream auditor reproduce the exact mapping snapshot
+used for any rendered PDF, without exposing PII in the metadata.
 
 ### 3.8 `src/frontend/FilingDraftView.tsx` — preview tab (T4.1)
 
@@ -265,6 +298,28 @@ must preserve them:
    downstream UI can show "Müller → Mueller" indicators.
 5. **No PDF flattening.** Users can always edit the output. The
    pipeline never collapses interactivity.
+6. **`TBD_` placeholders refuse to render** (Oracle P0-2). If any
+   active acroform `pdfField` starts with `TBD_`, the route returns
+   `422 mapping_unverified` instead of producing a PDF with mis-mapped
+   data. Coordinate `TBD_*` anchor names are allowed.
+7. **Watermark-off is admin-only + audited** (Oracle P0-1). Stripping
+   the DRAFT stamp requires `users.role === 'admin'` and writes an
+   `audit_log` row tying the user, mapping version, and content hash
+   to the moment of release.
+8. **CORS allowlist, not echo** (Oracle P0-3). The render endpoint
+   only accepts cross-origin credentialed requests from `env.APP_URL`
+   in production (`+ localhost:3000/8787` in dev). Echo-origin with
+   `credentials:true` was the prior posture and is permanently banned
+   — see `src/api/index.ts` `allowOrigin()`.
+9. **Provenance baked into the PDF** (Oracle P0-4). Mapping version,
+   full content hash, render timestamp, and the SHA-256 prefix of the
+   user id are written to the PDF's Producer/Keywords metadata. Any
+   filed PDF is reproducible bit-for-bit from those four values.
+10. **Cross-form leak guard at the type level** (Oracle P0-5). All D1
+    reads of `form_field_mappings` go through `eqAllActive(predicates[])`
+    which throws on an empty predicate list — making it impossible to
+    accidentally return rows for the wrong country/year/form when one
+    of the URL params is omitted.
 
 ---
 
@@ -283,7 +338,7 @@ must preserve them:
 Run locally:
 
 ```bash
-pnpm test          # whole suite (~28 files, ~384 tests)
+pnpm test          # whole suite (~30 files, ~410 tests, post-Oracle-P0)
 pnpm test:e2e      # just the e2e smoke test
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # biome check src
@@ -321,12 +376,19 @@ curl -X POST https://eu-tax.example.dev/api/forms/DE/2024/mantelbogen/render \
   }' \
   --output draft.pdf
 
-# POST render WITHOUT watermark (final filing copy)
+# POST render WITHOUT watermark (final filing copy — ADMIN ONLY, audited)
 curl -X POST https://eu-tax.example.dev/api/forms/DE/2024/mantelbogen/render \
   -H 'Cookie: better-auth.session_token=...' \
   -H 'Content-Type: application/json' \
   -d '{"data":{...},"watermark":false}' \
   --output final.pdf
+# Non-admin → 403 {"error":"watermark_off_admin_only"}
+# Admin    → 200 application/pdf, X-Render-Watermark: off, audit_log row written
+
+# GET caller role (for FilingDraftView toggle gating)
+curl -i https://eu-tax.example.dev/api/me \
+  -H 'Cookie: better-auth.session_token=...'
+# → {"userId":"...","role":"admin"|"user"}  (401 if not authed)
 ```
 
 ---
