@@ -19,12 +19,19 @@
  *     run in a Worker, in Node, or in a unit test pool worker identically.
  *   - WinAnsi-only fonts in this milestone (StandardFonts.Helvetica). The
  *     transliteration / non-Latin support is T3.1c.
- *   - Watermarking lives in T3.1b — intentionally not handled here.
+ *   - Watermarking (T3.1b) runs as the final pass before save. Default ON;
+ *     opt out per-call with `watermark: false`, or override defaults by
+ *     passing a `WatermarkOptions` object.
  */
 
 import { PDFDocument, type PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import type { Field, FormMapping } from '../types';
 import { type SourceValue, applyTransform } from './transforms';
+import { type WatermarkOptions, applyWatermark } from './watermark';
+
+// Re-exported so downstream callers (T3.2 API surface) can type their input
+// against the consolidated fill.ts module without an extra import.
+export type { WatermarkOptions } from './watermark';
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -39,6 +46,14 @@ export interface FillFormInput {
    * `sourcePath`s declared in the mapping (e.g. `user.profile.firstName`).
    */
   data: FillFormData;
+  /**
+   * Draft watermark control (T3.1b). Three states:
+   *   - `undefined` (omitted) → ON with defaults. This is the safe default:
+   *     every rendered PDF is marked as a draft unless the caller opts out.
+   *   - `false`               → OFF (e.g. final filing copy).
+   *   - `WatermarkOptions`    → ON with overrides (custom text, opacity, etc.).
+   */
+  watermark?: false | WatermarkOptions;
 }
 
 export interface FillFormResult {
@@ -101,6 +116,15 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
       const ok = writeCoordinateField(doc, field, text, helvetica, warnings, fieldLabel);
       if (ok) filledFieldCount += 1;
     }
+  }
+
+  // Final pass: stamp the DRAFT watermark unless the caller opts out. We
+  // pass the already-embedded Helvetica through so the helper doesn't
+  // embed a second copy. Default-ON matches the W4 product decision:
+  // every rendered PDF must be unmistakably marked as a draft.
+  if (input.watermark !== false) {
+    const overrides = typeof input.watermark === 'object' ? input.watermark : {};
+    await applyWatermark(doc, { font: helvetica, ...overrides });
   }
 
   // Deliberately NOT calling form.flatten(): users may re-edit the output.

@@ -8,6 +8,7 @@
  *   - Round-trippable output (PDFDocument.load doesn't throw, values readable)
  */
 
+import { inflateSync } from 'node:zlib';
 import { PDFDocument } from 'pdf-lib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -486,5 +487,94 @@ describe('fillForm — formatting + edge cases', () => {
     expect(pdf.getPageCount()).toBe(1);
     // Form should still be present (we don't flatten).
     expect(pdf.getForm().getFields().length).toBe(5);
+  });
+});
+
+describe('fillForm — watermark integration (T3.1b)', () => {
+  // pdf-lib emits Tj text operands as hex strings (`<4452...> Tj`) inside
+  // FlateDecode-compressed content streams, so a naive byte scan of the
+  // saved bytes won't find the watermark text. We inflate + decode here.
+  async function pdfContainsText(pdfBytes: Uint8Array, search: string): Promise<boolean> {
+    const pdf = await PDFDocument.load(pdfBytes);
+    for (let i = 0; i < pdf.getPageCount(); i++) {
+      const page = pdf.getPage(i);
+      const contents = page.node.Contents();
+      if (!contents) continue;
+      const items =
+        typeof (contents as { asArray?: () => unknown[] }).asArray === 'function'
+          ? (contents as { asArray: () => unknown[] }).asArray()
+          : [contents];
+
+      let decoded = '';
+      for (const item of items) {
+        const stream = pdf.context.lookup(item as never) as { contents?: Uint8Array };
+        const raw = stream?.contents;
+        if (!raw) continue;
+        try {
+          decoded += inflateSync(Buffer.from(raw)).toString('latin1');
+        } catch {
+          decoded += Buffer.from(raw).toString('latin1');
+        }
+      }
+
+      let extracted = '';
+      for (const m of decoded.matchAll(/\(([^)]*)\)\s*Tj/g)) extracted += m[1];
+      for (const m of decoded.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+        const hex = m[1];
+        for (let j = 0; j < hex.length; j += 2) {
+          extracted += String.fromCharCode(Number.parseInt(hex.substring(j, j + 2), 16));
+        }
+      }
+      if (extracted.includes(search)) return true;
+    }
+    return false;
+  }
+
+  const standardData = {
+    user: {
+      profile: {
+        firstName: 'Anna',
+        lastName: 'Schmidt',
+        taxId: 'DE1',
+        address: { line1: 'X' },
+        isMarried: true,
+      },
+    },
+  };
+
+  it('stamps the default DRAFT watermark when no watermark option is supplied', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: standardData,
+    });
+
+    expect(await pdfContainsText(result.pdfBytes, 'DRAFT')).toBe(true);
+    // Fields still filled normally — watermark is a non-destructive overlay.
+    expect(result.filledFieldCount).toBe(5);
+  });
+
+  it('omits the watermark when watermark: false', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: standardData,
+      watermark: false,
+    });
+
+    expect(await pdfContainsText(result.pdfBytes, 'DRAFT')).toBe(false);
+    expect(result.filledFieldCount).toBe(5);
+  });
+
+  it('honours a custom watermark text passed via watermark option', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: standardData,
+      watermark: { text: 'TEST DRAFT' },
+    });
+
+    expect(await pdfContainsText(result.pdfBytes, 'TEST DRAFT')).toBe(true);
+    expect(result.filledFieldCount).toBe(5);
   });
 });
