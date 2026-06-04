@@ -39,7 +39,7 @@
  *                                     windowSeconds, resetAt }
  */
 
-import { sql } from 'drizzle-orm';
+import { lt, sql } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import { createDb } from '../../db';
 import { rateLimitCounters } from '../../db/schema';
@@ -69,6 +69,21 @@ export interface RateLimitD1Options {
  * doesn't race the live window's last few requests.
  */
 const EXPIRES_GRACE_SECONDS = 60;
+
+/**
+ * Oracle P1-NEW-3 (W5-A followup): probability that any single call also
+ * fires a fire-and-forget DELETE of expired counter rows (lazy sweep).
+ * At 1% and 10 rows-per-sweep, steady-state under continuous load
+ * trends towards zero unbounded growth without adding latency to the
+ * 99% of calls that don't sweep.
+ */
+const SWEEP_PROBABILITY = 0.01;
+/**
+ * Oracle P1-NEW-3 (W5-A followup): max rows deleted per lazy-sweep call.
+ * Bounded so a sweep never becomes a long-running scan; the next sweep
+ * will pick up any remaining expired rows.
+ */
+const SWEEP_BATCH_SIZE = 10;
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -104,6 +119,15 @@ export function rateLimitD1(opts: RateLimitD1Options) {
     // 3. Atomic upsert. The composite PK (key, window_start) makes this
     //    a single-row CAS — D1 serialises per-row mutations, so even if
     //    100 requests land in the same millisecond, exactly N get count=N.
+    //
+    //    Oracle P1-NEW-3 (W5-A followup): cap the stored counter at
+    //    `max + 1` via a CASE WHEN inside the upsert so a sustained
+    //    flood doesn't grow the integer column without bound. The
+    //    middleware's 429 decision still triggers on `count > max` so
+    //    behaviour is unchanged; only the row-state ceiling changes.
+    //    The +1 buffer is intentional: it lets a "first refusal" be
+    //    distinguished from "well past cap" in the row, which a future
+    //    pre-write SELECT-peek optimisation could use to short-circuit.
     let count: number;
     try {
       const db = createDb(c.env.DB);
@@ -118,13 +142,27 @@ export function rateLimitD1(opts: RateLimitD1Options) {
         .onConflictDoUpdate({
           target: [rateLimitCounters.key, rateLimitCounters.windowStart],
           set: {
-            count: sql`${rateLimitCounters.count} + 1`,
+            count: sql`CASE WHEN ${rateLimitCounters.count} >= ${opts.max + 1} THEN ${rateLimitCounters.count} ELSE ${rateLimitCounters.count} + 1 END`,
           },
         })
         .returning({ count: rateLimitCounters.count });
       // Drizzle returns an array; for a single-row upsert with RETURNING
       // SQLite emits exactly one row. Defensive fallback just in case.
       count = rows[0]?.count ?? 1;
+
+      // Oracle P1-NEW-3 (W5-A followup): lazy fire-and-forget sweep of
+      // expired counter rows. 1% of calls trigger a bounded DELETE
+      // (`LIMIT SWEEP_BATCH_SIZE`) so the table doesn't accumulate
+      // stale per-(user, window) rows forever. Voided so the response
+      // never waits on it; errors swallowed because a sweep failure is
+      // never user-visible — the next sweep retries.
+      if (Math.random() < SWEEP_PROBABILITY) {
+        void db
+          .delete(rateLimitCounters)
+          .where(lt(rateLimitCounters.expiresAt, nowSec))
+          .limit(SWEEP_BATCH_SIZE)
+          .catch(() => {});
+      }
     } catch (err) {
       // FAIL-CLOSED: legally consequential endpoint, do not default-allow.
       console.error('rateLimitD1: D1 upsert failed', err);

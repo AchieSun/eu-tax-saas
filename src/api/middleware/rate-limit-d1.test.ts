@@ -37,11 +37,17 @@ interface CounterRow {
 let mockStore: Map<string, CounterRow>;
 let mockD1ShouldThrow: boolean;
 let upsertCalls: Array<{ key: string; windowStart: number }>;
+// Oracle P1-NEW-3 (W5-A followup): expose lazy-sweep observability so
+// tests can assert it ran (or was skipped) and how many rows it culled.
+let mockSweepCalls: Array<{ deleted: number; limit: number }>;
+let mockSweepShouldThrow: boolean;
 
 function resetMockStore() {
   mockStore = new Map();
   mockD1ShouldThrow = false;
   upsertCalls = [];
+  mockSweepCalls = [];
+  mockSweepShouldThrow = false;
 }
 
 function rowKey(key: string, windowStart: number) {
@@ -53,19 +59,35 @@ vi.mock('../../db', () => {
   //   db.insert(table).values(row).onConflictDoUpdate({target, set}).returning({count})
   // We return a thenable builder so `await` on the final `.returning(...)`
   // resolves to the simulated row(s).
+  //
+  // Oracle P1-NEW-3 (W5-A followup): the production middleware now caps
+  // the stored count at `max + 1` via a `CASE WHEN count >= max+1` in
+  // the upsert SQL. We mirror that here by reading the cap out of the
+  // ON CONFLICT options so the mock matches D1 behaviour without the
+  // test having to thread `max` separately.
+  //
+  // Oracle P1-NEW-3 (W5-A followup): the middleware also lazy-sweeps
+  // expired rows via `db.delete(...).where(lt(expiresAt, now)).limit(N)`.
+  // We expose `mockSweepCalls` so tests can assert the sweep ran (or
+  // didn't) and which rows it would have removed.
   const insert = vi.fn((_table: unknown) => ({
     values: vi.fn((row: CounterRow) => ({
-      onConflictDoUpdate: vi.fn((_opts: unknown) => ({
+      onConflictDoUpdate: vi.fn((opts: unknown) => ({
         returning: vi.fn(async (_cols?: unknown) => {
           if (mockD1ShouldThrow) {
             throw new Error('simulated D1 failure');
           }
           const k = rowKey(row.key, row.windowStart);
           upsertCalls.push({ key: row.key, windowStart: row.windowStart });
+          // Sniff `max` out of the CASE WHEN expression so the mock
+          // applies the same ceiling D1 will.
+          const cap = sniffCapFromUpsertOpts(opts);
           const existing = mockStore.get(k);
           if (existing) {
-            // ON CONFLICT branch — increment.
-            existing.count += 1;
+            // ON CONFLICT branch — increment up to cap.
+            if (cap === null || existing.count < cap) {
+              existing.count += 1;
+            }
             mockStore.set(k, existing);
             return [{ count: existing.count }];
           }
@@ -77,10 +99,47 @@ vi.mock('../../db', () => {
       })),
     })),
   }));
+
+  // Oracle P1-NEW-3: stub the lazy sweep DELETE chain.
+  const deleteFn = vi.fn((_table: unknown) => ({
+    where: vi.fn((_cond: unknown) => ({
+      limit: vi.fn(async (limit: number) => {
+        if (mockSweepShouldThrow) throw new Error('simulated sweep failure');
+        // Walk the store and delete up to `limit` rows whose expiresAt
+        // is < the current mocked unix-seconds clock. We can't introspect
+        // the drizzle SQL `lt(expiresAt, now)` cleanly inside vi.mock, so
+        // we use the test's fake clock as the cutoff.
+        const nowSec = Math.floor(Date.now() / 1000);
+        const expired = [...mockStore.entries()]
+          .filter(([, r]) => r.expiresAt < nowSec)
+          .slice(0, limit);
+        for (const [key] of expired) mockStore.delete(key);
+        mockSweepCalls.push({ deleted: expired.length, limit });
+        return undefined;
+      }),
+    })),
+  }));
   return {
-    createDb: vi.fn(() => ({ insert })),
+    createDb: vi.fn(() => ({ insert, delete: deleteFn })),
   };
 });
+
+// Sniff the cap (max+1) out of the SQL drizzle template the middleware
+// builds. drizzle's `sql\`CASE WHEN ${col} >= ${max+1} ...\`` produces a
+// queryChunks array where the bare-number interpolation becomes a raw
+// `number` chunk. We pick the first integer > 1 as the cap. Returns null
+// for the older `count + 1` shape so legacy test fixtures still work.
+function sniffCapFromUpsertOpts(opts: unknown): number | null {
+  const set = (opts as { set?: { count?: unknown } } | null)?.set;
+  const expr = set?.count as { queryChunks?: unknown[] } | undefined;
+  if (!expr || !Array.isArray(expr.queryChunks)) return null;
+  for (const chunk of expr.queryChunks) {
+    if (typeof chunk === 'number' && Number.isInteger(chunk) && chunk > 1) {
+      return chunk;
+    }
+  }
+  return null;
+}
 
 // Import AFTER vi.mock so the middleware picks up the mocked `createDb`.
 import { rateLimitD1 } from './rate-limit-d1';
@@ -196,9 +255,11 @@ describe('rateLimitD1 middleware (Oracle P1-7)', () => {
     expect(status429).toBe(5);
     // The DB saw exactly `burst` upserts (no read-then-write skips).
     expect(upsertCalls.length).toBe(burst);
-    // Final stored count equals total requests (each upsert ran once).
+    // Oracle P1-NEW-3 (W5-A followup): the production CASE WHEN caps the
+    // stored counter at `max + 1`. Without the cap this would be `burst`
+    // and the row would grow without bound under sustained refusal.
     const [row] = mockStore.values();
-    expect(row.count).toBe(burst);
+    expect(row.count).toBe(max + 1);
   });
 
   it('5. distinct userIds get independent buckets (user A maxed, user B fresh)', async () => {
@@ -304,5 +365,83 @@ describe('rateLimitD1 middleware (Oracle P1-7)', () => {
     // windowStart=1780488000 (already aligned), windowEnd=1780491600,
     // expiresAt should be 1780491600 + 60 = 1780491660.
     expect(row.expiresAt).toBe(1780491660);
+  });
+
+  // ── Oracle P1-NEW-3 (W5-A followup) ────────────────────────────────
+  it('12. CAP — stored count never exceeds max+1 even under sustained refusal', async () => {
+    const max = 5;
+    const burst = 20;
+    const { request } = createTestApp({ windowSeconds: 86400, max, keyPrefix: 'rl:test' });
+    for (let i = 0; i < burst; i++) {
+      await request();
+    }
+    // Production CASE WHEN ceilings count at max+1; the mock mirrors it.
+    const [row] = mockStore.values();
+    expect(row.count).toBe(max + 1);
+    expect(row.count).toBe(6);
+  });
+
+  // ── Oracle P1-NEW-3 (W5-A followup) — lazy sweep ───────────────────
+  it('13. LAZY SWEEP — fires 1% of calls, deletes up to 10 expired rows, no error throws', async () => {
+    // Seed 20 expired rows (expiresAt in the past relative to the mocked
+    // clock at 2026-06-03T12:00:00Z = unix 1780488000). They must NOT
+    // share the current request's (key, windowStart) — otherwise the
+    // upsert would touch the live row, not a stale one.
+    const nowSec = Math.floor(Date.now() / 1000); // 1780488000
+    for (let i = 0; i < 20; i++) {
+      const key = `rl:test:stale-${i}`;
+      // window 1h wide, started 2h ago, expired 1h ago.
+      const windowStart = nowSec - 7200;
+      mockStore.set(`${key}::${windowStart}`, {
+        key,
+        windowStart,
+        count: 3,
+        expiresAt: nowSec - 3600,
+      });
+    }
+    expect(mockStore.size).toBe(20);
+
+    // Force the sweep to fire by mocking Math.random → 0.005 (< 0.01).
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.005);
+
+    const { request } = createTestApp(
+      { windowSeconds: 86400, max: 10, keyPrefix: 'rl:test' },
+      { user: { id: 'live-user' } },
+    );
+    const res = await request();
+    expect(res.status).toBe(200);
+
+    // The middleware fired void-awaited the sweep; flush microtasks so
+    // the fake delete chain runs before we assert.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockSweepCalls.length).toBe(1);
+    expect(mockSweepCalls[0]?.limit).toBe(10);
+    expect(mockSweepCalls[0]?.deleted).toBe(10);
+    // 20 seeded - 10 swept + 1 new live-user row = 11 rows remaining.
+    expect(mockStore.size).toBe(11);
+
+    randSpy.mockRestore();
+  });
+
+  it('14. LAZY SWEEP — skipped when Math.random >= 0.01 (no DELETE issued)', async () => {
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { request } = createTestApp({ windowSeconds: 86400, max: 10, keyPrefix: 'rl:test' });
+    await request();
+    expect(mockSweepCalls.length).toBe(0);
+    randSpy.mockRestore();
+  });
+
+  it('15. LAZY SWEEP — failure is swallowed (fire-and-forget, never surfaces to caller)', async () => {
+    mockSweepShouldThrow = true;
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.005);
+    const { request } = createTestApp({ windowSeconds: 86400, max: 10, keyPrefix: 'rl:test' });
+    const res = await request();
+    expect(res.status).toBe(200); // sweep failure must not affect the user
+    // Let the rejected promise settle so vitest doesn't see an unhandled.
+    await Promise.resolve();
+    await Promise.resolve();
+    randSpy.mockRestore();
   });
 });

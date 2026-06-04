@@ -184,11 +184,30 @@ vi.mock('../../db', () => {
           const windowStart = Number(row.windowStart);
           const mapKey = `${key}::${windowStart}`;
           return {
-            onConflictDoUpdate: vi.fn((_opts: unknown) => ({
+            onConflictDoUpdate: vi.fn((opts: unknown) => ({
               returning: vi.fn(async (_cols?: unknown) => {
+                // Oracle P1-NEW-3 (W5-A followup): mirror the production
+                // CASE WHEN cap. The drizzle template embeds `max + 1` as
+                // a bare-number chunk in queryChunks; pick the first
+                // integer > 1 we find. Returns null for the older
+                // `count + 1` shape so legacy fixtures still work.
+                const sniffCap = (o: unknown): number | null => {
+                  const set = (o as { set?: { count?: unknown } } | null)?.set;
+                  const expr = set?.count as { queryChunks?: unknown[] } | undefined;
+                  if (!expr || !Array.isArray(expr.queryChunks)) return null;
+                  for (const chunk of expr.queryChunks) {
+                    if (typeof chunk === 'number' && Number.isInteger(chunk) && chunk > 1) {
+                      return chunk;
+                    }
+                  }
+                  return null;
+                };
+                const cap = sniffCap(opts);
                 const existing = mockRateLimitRows.get(mapKey);
                 if (existing) {
-                  existing.count += 1;
+                  if (cap === null || existing.count < cap) {
+                    existing.count += 1;
+                  }
                   mockRateLimitRows.set(mapKey, existing);
                   return [{ count: existing.count }];
                 }
@@ -206,7 +225,20 @@ vi.mock('../../db', () => {
   });
 
   return {
-    createDb: vi.fn(() => ({ select, insert })),
+    createDb: vi.fn(() => ({
+      select,
+      insert,
+      // Oracle P1-NEW-3 (W5-A followup): rateLimitD1 lazy-sweep stub.
+      // The middleware fires `db.delete(rateLimitCounters).where(...).limit(N)`
+      // ~1% of the time as a fire-and-forget. We must not throw, because
+      // the void-awaited promise's rejection would otherwise become an
+      // unhandled rejection in the test runner.
+      delete: vi.fn((_table: unknown) => ({
+        where: vi.fn((_cond: unknown) => ({
+          limit: vi.fn(async (_n: number) => undefined),
+        })),
+      })),
+    })),
   };
 });
 
@@ -832,10 +864,14 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     const status429 = results.filter((r) => r.status === 429).length;
     expect(status200).toBe(10);
     expect(status429).toBe(5);
-    // Only ONE row in D1 (single user × single window), final count = 15.
+    // Only ONE row in D1 (single user × single window).
+    // Oracle P1-NEW-3 (W5-A followup): the CASE WHEN cap in the upsert
+    // ceilings the stored count at `max + 1` (= 11) so the column
+    // doesn't grow without bound. Behaviour-wise: still exactly 10 200s
+    // and 5 429s; only the row-state value differs from the pre-cap 15.
     expect(mockRateLimitRows.size).toBe(1);
     const [row] = mockRateLimitRows.values();
-    expect(row.count).toBe(15);
+    expect(row.count).toBe(11);
   });
 
   it('8. watermark:false (admin) produces a PDF that does NOT contain "DRAFT" text + audit row + header', async () => {
@@ -1467,7 +1503,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(value).toBe('03.06.2026');
   }, 20000);
 
-  it("25. POST /render coerces an unknown/garbage transform value to 'none' instead of throwing 500", async () => {
+  it("25. POST /render coerces an unknown/garbage transform value to 'none' AND emits a transform-failed warning (Oracle P1-NEW-7)", async () => {
     const { PDFDocument } = await import('pdf-lib');
     mockVersion = makeVersion();
     mockFields = [
@@ -1478,7 +1514,8 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         dataPath: 'user.firstName',
         // Simulates a manual D1 edit / future schema drift writing a value
         // that's not in TransformSchema. Route must degrade to 'none'
-        // (raw passthrough) — never throw, never 500.
+        // (raw passthrough) — never throw, never 500 — AND must surface
+        // a structured warning so operators see the schema drift.
         transform: 'definitely-not-a-real-transform-id',
         xCoord: null,
         yCoord: null,
@@ -1499,8 +1536,194 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     const value = pdf.getForm().getTextField('txt_first_name').getText() ?? '';
     // Coerced to 'none' → raw value written verbatim.
     expect(value).toBe('Alice');
-    // No 'transform-failed' warning (because the coercion happened in the
-    // route before fillForm ever saw the bad id).
-    expect(res.headers.get('x-render-warnings')).toBe('0');
+    // Oracle P1-NEW-7 (W5-A followup): the count is now ≥ 1 and the
+    // detail surfaces a 'transform-failed' reason so this regression is
+    // visible without parsing log strings.
+    const warningCount = Number(res.headers.get('x-render-warnings') ?? '0');
+    expect(warningCount).toBeGreaterThanOrEqual(1);
+    const detailRaw = res.headers.get('x-render-warning-detail') ?? '{}';
+    expect(detailRaw).toContain('transform-failed');
+    const detail = JSON.parse(detailRaw) as {
+      items: Array<{ dataPath: string; fieldName: string; reason: string; detail?: string }>;
+      truncated: boolean;
+      total: number;
+    };
+    const transformFailed = detail.items.find((it) => it.reason === 'transform-failed');
+    expect(transformFailed).toBeTruthy();
+    expect(transformFailed?.fieldName).toBe('txt_first_name');
+    expect(transformFailed?.dataPath).toBe('user.firstName');
+    expect(transformFailed?.detail).toContain("definitely-not-a-real-transform-id");
+  }, 20000);
+
+  // ── Oracle P1-NEW-6 (W5-A followup): X-Render-Warning-Detail byte cap ──
+  it('26. X-Render-Warning-Detail caps at 4 KiB with a truncation marker entry', async () => {
+    mockVersion = makeVersion();
+    // 100 coordinate fields each pointing at a missing path. Synth fallback
+    // skips widget creation for coordinate fields, so this is cheap.
+    // 200-char dataPath per field × 100 fields × ~80 bytes of JSON
+    // envelope each ≈ 16 KiB if we naïvely emitted them all.
+    mockFields = Array.from({ length: 100 }, (_, idx) =>
+      makeField({
+        id: `f${idx}`,
+        fieldName: `coord_field_${idx}`,
+        fieldKind: 'coordinate',
+        fieldType: 'text',
+        // 200-char dataPath = the user-controlled string we're worried about.
+        dataPath: `user.missing.${'x'.repeat(190)}_${idx}`,
+        pageNumber: 0,
+        xCoord: 50 + idx * 2,
+        yCoord: 700,
+        fontSize: 10,
+      }),
+    );
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    const detailRaw = res.headers.get('x-render-warning-detail') ?? '';
+    // Hard byte cap — well under Cloudflare's 16 KiB response-header ceiling.
+    expect(new TextEncoder().encode(detailRaw).byteLength).toBeLessThanOrEqual(4096);
+    const detail = JSON.parse(detailRaw) as {
+      items: Array<{ dataPath: string; fieldName: string; reason: string; detail?: string }>;
+      truncated: boolean;
+      total: number;
+    };
+    expect(detail.truncated).toBe(true);
+    expect(detail.total).toBe(100);
+    // Marker entry must be present so consumers can detect mid-payload truncation.
+    const marker = detail.items.find((it) => it.dataPath === '__truncated__');
+    expect(marker).toBeTruthy();
+    expect(marker?.reason).toBe('transform-failed');
+    expect(marker?.detail).toMatch(/detail-truncated: \d+ more/);
+  }, 20000);
+
+  it('27. X-Render-Warning-Detail sanitises non-ASCII characters in detail to "?"', async () => {
+    mockVersion = makeVersion();
+    // Use a single garbage transform value whose name contains non-ASCII
+    // characters so the route's transform-failed warning carries them
+    // into `detail` — the sanitiser must replace them with '?'.
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        // Devanagari + emoji + a stray newline — all outside printable ASCII.
+        transform: 'बादtransform😀\nmore',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    const detailRaw = res.headers.get('x-render-warning-detail') ?? '';
+    // Header value must be header-safe (no CR/LF) and contain no non-ASCII bytes.
+    expect(detailRaw).not.toMatch(/[\r\n]/);
+    for (const ch of detailRaw) {
+      const code = ch.charCodeAt(0);
+      expect(code).toBeGreaterThanOrEqual(0x20);
+      expect(code).toBeLessThanOrEqual(0x7e);
+    }
+    // The dangerous characters must have been replaced (we don't pin the
+    // exact replacement count — just that they're gone from `detail`).
+    const detail = JSON.parse(detailRaw) as {
+      items: Array<{ reason: string; detail?: string }>;
+    };
+    const transformFailed = detail.items.find((it) => it.reason === 'transform-failed');
+    expect(transformFailed).toBeTruthy();
+    expect(transformFailed?.detail).toContain('?');
+    expect(transformFailed?.detail).not.toMatch(/[\u0080-\uffff]/);
+  }, 20000);
+
+  // ── Oracle P1-NEW-5 (W5-A followup): bodyLimit → requireAdminIfWatermarkOff → handler chain ──
+  //
+  // Pins the middleware ordering AND the body.clone() cache assumption.
+  // A future hono upgrade that changes c.req.bodyCache semantics, or a
+  // refactor that remounts these middlewares out of order, would silently
+  // break the admin gate without these tests.
+  it('28. POST /render with watermark:false + non-admin + near-bodyLimit body → 403 (not 401/200/500)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    // user-1 is in session but NOT in mockUserRoles → role-lookup returns
+    // no rows → middleware treats as non-admin and must 403.
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp({ user: { id: 'user-1' } });
+    // Build a body close to (but under) the 256 KiB bodyLimit: ~200 KiB
+    // of padded string in `data` plus the watermark:false flag.
+    const paddedData = { user: { firstName: 'Alice' }, padding: 'p'.repeat(200 * 1024) };
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { watermark: false, data: paddedData },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    // The body fits under 256 KiB so bodyLimit passes; admin gate refuses.
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('watermark_off_admin_only');
+    // Rate-limit row never written: the admin gate runs BEFORE rateLimitD1
+    // (Oracle P0-1) so a refused misuse doesn't burn a quota slot.
+    expect(mockRateLimitRows.size).toBe(0);
+  }, 20000);
+
+  it('29. POST /render with watermark omitted (default-on) + near-bodyLimit body → bodyLimit passes through to handler (NOT 403)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp({ user: { id: 'user-1' } });
+    const paddedData = { user: { firstName: 'Alice' }, padding: 'p'.repeat(200 * 1024) };
+    // watermark omitted → schema default (DRAFT watermark on) → admin gate
+    // is a no-op. The 1:1 wire format only allows `false` or a
+    // WatermarkOptions object — `true` is NOT in the union, so the
+    // canonical "watermark on" wire shape is to omit the field.
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: paddedData },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    // With watermark omitted the admin gate is a no-op; the body fits
+    // under 256 KiB so bodyLimit passes; the handler should render
+    // successfully (200) OR hit some downstream limit (429), but it must
+    // NOT be 403: 403 here would mean the admin gate is misfiring on a
+    // non-watermark-off body, which is the regression we guard against.
+    expect(res.status).not.toBe(403);
+    expect([200, 429]).toContain(res.status);
+    // And the rate-limit upsert did happen (gate cleared, limiter ran).
+    expect(mockRateLimitRows.size).toBe(1);
   }, 20000);
 });

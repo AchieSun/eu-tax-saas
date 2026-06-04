@@ -76,7 +76,11 @@ import { auditLog, formFieldMappings } from '../../db/schema';
 // Oracle P1-8 (W4 review): fillForm + synth helpers are imported dynamically
 // inside the POST /render handler — they pull in pdf-lib (~600 KiB) which the
 // GET path does NOT need. Keeping these top-level types-only.
-import type { PDFTooLargeError as PDFTooLargeErrorType, fillForm } from '../../forms/render/fill';
+import type {
+  FillWarning,
+  PDFTooLargeError as PDFTooLargeErrorType,
+  fillForm,
+} from '../../forms/render/fill';
 import type {
   buildSynthPdfWithAcroForm as BuildSynthPdfWithAcroFormType,
   defaultMantelStyleFields as DefaultMantelStyleFieldsType,
@@ -361,14 +365,35 @@ formsRoutes.post(
     //    degrades to 'none' instead of throwing 500 mid-render.
     //    NOTE: `citation` is required by the type but `notes` may be null
     //    for legacy rows — fall back to 'unknown' so the type stays sound.
-    const coerceTransform = (raw: unknown): Transform => {
+    //
+    //    Oracle P1-NEW-7 (W5-A followup): a safeParse failure used to be
+    //    silently absorbed — the route degraded to 'none' with zero
+    //    warnings emitted, defeating P2-A's observability. Now we collect
+    //    a structured warning per failed coercion and merge it into the
+    //    fillForm warnings array so operators see schema drift in both
+    //    X-Render-Warnings and X-Render-Warning-Detail.
+    const transformWarnings: FillWarning[] = [];
+    const coerceTransform = (
+      raw: unknown,
+      row: { dataPath: string; fieldName: string },
+    ): Transform => {
       const parsed = TransformSchema.safeParse(raw);
-      return parsed.success ? parsed.data : 'none';
+      if (parsed.success) return parsed.data;
+      transformWarnings.push({
+        dataPath: row.dataPath,
+        fieldName: row.fieldName,
+        reason: 'transform-failed',
+        detail: `unknown transform '${String(raw)}' on field '${row.fieldName}', degraded to 'none'`,
+      });
+      return 'none';
     };
     const fields: Field[] = rows.map((r) => {
       const fieldType = (r.fieldType ?? 'text') as 'text' | 'number' | 'date' | 'checkbox';
       const citation = r.notes ?? 'unknown';
-      const transform = coerceTransform(r.transform);
+      const transform = coerceTransform(r.transform, {
+        dataPath: r.dataPath,
+        fieldName: r.fieldName,
+      });
       if (r.fieldKind === 'coordinate') {
         return {
           kind: 'coordinate' as const,
@@ -592,23 +617,64 @@ formsRoutes.post(
     // Oracle P1-3 (W4 review): emit X-Render-Warning-Detail as a
     // JSON-encoded array of up to 10 structured warnings so the UI can
     // surface specific issues per-field instead of just the count.
+    // Oracle P1-NEW-6 (W5-A followup): the detail payload is sanitised
+    // (printable-ASCII only) and byte-capped at 4 KiB so a 100-field
+    // user-supplied unicode payload can never push past Cloudflare's
+    // 16 KiB response-header ceiling.
+    // Oracle P1-NEW-7 (W5-A followup): merge any transform-failed
+    // warnings collected during the mapping coercion into the
+    // post-render warnings array so they surface in both the count
+    // header and the detail payload.
+    const allWarnings: FillWarning[] = [...transformWarnings, ...result.warnings];
     c.header('Content-Type', 'application/pdf');
     c.header('Content-Disposition', `attachment; filename="${country}-${year}-${form}-draft.pdf"`);
-    c.header('X-Render-Warnings', String(result.warnings.length));
+    c.header('X-Render-Warnings', String(allWarnings.length));
     {
       const MAX_DETAIL = 10;
-      const truncated = result.warnings.length > MAX_DETAIL;
-      const detail: {
-        items: typeof result.warnings;
-        truncated: boolean;
-        total: number;
-      } = {
-        items: result.warnings.slice(0, MAX_DETAIL),
-        truncated,
-        total: result.warnings.length,
+      const MAX_DETAIL_BYTES = 4096;
+      // Sanitise per-warning detail to printable ASCII (0x20..0x7E).
+      // CR/LF are also out of range so newlines are implicitly stripped.
+      const sanitiseDetail = (s: string | undefined): string | undefined => {
+        if (s === undefined) return undefined;
+        return s.replace(/[^\x20-\x7E]/g, '?');
       };
-      // JSON-encode then strip CR/LF — header values must not contain newlines.
-      c.header('X-Render-Warning-Detail', JSON.stringify(detail).replace(/[\r\n]/g, ' '));
+      const sanitised: FillWarning[] = allWarnings.slice(0, MAX_DETAIL).map((w) => ({
+        ...w,
+        detail: sanitiseDetail(w.detail),
+      }));
+
+      const buildPayload = (items: FillWarning[], truncated: boolean, total: number) => ({
+        items,
+        truncated,
+        total,
+      });
+      const totalCount = allWarnings.length;
+      let kept: FillWarning[] = sanitised;
+      let truncated = totalCount > MAX_DETAIL;
+      let serialised = JSON.stringify(buildPayload(kept, truncated, totalCount));
+
+      // Byte-cap: drop entries from the END one at a time until under
+      // MAX_DETAIL_BYTES. Append a marker so consumers can detect
+      // truncation without comparing items.length to total.
+      if (new TextEncoder().encode(serialised).byteLength > MAX_DETAIL_BYTES) {
+        while (kept.length > 0) {
+          kept = kept.slice(0, -1);
+          truncated = true;
+          const withMarker: FillWarning[] = [
+            ...kept,
+            {
+              dataPath: '__truncated__',
+              fieldName: '__truncated__',
+              reason: 'transform-failed',
+              detail: `detail-truncated: ${totalCount - kept.length} more`,
+            },
+          ];
+          serialised = JSON.stringify(buildPayload(withMarker, truncated, totalCount));
+          if (new TextEncoder().encode(serialised).byteLength <= MAX_DETAIL_BYTES) break;
+        }
+      }
+      // Strip CR/LF defensively — header values must not contain newlines.
+      c.header('X-Render-Warning-Detail', serialised.replace(/[\r\n]/g, ' '));
     }
     c.header('X-Render-Filled-Fields', String(result.filledFieldCount));
     c.header('X-Render-Mapping-Version', String(version.version));

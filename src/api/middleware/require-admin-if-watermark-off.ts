@@ -1,6 +1,16 @@
 /**
  * require-admin-if-watermark-off.ts — Oracle P0-1 (W4 review).
  *
+ * **Ordering invariant (Oracle P1-NEW-5, W5-A followup):** this middleware
+ * assumes a `bodyLimit({maxSize: MAX_RENDER_BODY_BYTES})` ran in front of
+ * it. The body clone here (`c.req.raw.clone()`) works because hono caches
+ * the body in `c.req.bodyCache` — the downstream handler's `c.req.json()`
+ * call later in the chain re-reads from that cache rather than draining
+ * the stream a second time. If you remount this middleware AHEAD of
+ * `bodyLimit`, oversized bodies will be fully buffered here before
+ * bodyLimit gets to reject them. See `forms.test.ts` test #28/#29 for the
+ * E2E regression test that pins this ordering.
+ *
  * Gate the `watermark: false` lever on POST /api/forms/:c/:y/:f/render to
  * admin users only. Non-admins (including anon) get 403
  * `watermark_off_admin_only` BEFORE the rate-limit middleware consumes a
