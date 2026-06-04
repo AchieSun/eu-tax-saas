@@ -1,4 +1,15 @@
 import { eq } from 'drizzle-orm';
+// Oracle P1-1 (W4 review): hard caps on R2-fetched source PDFs — guards
+//   against unbounded memory + CPU when the upstream R2 object is huge
+//   or has too many pages.
+// Oracle P1-2 (W4 review): hono body-limit on POST /render rejects
+//   oversized request bodies BEFORE the route handler parses JSON.
+// Oracle P1-6 (W4 review): country/form path-params validated against
+//   FormMappingSchema.shape so the canonical enum is the single source
+//   of truth (no drift between the regex here and the rest of the app).
+// Oracle P1-8 (W4 review): pdf-lib + render helpers are dynamically
+//   imported inside POST /render so GET /:c/:y/:f (mapping metadata
+//   only, no PDF rendering) does NOT pay the cold-start cost.
 /**
  * W4 T2.1 — GET /api/forms/:country/:year/:form
  * W4 T3.2 — POST /api/forms/:country/:year/:form/render
@@ -32,6 +43,11 @@ import { eq } from 'drizzle-orm';
  *   - Oracle P0-5 (W4 review): uses `eqAllActive([...])` instead of
  *     `withActiveFilter(and(...))` so the (country, form, year) narrowing
  *     can never silently degrade to a global match.
+ *   - Oracle P1-1 (W4 review): rejects R2-sourced PDFs that exceed
+ *     MAX_PDF_BYTES (size) or MAX_PDF_PAGES (page count) with 502 +
+ *     X-Render-Reject-Reason header so the failure mode is structured.
+ *   - Oracle P1-2 (W4 review): request bodies > 256 KiB are refused with
+ *     413 body_too_large BEFORE the admin gate / rateLimit run.
  *   - Auth-required (refused 401 by `rateLimit({requireSession:true})`)
  *   - Per-user rate-limited (10/day default via KV-backed sliding bucket)
  *   - Pulls the same active mapping rows as GET, then either fetches the
@@ -42,17 +58,21 @@ import { eq } from 'drizzle-orm';
  *   - Cache-Control: no-store, private — every render embeds user data.
  */
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { createDb } from '../../db';
 import { currentMappingVersion, eqAllActive } from '../../db/queries/form-mappings';
 import { auditLog, formFieldMappings } from '../../db/schema';
-import { fillForm } from '../../forms/render/fill';
-import {
-  type FieldSpec,
-  buildSynthPdfWithAcroForm,
-  defaultMantelStyleFields,
+// Oracle P1-8 (W4 review): fillForm + synth helpers are imported dynamically
+// inside the POST /render handler — they pull in pdf-lib (~600 KiB) which the
+// GET path does NOT need. Keeping these top-level types-only.
+import type { PDFTooLargeError as PDFTooLargeErrorType, fillForm } from '../../forms/render/fill';
+import type {
+  buildSynthPdfWithAcroForm as BuildSynthPdfWithAcroFormType,
+  defaultMantelStyleFields as DefaultMantelStyleFieldsType,
+  FieldSpec,
 } from '../../forms/render/synth';
-import type { Field, FormMapping } from '../../forms/types';
+import { type Field, type FormMapping, FormMappingSchema } from '../../forms/types';
 import type { Bindings, Variables } from '../index';
 import { rateLimit } from '../middleware/rate-limit';
 import { requireAdminIfWatermarkOff } from '../middleware/require-admin-if-watermark-off';
@@ -60,10 +80,29 @@ import { MAX_HASH_BYTES, sha256Hex } from '../middleware/sha256';
 
 export const formsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+// ── Oracle P1-1 / P1-2 caps ─────────────────────────────────────────────────
+// MAX_PDF_BYTES: R2 source PDFs over 10 MiB are refused — production tax
+//   forms are O(few hundred KiB); anything bigger is either a misuploaded
+//   asset or a malicious blob.
+// MAX_PDF_PAGES: 50 is generous (the longest real form we ship has ~30 pp);
+//   refuses bombs that would force pdf-lib to allocate page graphs for
+//   thousands of pages.
+// MAX_RENDER_BODY_BYTES: 256 KiB — render bodies are O(few KiB) of user
+//   data; anything bigger is refused with 413 before the JSON parser runs.
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_PAGES = 50;
+const MAX_RENDER_BODY_BYTES = 256 * 1024;
+
 // ── Zod path-param schema ───────────────────────────────────────────────────
 
+// Oracle P1-6 (W4 review): country + form must match the canonical enum
+// exported by FormMappingSchema. Previously the regex /^[A-Z]{2}$/ accepted
+// any 2-letter code (e.g. ZZ) and the route then cast it to FormMapping's
+// narrower union, papering over the mismatch. Pulling the enum in here
+// means the path-param validator now refuses unsupported countries at the
+// edge with a structured Zod error — no silent fall-through.
 const pathParamsSchema = z.object({
-  country: z.string().regex(/^[A-Z]{2}$/, 'country must be 2-letter uppercase ISO code'),
+  country: FormMappingSchema.shape.country,
   year: z.coerce.number().int().min(2020).max(2099),
   form: z.string().regex(/^[a-z0-9_]{1,64}$/, 'form must be snake_case (a-z0-9_, max 64 chars)'),
 });
@@ -181,6 +220,14 @@ const RENDER_MAX_PER_WINDOW = 10;
 
 formsRoutes.post(
   '/:country/:year/:form/render',
+  // Oracle P1-2 (W4 review): bodyLimit runs first — a 300 KiB JSON body
+  // gets refused with 413 + structured JSON before the admin gate clones
+  // the body, before rateLimit consumes a slot, and before the route
+  // handler ever runs. Cap is generous: real render bodies are O(few KiB).
+  bodyLimit({
+    maxSize: MAX_RENDER_BODY_BYTES,
+    onError: (c) => c.json({ error: 'body_too_large', limitBytes: MAX_RENDER_BODY_BYTES }, 413),
+  }),
   // Oracle P0-1 (W4 review): admin gate runs BEFORE rateLimit so a refused
   // non-admin watermark:false call does not burn one of the user's daily
   // 10 render slots. The middleware peeks at body via Request.clone() and
@@ -192,6 +239,21 @@ formsRoutes.post(
     keyPrefix: 'rl:render',
   }),
   async (c) => {
+    // Oracle P1-8 (W4 review): load the pdf-lib-heavy render helpers
+    // lazily so GET /api/forms/:c/:y/:f (which only returns JSON mapping
+    // metadata) never pulls in the ~600 KiB pdf-lib bundle. Both modules
+    // are needed in this handler so we load them in parallel.
+    const [fillModule, synthModule] = await Promise.all([
+      import('../../forms/render/fill'),
+      import('../../forms/render/synth'),
+    ]);
+    const fillFormFn: typeof fillForm = fillModule.fillForm;
+    const PDFTooLargeError: typeof PDFTooLargeErrorType = fillModule.PDFTooLargeError;
+    const buildSynthPdfWithAcroForm: typeof BuildSynthPdfWithAcroFormType =
+      synthModule.buildSynthPdfWithAcroForm;
+    const defaultMantelStyleFields: typeof DefaultMantelStyleFieldsType =
+      synthModule.defaultMantelStyleFields;
+
     // 1. Validate path params (same schema as GET).
     const parsedPath = pathParamsSchema.safeParse({
       country: c.req.param('country'),
@@ -306,11 +368,12 @@ formsRoutes.post(
     });
 
     const mapping: FormMapping = {
-      // pathParamsSchema regex /^[A-Z]{2}$/ guarantees a 2-letter code,
-      // but FormMappingSchema only allows the 5 supported countries — cast
-      // here so we don't double-validate; the API contract is that the
-      // path-param Zod is authoritative.
-      country: country as FormMapping['country'],
+      // Oracle P1-6 (W4 review): `country` is already narrowed to the
+      // canonical FormMappingSchema enum by pathParamsSchema, so no cast
+      // is required here. If a future country is added to the app it
+      // ships in one place (FormMappingSchema) and this route picks it
+      // up automatically.
+      country,
       year,
       form,
       formTitle: form,
@@ -324,17 +387,39 @@ formsRoutes.post(
     //    R2 fetch failure (object missing / read error) silently falls
     //    through to synth — the dev environment may not have the asset
     //    uploaded yet, and the synth output is still a valid demo PDF.
+    // Oracle P1-1 (W4 review): when R2 returns an object we enforce a
+    //    hard 10 MiB size cap BEFORE allocating an arrayBuffer; oversized
+    //    objects return a structured 502 + X-Render-Reject-Reason
+    //    header so the failure mode is observable. Page-count enforcement
+    //    happens later via fillForm({maxPages}) — see below.
     const r2Key = rows.find((r) => r.pdfR2Key)?.pdfR2Key ?? null;
     let pdfBytes: Uint8Array | null = null;
+    let pdfFromR2 = false;
     if (r2Key) {
       try {
         const obj = await c.env.R2.get(r2Key);
         if (obj) {
+          // Oracle P1-1: refuse objects exceeding MAX_PDF_BYTES before
+          // we materialise them in memory.
+          const size = (obj as { size?: number }).size;
+          if (typeof size === 'number' && size > MAX_PDF_BYTES) {
+            c.header('X-Render-Reject-Reason', 'r2_size');
+            return c.json(
+              {
+                error: 'source_pdf_too_large',
+                sizeBytes: size,
+                limitBytes: MAX_PDF_BYTES,
+              },
+              502,
+            );
+          }
           pdfBytes = new Uint8Array(await obj.arrayBuffer());
+          pdfFromR2 = true;
         }
       } catch (_err) {
         // Swallow — fall through to synth.
         pdfBytes = null;
+        pdfFromR2 = false;
       }
     }
     if (!pdfBytes) {
@@ -383,23 +468,44 @@ formsRoutes.post(
     const userIdHash = sessionUserId ? (await sha256Hex(sessionUserId)).slice(0, 16) : 'anonymous';
     const renderedAt = new Date().toISOString();
 
-    const result = await fillForm({
-      pdfBytes,
-      mapping,
-      data: body.data,
-      watermark: body.watermark,
-      // Oracle P0-4: embed mapping provenance + render trace into the PDF
-      // metadata slots so the artifact carries its origin everywhere.
-      metadata: {
-        mappingVersion: version.version,
-        mappingHash: version.contentHash,
-        country,
-        taxYear: year,
-        formType: form,
-        renderedAt,
-        userIdHash,
-      },
-    });
+    // Oracle P1-1 (W4 review): pass maxPages ONLY when the source bytes
+    // came from R2. The synth fallback is our own builder and is already
+    // capped by its `pageCount` arg, so re-enforcing here would just
+    // double-check our own code.
+    let result: Awaited<ReturnType<typeof fillForm>>;
+    try {
+      result = await fillFormFn({
+        pdfBytes,
+        mapping,
+        data: body.data,
+        watermark: body.watermark,
+        ...(pdfFromR2 ? { maxPages: MAX_PDF_PAGES } : {}),
+        // Oracle P0-4: embed mapping provenance + render trace into the PDF
+        // metadata slots so the artifact carries its origin everywhere.
+        metadata: {
+          mappingVersion: version.version,
+          mappingHash: version.contentHash,
+          country,
+          taxYear: year,
+          formType: form,
+          renderedAt,
+          userIdHash,
+        },
+      });
+    } catch (err) {
+      if (err instanceof PDFTooLargeError) {
+        c.header('X-Render-Reject-Reason', 'r2_pages');
+        return c.json(
+          {
+            error: 'source_pdf_too_many_pages',
+            pageCount: err.pageCount,
+            limit: err.limit,
+          },
+          502,
+        );
+      }
+      throw err;
+    }
 
     // 7b. Oracle P0-1: every off-watermark render leaves a dedicated audit
     //     trail. Fire-and-forget via executionCtx.waitUntil when available

@@ -148,6 +148,13 @@ app.use('/api/days', auditMiddleware());
 app.use('/api/days/*', auditMiddleware());
 app.use('/api/admin', auditMiddleware());
 app.use('/api/admin/*', auditMiddleware());
+// Oracle P1-2 (W4 review): /api/forms is legally consequential — every
+// render embeds user data into a draft tax PDF, so it deserves the same
+// hash-only audit trail as /calculate and /admin. This emits a generic
+// source='api' row alongside the per-render source='render-watermark-off'
+// row from P0-1 (the two complement each other rather than overlapping).
+app.use('/api/forms', auditMiddleware());
+app.use('/api/forms/*', auditMiddleware());
 
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);

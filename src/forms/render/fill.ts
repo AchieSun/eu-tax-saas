@@ -1,3 +1,6 @@
+// Oracle P1-1 (W4 review): export PDFTooLargeError so the /render route
+// can reject oversized source PDFs (R2 bytes that exceed maxPages) with a
+// typed, catchable error instead of silently OOMing the worker isolate.
 /**
  * fill.ts — Pure render core for W4 T3.1a (pdf-fill engine).
  *
@@ -41,6 +44,23 @@ export type { WatermarkOptions } from './watermark';
 /** Arbitrarily nested user data bundle; leaves resolve to `SourceValue`. */
 export type FillFormData = Record<string, unknown>;
 
+/**
+ * Oracle P1-1 (W4 review) — typed error thrown by fillForm when the source
+ * PDF carries more pages than the caller is willing to render. The /render
+ * route catches this to return a structured 502 + reject-reason header
+ * instead of letting pdf-lib chew through arbitrary user-supplied bytes.
+ */
+export class PDFTooLargeError extends Error {
+  readonly pageCount: number;
+  readonly limit: number;
+  constructor(pageCount: number, limit: number) {
+    super(`source PDF has ${pageCount} pages, exceeds limit ${limit}`);
+    this.name = 'PDFTooLargeError';
+    this.pageCount = pageCount;
+    this.limit = limit;
+  }
+}
+
 export interface FillFormInput {
   pdfBytes: Uint8Array;
   mapping: FormMapping;
@@ -49,6 +69,12 @@ export interface FillFormInput {
    * `sourcePath`s declared in the mapping (e.g. `user.profile.firstName`).
    */
   data: FillFormData;
+  /**
+   * Oracle P1-1 (W4 review): hard ceiling on source PDF page count. When
+   * set, fillForm() throws PDFTooLargeError after PDFDocument.load() if
+   * the loaded doc exceeds this number. Omit to disable (no cap).
+   */
+  maxPages?: number;
   /**
    * Draft watermark control (T3.1b). Three states:
    *   - `undefined` (omitted) → ON with defaults. This is the safe default:
@@ -100,6 +126,15 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
 
   // Invalid PDF bytes deliberately propagate the natural pdf-lib error.
   const doc = await PDFDocument.load(pdfBytes);
+  // Oracle P1-1 (W4 review): enforce page-count cap on the freshly-loaded
+  // doc BEFORE embedding fonts or iterating fields. Throwing PDFTooLargeError
+  // gives the caller a typed error to map to a 502 + structured body.
+  if (input.maxPages !== undefined) {
+    const pageCount = doc.getPageCount();
+    if (pageCount > input.maxPages) {
+      throw new PDFTooLargeError(pageCount, input.maxPages);
+    }
+  }
   // Embed Helvetica once and reuse — embedFont is expensive and the engine
   // may stamp dozens of coordinate fields per render.
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);

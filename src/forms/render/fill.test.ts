@@ -17,7 +17,7 @@ import {
   defaultMantelStyleFields,
 } from '../../../tests/fixtures/pdf-builder';
 import type { FormMapping } from '../types';
-import { fillForm } from './fill';
+import { PDFTooLargeError, fillForm } from './fill';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -813,5 +813,140 @@ describe('fillForm — PDF metadata embedding (Oracle P0-4)', () => {
     expect(keywords).not.toContain('user-id-hash:');
     // renderedAt defaults to "now"-shaped ISO string when omitted.
     expect(keywords).toMatch(/rendered-at:\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+// ── Oracle P1-1 (W4 review): PDFTooLargeError page-count cap ──────────
+describe('fillForm — PDFTooLargeError (Oracle P1-1)', () => {
+  it('throws PDFTooLargeError when source doc page count exceeds maxPages', async () => {
+    // Build a 3-page coord-only PDF; cap at 2 → must throw.
+    const longPdf = await buildSynthPdfCoordOnly({ pageCount: 3 });
+    await expect(
+      fillForm({
+        pdfBytes: longPdf,
+        mapping: {
+          country: 'DE',
+          year: 2024,
+          form: 'coord-cap',
+          formTitle: 'cap test',
+          sourceUrl: SOURCE_URL,
+          sourceVersion: SOURCE_VERSION,
+          fields: [
+            {
+              kind: 'coordinate',
+              sourcePath: 'value',
+              type: 'text',
+              transform: 'none',
+              citation: 'test',
+              page: 0,
+              x: 10,
+              y: 10,
+              fontSize: 10,
+            },
+          ],
+        },
+        data: { value: 'x' },
+        maxPages: 2,
+      }),
+    ).rejects.toBeInstanceOf(PDFTooLargeError);
+  });
+
+  it('attaches pageCount + limit fields to PDFTooLargeError', async () => {
+    const longPdf = await buildSynthPdfCoordOnly({ pageCount: 5 });
+    let caught: unknown;
+    try {
+      await fillForm({
+        pdfBytes: longPdf,
+        mapping: {
+          country: 'DE',
+          year: 2024,
+          form: 'coord-cap',
+          formTitle: 'cap test',
+          sourceUrl: SOURCE_URL,
+          sourceVersion: SOURCE_VERSION,
+          fields: [
+            {
+              kind: 'coordinate',
+              sourcePath: 'value',
+              type: 'text',
+              transform: 'none',
+              citation: 'test',
+              page: 0,
+              x: 10,
+              y: 10,
+              fontSize: 10,
+            },
+          ],
+        },
+        data: { value: 'x' },
+        maxPages: 2,
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(PDFTooLargeError);
+    expect((caught as PDFTooLargeError).pageCount).toBe(5);
+    expect((caught as PDFTooLargeError).limit).toBe(2);
+  });
+
+  it('does NOT throw when source page count equals maxPages', async () => {
+    const pdf = await buildSynthPdfCoordOnly({ pageCount: 2 });
+    const result = await fillForm({
+      pdfBytes: pdf,
+      mapping: {
+        country: 'DE',
+        year: 2024,
+        form: 'coord-cap',
+        formTitle: 'cap test',
+        sourceUrl: SOURCE_URL,
+        sourceVersion: SOURCE_VERSION,
+        fields: [
+          {
+            kind: 'coordinate',
+            sourcePath: 'value',
+            type: 'text',
+            transform: 'none',
+            citation: 'test',
+            page: 0,
+            x: 10,
+            y: 10,
+            fontSize: 10,
+          },
+        ],
+      },
+      data: { value: 'x' },
+      maxPages: 2,
+    });
+    expect(result.filledFieldCount).toBe(1);
+  });
+
+  it('omitting maxPages disables the cap (no throw on 10-page doc)', async () => {
+    const pdf = await buildSynthPdfCoordOnly({ pageCount: 10 });
+    const result = await fillForm({
+      pdfBytes: pdf,
+      mapping: {
+        country: 'DE',
+        year: 2024,
+        form: 'coord-cap',
+        formTitle: 'cap test',
+        sourceUrl: SOURCE_URL,
+        sourceVersion: SOURCE_VERSION,
+        fields: [
+          {
+            kind: 'coordinate',
+            sourcePath: 'value',
+            type: 'text',
+            transform: 'none',
+            citation: 'test',
+            page: 0,
+            x: 10,
+            y: 10,
+            fontSize: 10,
+          },
+        ],
+      },
+      data: { value: 'x' },
+    });
+    expect(result.filledFieldCount).toBe(1);
   });
 });

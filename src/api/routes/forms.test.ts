@@ -503,12 +503,17 @@ function makeFakeKv() {
 /**
  * R2Bucket stub. When `bytes` is null the get() returns null (forcing the
  * synth fallback); when non-null the route uses them as the source PDF.
+ *
+ * Oracle P1-1 (W4 review): `overrideSize` lets tests assert the size-cap
+ * branch (the route reads `obj.size` before allocating the arrayBuffer);
+ * when omitted we report the true byte length.
  */
-function makeFakeR2(bytes: Uint8Array | null = null) {
+function makeFakeR2(bytes: Uint8Array | null = null, overrideSize?: number) {
   return {
     get: vi.fn(async (_key: string) => {
       if (!bytes) return null;
       return {
+        size: overrideSize ?? bytes.byteLength,
         arrayBuffer: async () =>
           bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
       };
@@ -1072,5 +1077,131 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { KV: fakeKv.kv, R2: fakeR2 },
     );
     expect(res.status).toBe(200);
+  });
+
+  // ── Oracle P1-1 (W4 review): R2 source-PDF size + page-count caps ────
+  it('16. rejects R2 object exceeding MAX_PDF_BYTES with 502 source_pdf_too_large + X-Render-Reject-Reason: r2_size', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        pdfR2Key: 'tax-forms/DE/2024/huge.pdf',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    // Body bytes are irrelevant — the route checks obj.size first.
+    const tinyBytes = await buildSynthPdfWithAcroForm({
+      fields: [{ name: 'txt_first_name', kind: 'text', x: 100, y: 700, width: 200, height: 18 }],
+    });
+    const fakeR2 = makeFakeR2(tinyBytes, 11_000_000);
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(502);
+    expect(res.headers.get('x-render-reject-reason')).toBe('r2_size');
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('source_pdf_too_large');
+    expect(body.sizeBytes).toBe(11_000_000);
+    expect(body.limitBytes).toBe(10 * 1024 * 1024);
+  });
+
+  it('17. rejects R2 object with too many pages (>50) with 502 source_pdf_too_many_pages + X-Render-Reject-Reason: r2_pages', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        pdfR2Key: 'tax-forms/DE/2024/longform.pdf',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    // 51-page synth PDF — over the 50-page MAX_PDF_PAGES cap.
+    const longPdf = await buildSynthPdfWithAcroForm({
+      pageCount: 51,
+      fields: [{ name: 'txt_first_name', kind: 'text', x: 100, y: 700, width: 200, height: 18 }],
+    });
+    const fakeR2 = makeFakeR2(longPdf);
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(502);
+    expect(res.headers.get('x-render-reject-reason')).toBe('r2_pages');
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('source_pdf_too_many_pages');
+    expect(body.pageCount).toBe(51);
+    expect(body.limit).toBe(50);
+  });
+
+  // ── Oracle P1-2 (W4 review): request-body size cap + audit-log ────
+  it('18. rejects POST body > 256 KiB with 413 body_too_large', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    // ~300 KiB payload — over the 256 KiB cap.
+    const huge = { data: { user: { firstName: 'A'.repeat(300 * 1024) } } };
+    const res = await postJson(app, '/api/forms/DE/2024/mantelbogen/render', huge, {
+      KV: fakeKv.kv,
+      R2: fakeR2,
+    });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('body_too_large');
+    expect(body.limitBytes).toBe(256 * 1024);
+    // bodyLimit refuses BEFORE rateLimit — no KV write should have happened.
+    expect(fakeKv.puts).toHaveLength(0);
+  });
+
+  // ── Oracle P1-6 (W4 review): country narrowed by FormMappingSchema ──
+  it('19. rejects unsupported country code ZZ on POST with 400 validation', async () => {
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/ZZ/2024/mantelbogen/render',
+      { data: {} },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('validation');
+    expect(Array.isArray(body.issues)).toBe(true);
+  });
+
+  it('20. rejects unsupported country code ZZ on GET with 400 validation', async () => {
+    const app = createTestApp();
+    const res = await request(app, '/api/forms/ZZ/2024/mantelbogen');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe('validation');
+    expect(Array.isArray(body.issues)).toBe(true);
   });
 });
