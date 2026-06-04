@@ -158,6 +158,40 @@ describe('toWinAnsi — unsupported scripts fall back to "?"', () => {
   });
 });
 
+describe('toWinAnsi — Oracle P2-B NFC normalization', () => {
+  it('NFD-decomposed é (e + U+0301) normalizes to NFC é before transliteration', () => {
+    // 'caf\u0065\u0301' is NFD for 'café'. After NFC normalization it becomes
+    // 'caf\u00e9' which maps to 'cafe' in TRANSLIT_MAP. No '?' should appear.
+    const r = toWinAnsi('caf\u0065\u0301');
+    expect(r.text).toBe('cafe');
+    expect(r.text.includes('?')).toBe(false);
+  });
+
+  it('NFD ñ (n + U+0303) becomes single char in output', () => {
+    // NFD 'n\u0303' normalizes to NFC '\u00f1' which maps to 'n'.
+    const r = toWinAnsi('jalape\u00f1o');
+    expect(r.text).toBe('jalapeno');
+    expect(r.text.includes('?')).toBe(false);
+  });
+
+  it('NFC pre-composed é stays as é (single char output)', () => {
+    // NFC 'caf\u00e9' should produce identical output to the NFD case.
+    const r = toWinAnsi('caf\u00e9');
+    expect(r.text).toBe('cafe');
+    expect(r.text.includes('?')).toBe(false);
+  });
+
+  it('NFC normalization is idempotent for already-NFC strings (existing tests still pass)', () => {
+    // Regression: existing German/Romance tests all use NFC strings already.
+    const r1 = toWinAnsi('Müller');
+    expect(r1.text).toBe('Mueller');
+    const r2 = toWinAnsi('résumé');
+    expect(r2.text).toBe('resume');
+    const r3 = toWinAnsi('naïve façade');
+    expect(r3.text).toBe('naive facade');
+  });
+});
+
 describe('toWinAnsi — mixed-input integration', () => {
   it('Café — €100 → Cafe - €100 (é + em-dash replaced, € preserved)', () => {
     const r = toWinAnsi('Café — €100');

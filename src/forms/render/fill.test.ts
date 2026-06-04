@@ -23,6 +23,7 @@ import {
   buildWarningFooterText,
   fillForm,
   formatWarningsForLog,
+  getByPath,
 } from './fill';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1318,5 +1319,60 @@ describe('fillForm — Oracle P2-A transform application', () => {
     expect(result.warnings.length).toBe(1);
     expect(result.warnings[0]?.reason).toBe('transform-failed');
     expect(result.warnings[0]?.detail).toContain('boolean-x');
+  });
+});
+
+// ─── Oracle P2-B (W4 review): getByPath prototype pollution guard ───────────
+describe('getByPath — Oracle P2-B prototype pollution guard', () => {
+  it('getByPath returns undefined for __proto__ segment', () => {
+    const data = { user: { name: 'test' } };
+    expect(getByPath(data, 'user.__proto__.toString')).toBeUndefined();
+  });
+
+  it('getByPath returns undefined for constructor segment', () => {
+    const data = { user: { name: 'test' } };
+    expect(getByPath(data, 'user.constructor.name')).toBeUndefined();
+  });
+
+  it('getByPath returns undefined for prototype segment', () => {
+    const data = { user: { name: 'test' } };
+    expect(getByPath(data, 'user.prototype.toString')).toBeUndefined();
+  });
+
+  it('fillForm with dataPath user.__proto__.toString produces missing-data warning, not transform-failed', async () => {
+    const mapping: FormMapping = {
+      country: 'DE',
+      year: 2024,
+      form: 'mantelbogen-synth',
+      formTitle: 'Synthetic Mantelbogen for tests',
+      sourceUrl: SOURCE_URL,
+      sourceVersion: SOURCE_VERSION,
+      fields: [
+        {
+          kind: 'acroform',
+          pdfField: 'txt_first_name',
+          sourcePath: 'user.__proto__.toString',
+          type: 'text',
+          transform: 'none',
+          citation: 'test',
+        },
+      ],
+    };
+
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping,
+      data: { user: { profile: { firstName: 'Anna' } } },
+    });
+
+    expect(result.filledFieldCount).toBe(0);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]?.reason).toBe('missing-data');
+    expect(result.warnings[0]?.dataPath).toContain('__proto__');
+  });
+
+  it('normal nested dataPath user.profile.firstName still resolves', async () => {
+    const data = { user: { profile: { firstName: 'Anna' } } };
+    expect(getByPath(data, 'user.profile.firstName')).toBe('Anna');
   });
 });

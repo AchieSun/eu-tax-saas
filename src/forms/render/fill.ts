@@ -479,13 +479,20 @@ function stampWarningFooter(doc: PDFDocument, font: PDFFont, count: number): voi
  * arbitrarily nested object. Returns `undefined` for any missing segment.
  *
  * Deliberately tiny + dependency-free: lodash.get would be overkill here.
+ *
+ * Oracle P2-B (W4 review): refuse __proto__/constructor/prototype segments
+ * in user-controlled paths to prevent accidental prototype walk.
  */
-function getByPath(obj: unknown, path: string): SourceValue | undefined {
+export function getByPath(obj: unknown, path: string): SourceValue | undefined {
   const keys = path.split('.');
   let cur: unknown = obj;
   for (const k of keys) {
     if (cur === null || cur === undefined) return undefined;
     if (typeof cur !== 'object') return undefined;
+    // Oracle P2-B (W4 review): bail on prototype-pollution vectors
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') {
+      return undefined;
+    }
     cur = (cur as Record<string, unknown>)[k];
   }
   return cur as SourceValue | undefined;

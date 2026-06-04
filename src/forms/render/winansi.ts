@@ -169,14 +169,22 @@ const TRANSLIT_MAP: Record<string, string> = {
  *
  * Performance: O(n) over Unicode scalars; uses string concatenation in a
  * tight loop. Inputs of realistic field length (< 200 chars) are sub-µs.
+ *
+ * Oracle P2-B (W4 review): NFC-normalize before transliteration so
+ * e\u0301 (NFD) becomes é (NFC) and gets transliterated as 'e', not 'e?'.
  */
 export function toWinAnsi(input: string): WinAnsiResult {
   const replacements: Array<{ original: string; replacement: string }> = [];
 
+  // NFC-normalise input so NFD-decomposed combining marks (common on macOS)
+  // are collapsed into pre-composed single scalars before the transliteration
+  // loop. Idempotent for already-NFC strings.
+  const normalized = input.normalize('NFC');
+
   let result = '';
   // `for..of` iterates by Unicode scalar — surrogate pairs count as one
   // step, so emoji and higher-plane CJK collapse cleanly to a single `?`.
-  for (const ch of input) {
+  for (const ch of normalized) {
     const mapped = TRANSLIT_MAP[ch];
     if (mapped !== undefined) {
       result += mapped;
