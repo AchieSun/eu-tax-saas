@@ -15,7 +15,8 @@ build/
 wrangler.toml.local
 
 # Drizzle
-drizzle/migrations/meta/
+# meta/ IS tracked (drizzle-kit needs snapshots for incremental diffs across machines).
+# Only ignore drizzle-kit's local temp folder if you ever introduce one.
 
 # Test
 coverage/
