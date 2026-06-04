@@ -2,7 +2,12 @@
  * Hash-only audit logging middleware (Oracle P1#9).
  *
  * Captures SHA-256 hashes of request/response bodies for /api/calculate,
- * /api/residency, and /api/days routes. Never stores raw body content.
+ * /api/residency, /api/days, /api/admin, and /api/forms mutation routes.
+ * Never stores raw body content.
+ *
+ * Skipped methods: GET, HEAD (Oracle P1-NEW-2 W5-A followup) — those are
+ * audit-irrelevant reads and we mustn't burn D1 free-tier write budget on
+ * each metadata fetch.
  *
  * GDPR Art. 4(1): SHA-256 hashes are NOT personal data when collision-resistant
  * hashing is used and no PII is stored alongside.
@@ -19,9 +24,19 @@ import { MAX_HASH_BYTES, OVERSIZED_THRESHOLD, sha256Hex } from './sha256';
 
 export function auditMiddleware() {
   return createMiddleware<{ Bindings: Bindings; Variables: Variables }>(async (c, next) => {
+    // ── Oracle P1-NEW-2 (W5-A followup): short-circuit on GET/HEAD ───
+    // /api/forms now mounts this middleware to capture POST/PATCH/DELETE
+    // mutations, but its GET endpoints are anonymous-allowed metadata
+    // reads (mapping JSON, ETag-cached) that don't carry user data and
+    // therefore have nothing to audit. Writing a D1 row per metadata
+    // fetch would burn the free-tier 1k-writes/day budget on noise.
+    // HEAD shares the same body-less semantics; skip both before any
+    // body-read or DB insert work.
+    if (c.req.method === 'GET' || c.req.method === 'HEAD') return next();
+
     // ── Capture input hash BEFORE handler consumes body ──────────────
     let inputHash: string | null = null;
-    if (c.req.method !== 'GET' && c.req.method !== 'DELETE') {
+    if (c.req.method !== 'DELETE') {
       // Content-Length short-circuit: don't even try to hash huge bodies
       const contentLength = Number.parseInt(c.req.header('content-length') ?? '0', 10);
       if (contentLength > OVERSIZED_THRESHOLD) {
@@ -55,7 +70,13 @@ export function auditMiddleware() {
           const cloned = c.res.clone();
           const buf = await cloned.arrayBuffer();
           if (buf.byteLength > 0) {
-            resultHash = await sha256Hex(buf);
+            // Oracle P1-NEW-1 (W5-A followup): mirror the input-side
+            // MAX_HASH_BYTES slice. A 10 MiB PDF response was previously
+            // hashed in full (30-80ms CPU per render). The hash is a
+            // collision-resistant fingerprint over the response prefix —
+            // the slice keeps that property at constant cost.
+            const slice = buf.byteLength > MAX_HASH_BYTES ? buf.slice(0, MAX_HASH_BYTES) : buf;
+            resultHash = await sha256Hex(slice);
           }
         } catch {
           // Response may not be clonable if handler threw mid-stream

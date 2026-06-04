@@ -99,14 +99,13 @@ describe('auditMiddleware', () => {
     expect((lastAuditValues!.inputHash as string).length).toBe(64); // SHA-256 hex
   });
 
-  it('sets inputHash to null for GET requests', async () => {
+  it('GET requests skip audit entirely (no D1 row written)', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
     const res = await app.request('/api/test/hello', undefined, mockEnv);
     expect(res.status).toBe(200);
-    expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.inputHash).toBeNull();
-    expect(lastAuditValues!.resultHash).toBeTruthy();
+    // Oracle P1-NEW-2: GET/HEAD short-circuit — no audit row at all.
+    expect(lastAuditValues).toBeNull();
   });
 
   it('sets userIdOrNull to null for anonymous requests', async () => {
@@ -165,12 +164,16 @@ describe('auditMiddleware', () => {
     expect((lastAuditValues!.inputHash as string).length).toBe(64);
   });
 
-  it('records correct route and method metadata', async () => {
+  it('records correct route and method metadata (POST)', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
-    await app.request('/api/test/hello', undefined, mockEnv);
-    expect(lastAuditValues!.route).toBe('/api/test/hello');
-    expect(lastAuditValues!.method).toBe('GET');
+    await app.request('/api/test/echo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: 1 }),
+    }, mockEnv);
+    expect(lastAuditValues!.route).toBe('/api/test/echo');
+    expect(lastAuditValues!.method).toBe('POST');
     expect(lastAuditValues!.source).toBe('api');
   });
 
@@ -211,5 +214,55 @@ describe('auditMiddleware', () => {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
     expect(lastAuditValues!.inputHash).toBe(expectedHex);
+  });
+
+  // ── Oracle P1-NEW-1 (W5-A followup) ────────────────────────────────
+  it('large response body (>64KB) hashes only the first 64KB slice', async () => {
+    const app = createTestApp({ user: { id: 'user-1' } });
+    // Push a 100 KB string back through the echo route so the response
+    // body is at least MAX_HASH_BYTES + change. JSON.stringify adds ~12
+    // bytes of envelope which is fine — we assert against the slice.
+    const largeValue = 'y'.repeat(100 * 1024);
+    const res = await app.request('/api/test/echo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: largeValue }),
+    }, mockEnv);
+    expect(res.status).toBe(200);
+
+    // Re-derive the exact bytes hono returned to verify the slice.
+    // app.request returns a fresh response with the same body each call,
+    // but the audit middleware has already snapshotted resultHash via
+    // its own clone — we re-clone here to compute the expected slice.
+    const fullBuf = new Uint8Array(await res.clone().arrayBuffer());
+    expect(fullBuf.byteLength).toBeGreaterThan(65536);
+
+    const sliceBuf = fullBuf.slice(0, 65536);
+    const expectedDigest = await crypto.subtle.digest('SHA-256', sliceBuf);
+    const expectedHex = [...new Uint8Array(expectedDigest)]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Audit middleware must have hashed only the slice, not the full body.
+    expect(lastAuditValues!.resultHash).toBe(expectedHex);
+
+    // Defensive: confirm full-body hash is NOT what got recorded.
+    const fullDigest = await crypto.subtle.digest('SHA-256', fullBuf);
+    const fullHex = [...new Uint8Array(fullDigest)]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    expect(lastAuditValues!.resultHash).not.toBe(fullHex);
+  });
+
+  // ── Oracle P1-NEW-2 (W5-A followup) ────────────────────────────────
+  it('HEAD requests skip audit entirely (no D1 row written)', async () => {
+    const app = createTestApp({ user: { id: 'user-1' } });
+    // Hono's default HEAD handling on a GET route still flows through
+    // middleware; the short-circuit must catch it.
+    const res = await app.request('/api/test/hello', { method: 'HEAD' }, mockEnv);
+    // hono may return 200 or 404 for HEAD on a GET-only route; what we
+    // assert here is the audit-skip, not the response shape.
+    expect([200, 404]).toContain(res.status);
+    expect(lastAuditValues).toBeNull();
   });
 });

@@ -147,7 +147,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     expect(body.items).toEqual([]);
   });
 
-  it('GET /audit (as admin) writes its own audit_log row (P1#8)', async () => {
+  it('GET /audit (as admin) does NOT write an audit_log row — supersedes W4 P1#8 per W5-A Oracle P1-NEW-2', async () => {
     mockSelect
       .mockReturnValueOnce(makeQueryChain([{ role: 'admin' }]))
       .mockReturnValueOnce(makeQueryChain([]));
@@ -166,13 +166,13 @@ describe('GET /audit — requireAdmin middleware', () => {
     const res = await fullApp.request('/api/admin/audit', {}, testEnv);
     expect(res.status).toBe(200);
 
-    // Audit middleware should have called insert + values
-    expect(mockInsert).toHaveBeenCalled();
-    expect(mockValues).toHaveBeenCalled();
-    const callArgs = mockValues.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArgs.route).toBe('/api/admin/audit');
-    expect(callArgs.method).toBe('GET');
-    expect(callArgs.userIdOrNull).toBe('admin-1');
-    expect(callArgs.source).toBe('api');
+    // W4 P1#8 originally pinned "GET /audit must self-audit". W5-A Oracle
+    // P1-NEW-2 reversed that: GET/HEAD are read-only and should NOT
+    // produce audit rows (privacy noise + write budget). The mutating
+    // operations behind /audit access (i.e. exfil through downloads,
+    // role escalations) are guarded at the POST/PUT/DELETE handlers and
+    // are still audited. This test now pins the new, correct behaviour.
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockValues).not.toHaveBeenCalled();
   });
 });
