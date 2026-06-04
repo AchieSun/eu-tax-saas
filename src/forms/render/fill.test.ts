@@ -17,7 +17,13 @@ import {
   defaultMantelStyleFields,
 } from '../../../tests/fixtures/pdf-builder';
 import type { FormMapping } from '../types';
-import { PDFTooLargeError, fillForm } from './fill';
+import {
+  type FillWarning,
+  PDFTooLargeError,
+  buildWarningFooterText,
+  fillForm,
+  formatWarningsForLog,
+} from './fill';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -210,8 +216,9 @@ describe('fillForm — warning collection', () => {
 
     expect(result.filledFieldCount).toBe(4);
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('missing data');
-    expect(result.warnings[0]).toContain('user.profile.lastName');
+    expect(result.warnings[0]?.reason).toBe('missing-data');
+    expect(result.warnings[0]?.dataPath).toBe('user.profile.lastName');
+    expect(result.warnings[0]?.fieldName).toBe('txt_last_name');
   });
 
   it('warns and skips when the mapping references a missing AcroForm widget', async () => {
@@ -244,8 +251,9 @@ describe('fillForm — warning collection', () => {
 
     expect(result.filledFieldCount).toBe(5);
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/txt_does_not_exist/);
-    expect(result.warnings[0]).toMatch(/not found/);
+    expect(result.warnings[0]?.reason).toBe('unknown-field');
+    expect(result.warnings[0]?.fieldName).toBe('txt_does_not_exist');
+    expect(result.warnings[0]?.detail).toMatch(/not found/);
   });
 
   it('warns and skips when a transform throws on incompatible input', async () => {
@@ -271,7 +279,8 @@ describe('fillForm — warning collection', () => {
 
     expect(result.filledFieldCount).toBe(0);
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/transform 'format-currency-eur' failed/);
+    expect(result.warnings[0]?.reason).toBe('transform-failed');
+    expect(result.warnings[0]?.detail).toMatch(/format-currency-eur/);
   });
 });
 
@@ -380,7 +389,8 @@ describe('fillForm — coordinate writes', () => {
 
     expect(result.filledFieldCount).toBe(0);
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/page 99 out of range/);
+    expect(result.warnings[0]?.reason).toBe('unknown-field');
+    expect(result.warnings[0]?.detail).toMatch(/page 99 out of range/);
   });
 });
 
@@ -599,9 +609,10 @@ describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
 
     expect(result.filledFieldCount).toBe(5);
     // Exactly one warning, attributed to the first-name field, listing [ü].
-    const warn = result.warnings.find((w) => w.includes('txt_first_name'));
+    const warn = result.warnings.find((w) => w.fieldName === 'txt_first_name');
     expect(warn).toBeDefined();
-    expect(warn).toMatch(/replaced 1 non-WinAnsi char\(s\) \[ü\]/);
+    expect(warn?.reason).toBe('transliterated');
+    expect(warn?.detail).toMatch(/replaced 1 non-WinAnsi char\(s\) \[ü\]/);
 
     const pdf = await PDFDocument.load(result.pdfBytes);
     expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('Mueller');
@@ -625,9 +636,10 @@ describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
     });
 
     expect(result.filledFieldCount).toBe(5);
-    const warn = result.warnings.find((w) => w.includes('txt_first_name'));
+    const warn = result.warnings.find((w) => w.fieldName === 'txt_first_name');
     expect(warn).toBeDefined();
-    expect(warn).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
+    expect(warn?.reason).toBe('transliterated');
+    expect(warn?.detail).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
     // Output must remain a re-parseable PDF.
     const pdf = await PDFDocument.load(result.pdfBytes);
     expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('??');
@@ -651,13 +663,14 @@ describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
     });
 
     expect(result.filledFieldCount).toBe(5);
-    const matches = result.warnings.filter((w) => w.includes('txt_first_name'));
+    const matches = result.warnings.filter((w) => w.fieldName === 'txt_first_name');
     // Single per-field warning line, even though there are two distinct
     // non-WinAnsi chars in the value.
     expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
-    expect(matches[0]).toContain('é');
-    expect(matches[0]).toContain('ü');
+    expect(matches[0]?.reason).toBe('transliterated');
+    expect(matches[0]?.detail).toMatch(/replaced 2 non-WinAnsi char\(s\)/);
+    expect(matches[0]?.detail).toContain('é');
+    expect(matches[0]?.detail).toContain('ü');
 
     const pdf = await PDFDocument.load(result.pdfBytes);
     expect(pdf.getForm().getTextField('txt_first_name').getText()).toBe('Cafe Mueller');
@@ -696,7 +709,8 @@ describe('fillForm — WinAnsi safety guard (T3.1c)', () => {
     expect(result.filledFieldCount).toBe(1);
     // One per-field summary covering the three distinct non-WinAnsi chars.
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/replaced \d+ non-WinAnsi char\(s\)/);
+    expect(result.warnings[0]?.reason).toBe('transliterated');
+    expect(result.warnings[0]?.detail).toMatch(/replaced \d+ non-WinAnsi char\(s\)/);
     // PDF must still load.
     const pdf = await PDFDocument.load(result.pdfBytes);
     expect(pdf.getPageCount()).toBe(1);
@@ -948,5 +962,194 @@ describe('fillForm — PDFTooLargeError (Oracle P1-1)', () => {
       data: { value: 'x' },
     });
     expect(result.filledFieldCount).toBe(1);
+  });
+});
+
+// ── Oracle P1-3 (W4 review): warning footer + structured warnings ─────
+describe('fillForm — warning footer + structured shape (Oracle P1-3)', () => {
+  // Reuse the inflate+Tj helper from the watermark describe block — keep
+  // local so this describe can be skipped/refactored independently.
+  async function pdfContainsText(pdfBytes: Uint8Array, search: string): Promise<boolean> {
+    const pdf = await PDFDocument.load(pdfBytes);
+    for (let i = 0; i < pdf.getPageCount(); i++) {
+      const page = pdf.getPage(i);
+      const contents = page.node.Contents();
+      if (!contents) continue;
+      const items =
+        typeof (contents as { asArray?: () => unknown[] }).asArray === 'function'
+          ? (contents as { asArray: () => unknown[] }).asArray()
+          : [contents];
+      let decoded = '';
+      for (const item of items) {
+        const stream = pdf.context.lookup(item as never) as { contents?: Uint8Array };
+        const raw = stream?.contents;
+        if (!raw) continue;
+        try {
+          decoded += inflateSync(Buffer.from(raw)).toString('latin1');
+        } catch {
+          decoded += Buffer.from(raw).toString('latin1');
+        }
+      }
+      let extracted = '';
+      for (const m of decoded.matchAll(/\(([^)]*)\)\s*Tj/g)) extracted += m[1];
+      for (const m of decoded.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+        const hex = m[1];
+        for (let j = 0; j < hex.length; j += 2) {
+          extracted += String.fromCharCode(Number.parseInt(hex.substring(j, j + 2), 16));
+        }
+      }
+      if (extracted.toLowerCase().includes(search.toLowerCase())) return true;
+    }
+    return false;
+  }
+
+  it('warning objects have structured shape with reason discriminator', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Anna',
+            // lastName omitted → missing-data
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: true,
+          },
+        },
+      },
+    });
+    expect(result.warnings).toHaveLength(1);
+    const w = result.warnings[0] as FillWarning;
+    expect(w).toMatchObject({
+      dataPath: 'user.profile.lastName',
+      fieldName: 'txt_last_name',
+      reason: 'missing-data',
+    });
+    // Type-level guarantee: reason is one of the documented unions.
+    const allowed: readonly FillWarning['reason'][] = [
+      'missing-data',
+      'transform-failed',
+      'transliterated',
+      'unknown-field',
+      'set-text-failed',
+      'set-checkbox-failed',
+    ];
+    expect(allowed).toContain(w.reason);
+  });
+
+  it('warning footer is stamped on page 1 when warnings exist and watermark is on', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Anna',
+            // lastName omitted → triggers missing-data warning
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: true,
+          },
+        },
+      },
+    });
+    expect(result.warnings.length).toBeGreaterThan(0);
+    // toWinAnsi rewrites '⚠' → '?'; the core phrase still encodes verbatim.
+    expect(await pdfContainsText(result.pdfBytes, 'not filled or transliterated')).toBe(true);
+  });
+
+  it('no warning footer when warnings is empty', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Anna',
+            lastName: 'Schmidt',
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: true,
+          },
+        },
+      },
+    });
+    expect(result.warnings).toEqual([]);
+    expect(await pdfContainsText(result.pdfBytes, 'not filled or transliterated')).toBe(false);
+  });
+
+  it('no warning footer when watermark is explicitly false (warningFooter defaults to false)', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Anna',
+            // lastName omitted → would emit warning if footer were enabled
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: true,
+          },
+        },
+      },
+      watermark: false,
+    });
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(await pdfContainsText(result.pdfBytes, 'not filled or transliterated')).toBe(false);
+  });
+
+  it('warningFooter:true forces the footer even when watermark is false', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: defaultMantelMapping(),
+      data: {
+        user: {
+          profile: {
+            firstName: 'Anna',
+            // lastName omitted
+            taxId: 'DE1',
+            address: { line1: 'X' },
+            isMarried: true,
+          },
+        },
+      },
+      watermark: false,
+      warningFooter: true,
+    });
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(await pdfContainsText(result.pdfBytes, 'not filled or transliterated')).toBe(true);
+  });
+
+  it('buildWarningFooterText is deterministic and asserts the literal format', () => {
+    expect(buildWarningFooterText(3)).toBe(
+      '⚠ 3 field(s) not filled or transliterated — see app for details',
+    );
+    expect(buildWarningFooterText(0)).toBe(
+      '⚠ 0 field(s) not filled or transliterated — see app for details',
+    );
+  });
+
+  it('formatWarningsForLog re-creates legacy string[] format for audit hashing', () => {
+    const fakeWarnings: FillWarning[] = [
+      {
+        dataPath: 'user.x',
+        fieldName: 'txt_x',
+        reason: 'missing-data',
+      },
+      {
+        dataPath: 'user.y',
+        fieldName: 'txt_y',
+        reason: 'transliterated',
+        detail: 'replaced 1 non-WinAnsi char(s) [ü]',
+      },
+    ];
+    const lines = formatWarningsForLog(fakeWarnings);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("missing data at path 'user.x'");
+    expect(lines[0]).toContain('txt_x');
+    expect(lines[1]).toContain('txt_y');
+    expect(lines[1]).toContain('replaced 1 non-WinAnsi');
   });
 });

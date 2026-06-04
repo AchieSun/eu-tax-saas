@@ -1,3 +1,4 @@
+// Oracle P1-5 (W4 review): rotated-bbox overflow detection + downscale fit pass.
 /**
  * watermark.ts — Pure helper for W4 T3.1b (DRAFT watermark layer).
  *
@@ -22,12 +23,25 @@
  *     `embedFont(Helvetica)` cost across many renders (e.g. fill.ts already
  *     embeds Helvetica for coordinate draws and reuses it here).
  *
+ * Oracle P1-5 (W4 review):
+ *   The original `computeFontSize` used an empirical 0.5 * size width
+ *   estimate keyed off the page diagonal. That worked for A4 portrait /
+ *   landscape, but on narrow or rotated pages the resulting bounding box
+ *   could overflow the page edges (especially around 45° where the rotated
+ *   bbox is √2× the unrotated bbox). The new `computeWatermarkFit` measures
+ *   with the real font, projects the rotated bounding box, and downscales
+ *   in 5% steps until the rotated bbox fits inside the page (with a 5%
+ *   safety margin), bottoming out at `MIN_FONT_SIZE` so tiny pages still
+ *   get a watermark even if it's slightly clipped.
+ *
  * Edge cases (covered by tests):
  *   - 0-page doc           → no-op (does not throw)
  *   - text === ''          → no-op (does not draw)
  *   - opacity < 0 / > 1    → RangeError at the top, before any draw
  *   - opacity === 0        → still draws (visually invisible but valid)
  *   - rotation === 0 / 90  → horizontal / vertical text still centered
+ *   - narrow page          → fit pass downscales until rotated bbox fits
+ *   - extremely narrow     → font size bottoms out at MIN_FONT_SIZE
  */
 
 import { type PDFDocument, type PDFFont, StandardFonts, degrees, rgb } from 'pdf-lib';
@@ -52,6 +66,28 @@ export interface WatermarkOptions {
   rotationDegrees?: number;
 }
 
+/**
+ * Oracle P1-5 (W4 review): output of the fit pass.
+ *
+ *   - `fontSize`     — final font size to render with (clamped to MIN..MAX).
+ *   - `textWidth`    — measured pdf-lib width at `fontSize` (font.widthOfTextAtSize).
+ *   - `bboxWidth`    — rotated-text bounding-box width on the page.
+ *   - `bboxHeight`   — rotated-text bounding-box height on the page.
+ *   - `downscaled`   — true if the fit loop reduced fontSize below the
+ *                      "ideal" (diagonal-coverage) size to avoid overflow.
+ *   - `clipped`      — true if the rotated bbox still exceeds the safe area
+ *                      even at `MIN_FONT_SIZE` (page is too narrow to fit
+ *                      the watermark; we render anyway).
+ */
+export interface WatermarkFit {
+  fontSize: number;
+  textWidth: number;
+  bboxWidth: number;
+  bboxHeight: number;
+  downscaled: boolean;
+  clipped: boolean;
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 /**
@@ -69,6 +105,9 @@ const DEFAULT_COLOR = { r: 0.5, g: 0.5, b: 0.5 } as const;
  * Empirical char-width factor for Helvetica at the size class we care about
  * (16..200 pt). Helvetica's average advance width is ~0.5 * fontSize for
  * uppercase ASCII, which is what every realistic watermark text will be.
+ *
+ * Used ONLY for the initial size guess; the fit pass measures with the real
+ * font (`font.widthOfTextAtSize`) before deciding whether to downscale.
  */
 const HELVETICA_CHAR_WIDTH_FACTOR = 0.5;
 
@@ -78,6 +117,23 @@ const DIAGONAL_COVERAGE = 0.7;
 /** Clamp range protects against tiny page sizes (thumbnails) and huge ones (posters). */
 const MIN_FONT_SIZE = 16;
 const MAX_FONT_SIZE = 200;
+
+/**
+ * Oracle P1-5 (W4 review): safety margin so the rotated bbox is kept at
+ * least 5% inside the page edges. Prevents borderline cases (e.g. JIS B5
+ * landscape at 45°) from clipping a glyph.
+ */
+const SAFE_AREA_FACTOR = 0.95;
+
+/** Oracle P1-5 (W4 review): max iterations for the downscale fit loop. */
+const MAX_FIT_ITERATIONS = 32;
+
+/**
+ * Oracle P1-5 (W4 review): shrink the candidate font size by 5% each
+ * iteration of the fit loop. Geometric decay reaches MIN_FONT_SIZE quickly
+ * even from MAX_FONT_SIZE (200 → 16 in ~50 iterations; capped at 32).
+ */
+const FIT_SHRINK_FACTOR = 0.95;
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -123,10 +179,12 @@ export async function applyWatermark(
 
   for (const page of pages) {
     const { width, height } = page.getSize();
-    const fontSize = computeFontSize(width, height, text);
-
-    // Measure with the real font to get pixel-accurate centering.
-    const tw = font.widthOfTextAtSize(text, fontSize);
+    // Oracle P1-5 (W4 review): real-font fit pass replaces the old
+    // empirical-only computeFontSize. Returns the measured text width so we
+    // can center accurately without re-measuring below.
+    const fit = computeWatermarkFit(width, height, text, font, { rotationDegrees: rotation });
+    const fontSize = fit.fontSize;
+    const tw = fit.textWidth;
     const th = fontSize; // Helvetica cap height ≈ fontSize for centering purposes.
 
     // pdf-lib rotates around the text's lower-left origin. To keep the
@@ -152,11 +210,96 @@ export async function applyWatermark(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Pick a font size such that the rendered text spans ~70% of the page
- * diagonal, then clamp into a safe range. Uses a cheap empirical width
- * estimate to avoid calling `font.widthOfTextAtSize` in a fit loop.
+ * Oracle P1-5 (W4 review): compute a font size such that the rotated text
+ * bounding box fits inside the page's safe area.
+ *
+ * Algorithm:
+ *   1. Estimate an "ideal" size from the diagonal-coverage heuristic
+ *      (same as the original empirical formula) and clamp to [MIN, MAX].
+ *   2. Measure the real text width with `font.widthOfTextAtSize(text, size)`.
+ *   3. Project the rotated bounding box on the page axes:
+ *        bboxWidth  = |tw * cos(θ)| + |th * sin(θ)|
+ *        bboxHeight = |tw * sin(θ)| + |th * cos(θ)|
+ *      (th ≈ fontSize for Helvetica; close enough for fit purposes.)
+ *   4. If bbox exceeds page * SAFE_AREA_FACTOR, shrink size by
+ *      FIT_SHRINK_FACTOR (5%) and re-measure, up to MAX_FIT_ITERATIONS.
+ *   5. If we hit MIN_FONT_SIZE and still overflow, flag `clipped: true`
+ *      and return — we'd rather render a slightly-clipped watermark than
+ *      no watermark at all.
+ *
+ * Exported (not just internal) so tests can assert the fit decisions
+ * directly without round-tripping through pdf-lib.
  */
-function computeFontSize(width: number, height: number, text: string): number {
+export function computeWatermarkFit(
+  pageWidth: number,
+  pageHeight: number,
+  text: string,
+  font: PDFFont,
+  options: { rotationDegrees?: number } = {},
+): WatermarkFit {
+  const rotation = options.rotationDegrees ?? DEFAULT_ROTATION_DEG;
+  const rad = (rotation * Math.PI) / 180;
+  const absCos = Math.abs(Math.cos(rad));
+  const absSin = Math.abs(Math.sin(rad));
+  const maxBoxWidth = pageWidth * SAFE_AREA_FACTOR;
+  const maxBoxHeight = pageHeight * SAFE_AREA_FACTOR;
+
+  // 1. Initial guess from the diagonal-coverage heuristic.
+  const idealSize = initialFontSizeGuess(pageWidth, pageHeight, text);
+  let size = idealSize;
+  let downscaled = false;
+
+  // 2-4. Fit loop — shrink until the rotated bbox fits or we hit the floor.
+  let measured: WatermarkFit | null = null;
+  for (let i = 0; i < MAX_FIT_ITERATIONS; i++) {
+    const tw = font.widthOfTextAtSize(text, size);
+    const th = size;
+    const bboxWidth = tw * absCos + th * absSin;
+    const bboxHeight = tw * absSin + th * absCos;
+
+    const fits = bboxWidth <= maxBoxWidth && bboxHeight <= maxBoxHeight;
+    measured = {
+      fontSize: size,
+      textWidth: tw,
+      bboxWidth,
+      bboxHeight,
+      downscaled,
+      clipped: false,
+    };
+    if (fits) return measured;
+
+    const next = Math.max(MIN_FONT_SIZE, Math.floor(size * FIT_SHRINK_FACTOR));
+    if (next === size) {
+      // Already at the floor; mark clipped and bail.
+      measured.clipped = true;
+      return measured;
+    }
+    size = next;
+    downscaled = true;
+  }
+
+  // 5. Iteration cap hit — return the last measurement marked clipped.
+  if (measured) {
+    measured.clipped = true;
+    return measured;
+  }
+  // Defensive fallback (unreachable: loop runs at least once for non-empty text).
+  return {
+    fontSize: MIN_FONT_SIZE,
+    textWidth: 0,
+    bboxWidth: 0,
+    bboxHeight: 0,
+    downscaled: false,
+    clipped: true,
+  };
+}
+
+/**
+ * Pick the initial font size guess such that the rendered text spans ~70%
+ * of the page diagonal, then clamp into [MIN, MAX]. Cheap empirical width
+ * estimate (no font measurement) — the fit loop refines from here.
+ */
+function initialFontSizeGuess(width: number, height: number, text: string): number {
   if (text.length === 0) return MIN_FONT_SIZE;
   const diagonal = Math.sqrt(width * width + height * height);
   const targetTextWidth = diagonal * DIAGONAL_COVERAGE;

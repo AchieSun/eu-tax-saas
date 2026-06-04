@@ -40,6 +40,29 @@ export interface RenderResult {
   filledFields: number;
   mappingVersion: number;
   mappingHash: string;
+  /**
+   * Oracle P1-4 (W4 review): structured per-warning detail lifted from the
+   * X-Render-Warning-Detail response header. `null` when the header is
+   * absent or unparseable. `items` is capped at 10 by the server; the
+   * `truncated` flag and `total` count let the UI tell the user there were
+   * more warnings than shown.
+   */
+  warningDetail: {
+    items: Array<{
+      dataPath: string;
+      fieldName: string;
+      reason:
+        | 'missing-data'
+        | 'transform-failed'
+        | 'transliterated'
+        | 'unknown-field'
+        | 'set-text-failed'
+        | 'set-checkbox-failed';
+      detail?: string;
+    }>;
+    truncated: boolean;
+    total: number;
+  } | null;
 }
 
 export interface FormPicker {

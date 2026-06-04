@@ -10,10 +10,10 @@
  */
 
 import { inflateSync } from 'node:zlib';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { buildSynthPdfCoordOnly } from '../../../tests/fixtures/pdf-builder';
-import { applyWatermark } from './watermark';
+import { applyWatermark, computeWatermarkFit } from './watermark';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -255,5 +255,108 @@ describe('applyWatermark — WinAnsi guard (T3.1c)', () => {
     // And the literal em-dash bytes must NOT appear (guard actually ran).
     const withEmDash = await applyAndScan(pdf, 'DRAFT \u2014 NOT FOR FILING');
     expect(withEmDash.contains).toBe(false);
+  });
+});
+
+// ── Oracle P1-5 (W4 review): rotated-bbox overflow + downscale ─────────
+describe('computeWatermarkFit — overflow detection + downscale', () => {
+  // Helper: build a one-page synth doc at the requested size and embed
+  // Helvetica so we can pass a real PDFFont to computeWatermarkFit.
+  async function embedHelvetica(width: number, height: number) {
+    const bytes = await buildSynthPdfCoordOnly({ pageWidth: width, pageHeight: height });
+    const pdf = await PDFDocument.load(bytes);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    return { pdf, font };
+  }
+
+  it('produces a non-clipped fit with rotated bbox inside the page safe area', async () => {
+    // A4 portrait. The diagonal-coverage heuristic intentionally
+    // over-estimates the ideal size (it's a crude 0.5×fontSize width
+    // model), so even on A4 the fit pass may downscale a step or two
+    // before the rotated bbox fits inside the 5% safe area. What we
+    // contract on is the OUTCOME: a real-font-measured bbox that
+    // demonstrably fits, never clipped, and never below MIN_FONT_SIZE.
+    const { font } = await embedHelvetica(595, 842);
+    const fit = computeWatermarkFit(595, 842, 'DRAFT - NOT FOR FILING', font, {
+      rotationDegrees: 45,
+    });
+    expect(fit.clipped).toBe(false);
+    expect(fit.bboxWidth).toBeLessThanOrEqual(595 * 0.95 + 0.0001);
+    expect(fit.bboxHeight).toBeLessThanOrEqual(842 * 0.95 + 0.0001);
+    expect(fit.fontSize).toBeGreaterThanOrEqual(16);
+    expect(fit.fontSize).toBeLessThanOrEqual(200);
+  });
+
+  it('downscales when the page is too narrow for the ideal-size rotated bbox', async () => {
+    // 300x842 — A4 height, but only half the width. Diagonal coverage
+    // would happily pick a font size that overflows the narrow axis once
+    // rotated 45°.
+    const { font } = await embedHelvetica(300, 842);
+    const fit = computeWatermarkFit(300, 842, 'DRAFT - NOT FOR FILING', font, {
+      rotationDegrees: 45,
+    });
+    expect(fit.downscaled).toBe(true);
+    expect(fit.clipped).toBe(false);
+    expect(fit.bboxWidth).toBeLessThanOrEqual(300 * 0.95 + 0.0001);
+    expect(fit.bboxHeight).toBeLessThanOrEqual(842 * 0.95 + 0.0001);
+  });
+
+  it('floors at MIN_FONT_SIZE and flags clipped:true on extremely narrow pages', async () => {
+    // 50x50 — thumbnail-sized. The diagonal-coverage heuristic already
+    // bottoms out at MIN_FONT_SIZE (16) here, so the very first measurement
+    // overflows and we mark clipped:true without ever entering the shrink
+    // branch (downscaled stays false because we never reduced from a
+    // larger size).
+    const { font } = await embedHelvetica(50, 50);
+    const fit = computeWatermarkFit(50, 50, 'DRAFT - NOT FOR FILING', font, {
+      rotationDegrees: 45,
+    });
+    expect(fit.fontSize).toBe(16);
+    expect(fit.clipped).toBe(true);
+    // Page is far too narrow at any size in our range — bbox MUST exceed
+    // the safe area at the floor size.
+    expect(fit.bboxWidth).toBeGreaterThan(50 * 0.95);
+  });
+
+  it('rotation 0 (horizontal) only checks width, allowing larger fontSize than 45°', async () => {
+    // 1000x300 — wide and short. At 0° the rotated bbox = unrotated bbox,
+    // so width is the only constraint; at 45° the diagonal halves the
+    // effective space and forces downscale.
+    const { font } = await embedHelvetica(1000, 300);
+    const flat = computeWatermarkFit(1000, 300, 'DRAFT - NOT FOR FILING', font, {
+      rotationDegrees: 0,
+    });
+    const diagonal = computeWatermarkFit(1000, 300, 'DRAFT - NOT FOR FILING', font, {
+      rotationDegrees: 45,
+    });
+    expect(flat.fontSize).toBeGreaterThanOrEqual(diagonal.fontSize);
+    expect(flat.bboxWidth).toBeLessThanOrEqual(1000 * 0.95 + 0.0001);
+    expect(flat.bboxHeight).toBeLessThanOrEqual(300 * 0.95 + 0.0001);
+    expect(diagonal.bboxHeight).toBeLessThanOrEqual(300 * 0.95 + 0.0001);
+  });
+
+  it('rotated bbox math: a square 45° rotation gives bbox = unrotatedDiagonal', async () => {
+    // Sanity check on the projection formula. For a square text bbox
+    // (tw = th = fontSize) at 45°, the rotated bbox edges should each be
+    // (tw + th)/√2 × √2 = tw + th. Specifically: bboxWidth ≈ bboxHeight.
+    const { font } = await embedHelvetica(2000, 2000);
+    const fit = computeWatermarkFit(2000, 2000, 'X', font, { rotationDegrees: 45 });
+    // 1-char text — width ≪ fontSize. Bbox width ≈ bbox height because at
+    // 45° both axes get equal contributions from tw and th.
+    expect(Math.abs(fit.bboxWidth - fit.bboxHeight)).toBeLessThan(1);
+  });
+
+  it('applyWatermark threads the fit result through end-to-end (narrow page still gets watermark)', async () => {
+    const bytes = await buildSynthPdfCoordOnly({ pageWidth: 300, pageHeight: 842 });
+    const pdf = await PDFDocument.load(bytes);
+    await applyWatermark(pdf);
+    const saved = await pdf.save();
+    const reopened = await PDFDocument.load(saved);
+    const decoded = decodePageContentStream(reopened, 0);
+    const tj = extractTjStrings(decoded);
+    // Watermark text must still be present even though the page was too
+    // narrow for the ideal-size pass.
+    expect(tj).toContain('DRAFT');
+    expect(tj).toContain('NOT FOR FILING');
   });
 });

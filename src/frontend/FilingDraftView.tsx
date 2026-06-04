@@ -512,16 +512,64 @@ const FilingDraftView: Component = () => {
           />
           <Show when={renderResult()}>
             {(r) => (
-              <p
-                style={{
-                  margin: '0.75rem 0 0',
-                  'font-size': '0.8rem',
-                  color: '#6b7280',
-                }}
-              >
-                Filled {r().filledFields} field(s) · {r().warnings} warning(s) · mapping v
-                {r().mappingVersion} ({r().mappingHash.slice(0, 8)})
-              </p>
+              <>
+                <p
+                  style={{
+                    margin: '0.75rem 0 0',
+                    'font-size': '0.8rem',
+                    color: '#6b7280',
+                  }}
+                >
+                  Filled {r().filledFields} field(s) · {r().warnings} warning(s) · mapping v
+                  {r().mappingVersion} ({r().mappingHash.slice(0, 8)})
+                </p>
+                {/* Oracle P1-4 (W4 review): per-warning detail panel — yellow border */}
+                <Show when={r().warningDetail && (r().warningDetail?.items.length ?? 0) > 0}>
+                  {(_) => {
+                    const wd = r().warningDetail;
+                    if (!wd) return null;
+                    return (
+                      <div
+                        role="alert"
+                        style={{
+                          margin: '0.75rem 0 0',
+                          padding: '0.75rem 1rem',
+                          background: '#fffbeb',
+                          border: '1px solid #f59e0b',
+                          'border-radius': '8px',
+                          'font-size': '0.8rem',
+                          color: '#92400e',
+                        }}
+                      >
+                        <div style={{ 'font-weight': 600, 'margin-bottom': '0.5rem' }}>
+                          {wd.total} field warning(s)
+                          {wd.truncated ? ` — showing first ${wd.items.length} of ${wd.total}` : ''}
+                        </div>
+                        <ul
+                          style={{
+                            margin: 0,
+                            'padding-left': '1.25rem',
+                            'list-style-type': 'disc',
+                          }}
+                        >
+                          {/* Oracle P1-4 (W4 review): <For> handles list reconciliation in SolidJS. */}
+                          <For each={wd.items}>
+                            {(w) => (
+                              <li style={{ 'margin-bottom': '0.25rem' }}>
+                                <code style={{ 'font-family': 'monospace' }}>{w.fieldName}</code>
+                                {' — '}
+                                <span style={{ 'font-style': 'italic' }}>{w.reason}</span>
+                                {w.detail ? `: ${w.detail}` : ''}
+                                {w.dataPath ? ` (path: ${w.dataPath})` : ''}
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </div>
+                    );
+                  }}
+                </Show>
+              </>
             )}
           </Show>
         </div>

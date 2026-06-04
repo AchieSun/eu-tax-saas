@@ -1,6 +1,12 @@
 // Oracle P1-1 (W4 review): export PDFTooLargeError so the /render route
 // can reject oversized source PDFs (R2 bytes that exceed maxPages) with a
 // typed, catchable error instead of silently OOMing the worker isolate.
+// Oracle P1-3 (W4 review): warnings are now structured objects (not
+// strings) carrying { dataPath, fieldName, reason, detail? } so the API
+// layer can surface them per-field in X-Render-Warning-Detail, and the
+// render core stamps a one-line footer on page 1 listing the count when
+// warnings exist and the watermark is enabled. formatWarningsForLog
+// reconstructs the legacy string[] shape for any caller still using it.
 /**
  * fill.ts — Pure render core for W4 T3.1a (pdf-fill engine).
  *
@@ -84,6 +90,15 @@ export interface FillFormInput {
    */
   watermark?: false | WatermarkOptions;
   /**
+   * Oracle P1-3 (W4 review): stamp a one-line warning-summary footer on
+   * page 1 when `warnings.length > 0`. Defaults to ON whenever the
+   * watermark is also on; explicitly OFF when watermark is `false`
+   * (rationale: a watermark-off "final" copy is between the user and
+   * their accountant — our internal UI banner has no business on it).
+   * Pass an explicit boolean to override the inference.
+   */
+  warningFooter?: boolean;
+  /**
    * Oracle P0-4 (W4 review) — embed mapping + render provenance into the
    * PDF's built-in metadata slots (Producer / Creator / Subject / Keywords
    * / CreationDate / ModDate) so the artifact is self-describing after it
@@ -104,12 +119,88 @@ export interface FillFormInput {
   };
 }
 
+/**
+ * Oracle P1-3 (W4 review) — structured warning discriminator. Every code
+ * path that pushes a warning attaches a stable `reason` tag so the API
+ * layer can group/filter without parsing free-text messages.
+ */
+export type FillWarningReason =
+  | 'missing-data'
+  | 'transform-failed'
+  | 'transliterated'
+  | 'unknown-field'
+  | 'set-text-failed'
+  | 'set-checkbox-failed';
+
+/**
+ * Oracle P1-3 (W4 review) — structured per-field warning. `dataPath` is
+ * the mapping's sourcePath; `fieldName` is the AcroForm widget name (or a
+ * synthetic `coord:<sourcePath>` for coordinate-kind fields where there
+ * is no widget). `detail` carries any reason-specific extra context (e.g.
+ * the comma-joined list of transliterated codepoints).
+ */
+export interface FillWarning {
+  dataPath: string;
+  fieldName: string;
+  reason: FillWarningReason;
+  detail?: string;
+}
+
 export interface FillFormResult {
   pdfBytes: Uint8Array;
-  /** Human-readable diagnostics for skipped fields. Order matches mapping. */
-  warnings: string[];
+  /** Structured per-field warnings; order matches mapping. */
+  warnings: FillWarning[];
   /** Count of fields that were actually written into the PDF. */
   filledFieldCount: number;
+}
+
+// ─── Footer helpers (Oracle P1-3) ───────────────────────────────────────────
+
+/**
+ * Oracle P1-3 (W4 review) — deterministic builder for the warning-footer
+ * text so tests can assert on the exact stamp without re-implementing the
+ * format string. Kept separate from any pdf-lib types so it is a pure
+ * function of `count` (no font measurement etc.).
+ */
+export function buildWarningFooterText(count: number): string {
+  return `⚠ ${count} field(s) not filled or transliterated — see app for details`;
+}
+
+/**
+ * Oracle P1-3 (W4 review) — re-create the legacy string[] warning format
+ * from the new structured shape. Existing audit hashes / log callers that
+ * still expect "field #0 'txt_x' missing data at path 'a.b'" stay stable
+ * by hashing `formatWarningsForLog(warnings).join('\n')` rather than the
+ * structured objects directly.
+ */
+export function formatWarningsForLog(warnings: readonly FillWarning[]): string[] {
+  return warnings.map(formatWarningForLog);
+}
+
+function formatWarningForLog(w: FillWarning): string {
+  switch (w.reason) {
+    case 'missing-data':
+      // Mirrors old: `field <label> missing data at path '<dataPath>'`
+      return `field ${w.fieldName} missing data at path '${w.dataPath}'`;
+    case 'transform-failed':
+      // Old: `field <label> transform '<name>' failed: <msg>`. detail = `<name>|<msg>`.
+      return `field ${w.fieldName} transform failed: ${w.detail ?? ''}`;
+    case 'transliterated':
+      // Old: `field <label> replaced N non-WinAnsi char(s) [a,b]`. detail = `N|a,b`.
+      return `field ${w.fieldName} transliterated: ${w.detail ?? ''}`;
+    case 'unknown-field':
+      // Old: `field <label> AcroForm widget '<name>' not found or unwritable: <msg>`.
+      return `field ${w.fieldName} AcroForm widget not found or unwritable: ${w.detail ?? ''}`;
+    case 'set-text-failed':
+      return `field ${w.fieldName} setText failed: ${w.detail ?? ''}`;
+    case 'set-checkbox-failed':
+      return `field ${w.fieldName} setCheckbox failed: ${w.detail ?? ''}`;
+    default: {
+      // Exhaustiveness guard — keep the switch honest under future reasons.
+      const _exhaustive: never = w.reason;
+      return `field ${w.fieldName} warning: ${String(_exhaustive)}`;
+    }
+  }
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -140,17 +231,23 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
   const form = doc.getForm();
 
-  const warnings: string[] = [];
+  const warnings: FillWarning[] = [];
   let filledFieldCount = 0;
 
   for (let i = 0; i < mapping.fields.length; i++) {
     const field = mapping.fields[i];
     const fieldLabel = describeField(field, i);
+    const fieldNameForWarning = warningFieldName(field, i);
 
     // 1. Resolve source value via dot-notation path.
     const rawValue = getByPath(data, field.sourcePath);
     if (rawValue === undefined) {
-      warnings.push(`field ${fieldLabel} missing data at path '${field.sourcePath}'`);
+      warnings.push({
+        dataPath: field.sourcePath,
+        fieldName: fieldNameForWarning,
+        reason: 'missing-data',
+        detail: fieldLabel,
+      });
       continue;
     }
 
@@ -161,7 +258,12 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
       rawText = applyTransform(rawValue as SourceValue, field.transform);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      warnings.push(`field ${fieldLabel} transform '${field.transform}' failed: ${msg}`);
+      warnings.push({
+        dataPath: field.sourcePath,
+        fieldName: fieldNameForWarning,
+        reason: 'transform-failed',
+        detail: `transform '${field.transform}' failed: ${msg}`,
+      });
       continue;
     }
 
@@ -173,17 +275,36 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
     const { text, replacements } = toWinAnsi(rawText);
     if (replacements.length > 0) {
       const uniqueOriginals = [...new Set(replacements.map((r) => r.original))];
-      warnings.push(
-        `field ${fieldLabel} replaced ${replacements.length} non-WinAnsi char(s) [${uniqueOriginals.join(',')}]`,
-      );
+      warnings.push({
+        dataPath: field.sourcePath,
+        fieldName: fieldNameForWarning,
+        reason: 'transliterated',
+        detail: `replaced ${replacements.length} non-WinAnsi char(s) [${uniqueOriginals.join(',')}]`,
+      });
     }
 
     // 3. Dispatch on field kind.
     if (field.kind === 'acroform') {
-      const ok = writeAcroFormField(form, field, text, rawValue, warnings, fieldLabel);
+      const ok = writeAcroFormField(
+        form,
+        field,
+        text,
+        rawValue,
+        warnings,
+        fieldNameForWarning,
+        fieldLabel,
+      );
       if (ok) filledFieldCount += 1;
     } else {
-      const ok = writeCoordinateField(doc, field, text, helvetica, warnings, fieldLabel);
+      const ok = writeCoordinateField(
+        doc,
+        field,
+        text,
+        helvetica,
+        warnings,
+        fieldNameForWarning,
+        fieldLabel,
+      );
       if (ok) filledFieldCount += 1;
     }
   }
@@ -192,9 +313,20 @@ export async function fillForm(input: FillFormInput): Promise<FillFormResult> {
   // pass the already-embedded Helvetica through so the helper doesn't
   // embed a second copy. Default-ON matches the W4 product decision:
   // every rendered PDF must be unmistakably marked as a draft.
-  if (input.watermark !== false) {
+  const watermarkEnabled = input.watermark !== false;
+  if (watermarkEnabled) {
     const overrides = typeof input.watermark === 'object' ? input.watermark : {};
     await applyWatermark(doc, { font: helvetica, ...overrides });
+  }
+
+  // Oracle P1-3 (W4 review): stamp a small red footer on page 1 listing
+  // the warning count, AFTER the watermark so it lays on top, BEFORE
+  // save. Default-on iff the watermark is on (a watermark-off "final"
+  // copy should NOT carry our internal warning UI). Callers can force
+  // either way via `warningFooter` in the input.
+  const warningFooterEnabled = input.warningFooter ?? watermarkEnabled;
+  if (warningFooterEnabled && warnings.length > 0 && doc.getPageCount() > 0) {
+    stampWarningFooter(doc, helvetica, warnings.length);
   }
 
   // Oracle P0-4 (W4 review): if the caller supplied provenance metadata,
@@ -244,7 +376,8 @@ function writeAcroFormField(
   field: Extract<Field, { kind: 'acroform' }>,
   text: string,
   rawValue: unknown,
-  warnings: string[],
+  warnings: FillWarning[],
+  fieldNameForWarning: string,
   fieldLabel: string,
 ): boolean {
   try {
@@ -268,9 +401,12 @@ function writeAcroFormField(
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    warnings.push(
-      `field ${fieldLabel} AcroForm widget '${field.pdfField}' not found or unwritable: ${msg}`,
-    );
+    warnings.push({
+      dataPath: field.sourcePath,
+      fieldName: fieldNameForWarning,
+      reason: 'unknown-field',
+      detail: `${fieldLabel} not found or unwritable: ${msg}`,
+    });
     return false;
   }
 }
@@ -286,14 +422,18 @@ function writeCoordinateField(
   field: Extract<Field, { kind: 'coordinate' }>,
   text: string,
   font: PDFFont,
-  warnings: string[],
+  warnings: FillWarning[],
+  fieldNameForWarning: string,
   fieldLabel: string,
 ): boolean {
   const pageCount = doc.getPageCount();
   if (field.page < 0 || field.page >= pageCount) {
-    warnings.push(
-      `field ${fieldLabel} coordinate page ${field.page} out of range (document has ${pageCount} page(s))`,
-    );
+    warnings.push({
+      dataPath: field.sourcePath,
+      fieldName: fieldNameForWarning,
+      reason: 'unknown-field',
+      detail: `${fieldLabel} page ${field.page} out of range (document has ${pageCount} page(s))`,
+    });
     return false;
   }
 
@@ -309,6 +449,30 @@ function writeCoordinateField(
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Oracle P1-3 (W4 review) — draw the warning-summary footer on page 1.
+ * Bottom-centered, red-ish, 9 pt. The ⚠ symbol is run through toWinAnsi
+ * so Helvetica's encoder can render it (it transliterates to '?'). We
+ * deliberately render onto page 1 only — the watermark already covers
+ * every page and a footer on every page is visual noise.
+ */
+function stampWarningFooter(doc: PDFDocument, font: PDFFont, count: number): void {
+  const page = doc.getPage(0);
+  const { width: pw } = page.getSize();
+  const { text } = toWinAnsi(buildWarningFooterText(count));
+  const size = 9;
+  const tw = font.widthOfTextAtSize(text, size);
+  const x = Math.max(0, (pw - tw) / 2);
+  const y = 6; // ~6pt above the bottom edge
+  page.drawText(text, {
+    x,
+    y,
+    size,
+    font,
+    color: rgb(0.7, 0, 0),
+  });
+}
 
 /**
  * Resolve a dot-notation path (e.g. `'user.profile.firstName'`) inside an
@@ -335,4 +499,15 @@ function getByPath(obj: unknown, path: string): SourceValue | undefined {
 function describeField(field: Field, index: number): string {
   if (field.kind === 'acroform') return `#${index} '${field.pdfField}'`;
   return `#${index} (coord ${field.sourcePath})`;
+}
+
+/**
+ * Oracle P1-3 (W4 review) — produce a stable `fieldName` for the structured
+ * warning shape. AcroForm fields use the actual widget name; coordinate
+ * fields synthesize `coord:<sourcePath>` so the API consumer can still
+ * group by field even without a widget name.
+ */
+function warningFieldName(field: Field, _index: number): string {
+  if (field.kind === 'acroform') return field.pdfField;
+  return `coord:${field.sourcePath}`;
 }

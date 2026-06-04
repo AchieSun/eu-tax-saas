@@ -1204,4 +1204,116 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(body.error).toBe('validation');
     expect(Array.isArray(body.issues)).toBe(true);
   });
+
+  // ── Oracle P1-3 (W4 review): X-Render-Warning-Detail ────────────────
+  it('21. POST /render emits X-Render-Warning-Detail as JSON-encoded array when warnings exist', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.missingPath',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } }, // wrong path
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-warnings')).toBe('1');
+    const detailRaw = res.headers.get('x-render-warning-detail');
+    expect(detailRaw).toBeTruthy();
+    const detail = JSON.parse(detailRaw ?? '{}') as {
+      items: Array<{ dataPath: string; fieldName: string; reason: string }>;
+      truncated: boolean;
+      total: number;
+    };
+    expect(detail.total).toBe(1);
+    expect(detail.truncated).toBe(false);
+    expect(detail.items).toHaveLength(1);
+    expect(detail.items[0]?.dataPath).toBe('user.missingPath');
+    expect(detail.items[0]?.fieldName).toBe('txt_first_name');
+    expect(detail.items[0]?.reason).toBe('missing-data');
+  });
+
+  it('22. X-Render-Warning-Detail truncates to 10 entries with truncated:true', async () => {
+    mockVersion = makeVersion();
+    // 11 coordinate fields each pointing at a missing path → 11 warnings,
+    // exceeding the 10-item cap so we exercise the truncation branch.
+    // Coordinate fields skip AcroForm widget creation in the synth fallback,
+    // keeping the test fast and avoiding any preset-name collisions.
+    mockFields = Array.from({ length: 11 }, (_, idx) =>
+      makeField({
+        id: `f${idx}`,
+        fieldName: `coord_field_${idx}`,
+        fieldKind: 'coordinate',
+        fieldType: 'text',
+        dataPath: `user.missing_${idx}`,
+        pageNumber: 0,
+        xCoord: 50 + idx * 10,
+        yCoord: 700 - idx * 20,
+        fontSize: 10,
+      }),
+    );
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {} }, // no data → every field warns
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-warnings')).toBe('11');
+    const detail = JSON.parse(res.headers.get('x-render-warning-detail') ?? '{}') as {
+      items: unknown[];
+      truncated: boolean;
+      total: number;
+    };
+    expect(detail.total).toBe(11);
+    expect(detail.truncated).toBe(true);
+    expect(detail.items).toHaveLength(10);
+  }, 20000);
+
+  it('23. X-Render-Warning-Detail items=[] truncated:false when no warnings', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-warnings')).toBe('0');
+    const detail = JSON.parse(res.headers.get('x-render-warning-detail') ?? '{}') as {
+      items: unknown[];
+      truncated: boolean;
+      total: number;
+    };
+    expect(detail.total).toBe(0);
+    expect(detail.truncated).toBe(false);
+    expect(detail.items).toEqual([]);
+  });
 });

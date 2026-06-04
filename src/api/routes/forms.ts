@@ -10,6 +10,10 @@ import { eq } from 'drizzle-orm';
 // Oracle P1-8 (W4 review): pdf-lib + render helpers are dynamically
 //   imported inside POST /render so GET /:c/:y/:f (mapping metadata
 //   only, no PDF rendering) does NOT pay the cold-start cost.
+// Oracle P1-3 (W4 review): emits X-Render-Warning-Detail (JSON array of
+//   up to 10 structured warnings) alongside the existing X-Render-Warnings
+//   count, and propagates `warningFooter` to fill.ts so the in-PDF stamp
+//   tracks the watermark state by default.
 /**
  * W4 T2.1 — GET /api/forms/:country/:year/:form
  * W4 T3.2 — POST /api/forms/:country/:year/:form/render
@@ -472,6 +476,9 @@ formsRoutes.post(
     // came from R2. The synth fallback is our own builder and is already
     // capped by its `pageCount` arg, so re-enforcing here would just
     // double-check our own code.
+    // Oracle P1-3 (W4 review): pass `warningFooter` explicitly so the
+    // in-PDF footer stamp follows the watermark toggle (off when the
+    // caller asked for watermark:false; on otherwise).
     let result: Awaited<ReturnType<typeof fillForm>>;
     try {
       result = await fillFormFn({
@@ -479,6 +486,7 @@ formsRoutes.post(
         mapping,
         data: body.data,
         watermark: body.watermark,
+        warningFooter: !watermarkOff,
         ...(pdfFromR2 ? { maxPages: MAX_PDF_PAGES } : {}),
         // Oracle P0-4: embed mapping provenance + render trace into the PDF
         // metadata slots so the artifact carries its origin everywhere.
@@ -556,9 +564,27 @@ formsRoutes.post(
 
     // 8. Respond with PDF bytes + diagnostic headers. Cache-Control is
     //    `no-store, private` because every render embeds user data.
+    // Oracle P1-3 (W4 review): emit X-Render-Warning-Detail as a
+    // JSON-encoded array of up to 10 structured warnings so the UI can
+    // surface specific issues per-field instead of just the count.
     c.header('Content-Type', 'application/pdf');
     c.header('Content-Disposition', `attachment; filename="${country}-${year}-${form}-draft.pdf"`);
     c.header('X-Render-Warnings', String(result.warnings.length));
+    {
+      const MAX_DETAIL = 10;
+      const truncated = result.warnings.length > MAX_DETAIL;
+      const detail: {
+        items: typeof result.warnings;
+        truncated: boolean;
+        total: number;
+      } = {
+        items: result.warnings.slice(0, MAX_DETAIL),
+        truncated,
+        total: result.warnings.length,
+      };
+      // JSON-encode then strip CR/LF — header values must not contain newlines.
+      c.header('X-Render-Warning-Detail', JSON.stringify(detail).replace(/[\r\n]/g, ' '));
+    }
     c.header('X-Render-Filled-Fields', String(result.filledFieldCount));
     c.header('X-Render-Mapping-Version', String(version.version));
     c.header('X-Render-Mapping-Hash', version.contentHash);

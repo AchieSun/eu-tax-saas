@@ -224,7 +224,8 @@ describe('W4 T5.1 — end-to-end PDF render pipeline', () => {
     expect(result.filledFieldCount).toBe(5);
     expect(result.warnings.length).toBe(4);
     for (const w of result.warnings) {
-      expect(w).toMatch(/replaced \d+ non-WinAnsi char/);
+      expect(w.reason).toBe('transliterated');
+      expect(w.detail).toMatch(/replaced \d+ non-WinAnsi char/);
     }
 
     // Round-trip: ASCII transliterations made it into the form.
@@ -287,7 +288,8 @@ describe('W4 T5.1 — end-to-end PDF render pipeline', () => {
     expect(result.filledFieldCount).toBe(2);
     expect(result.warnings.length).toBe(3);
     for (const w of result.warnings) {
-      expect(w).toMatch(/missing data at path 'taxpayer\./);
+      expect(w.reason).toBe('missing-data');
+      expect(w.dataPath).toMatch(/^taxpayer\./);
     }
 
     // The PDF is still valid + DRAFT-watermarked.
