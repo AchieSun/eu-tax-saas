@@ -7,6 +7,11 @@ import { eq } from 'drizzle-orm';
 // Oracle P1-6 (W4 review): country/form path-params validated against
 //   FormMappingSchema.shape so the canonical enum is the single source
 //   of truth (no drift between the regex here and the rest of the app).
+// Oracle P1-7 (W4 review): /render now uses rateLimitD1 (atomic D1
+//   upsert) instead of rateLimit (KV read-then-write). Eliminates the
+//   race where N parallel reqs all read count=N-1 and all write N,
+//   bypassing the daily free-tier cap. KV variant remains exported as
+//   `rateLimit` / `rateLimitKv` for soft-limit advisory endpoints.
 // Oracle P1-8 (W4 review): pdf-lib + render helpers are dynamically
 //   imported inside POST /render so GET /:c/:y/:f (mapping metadata
 //   only, no PDF rendering) does NOT pay the cold-start cost.
@@ -52,8 +57,9 @@ import { eq } from 'drizzle-orm';
  *     X-Render-Reject-Reason header so the failure mode is structured.
  *   - Oracle P1-2 (W4 review): request bodies > 256 KiB are refused with
  *     413 body_too_large BEFORE the admin gate / rateLimit run.
- *   - Auth-required (refused 401 by `rateLimit({requireSession:true})`)
- *   - Per-user rate-limited (10/day default via KV-backed sliding bucket)
+ *   - Auth-required (refused 401 by `rateLimitD1({requireSession:true})`)
+ *   - Per-user rate-limited (10/day default via D1-atomic counter — see
+ *     Oracle P1-7. KV-based variant remains for soft-limit endpoints.)
  *   - Pulls the same active mapping rows as GET, then either fetches the
  *     source PDF from R2 (when pdf_r2_key is set) or falls back to a
  *     synthetic AcroForm built from the field roster.
@@ -78,7 +84,7 @@ import type {
 } from '../../forms/render/synth';
 import { type Field, type FormMapping, FormMappingSchema } from '../../forms/types';
 import type { Bindings, Variables } from '../index';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitD1 } from '../middleware/rate-limit-d1';
 import { requireAdminIfWatermarkOff } from '../middleware/require-admin-if-watermark-off';
 import { MAX_HASH_BYTES, sha256Hex } from '../middleware/sha256';
 
@@ -232,12 +238,14 @@ formsRoutes.post(
     maxSize: MAX_RENDER_BODY_BYTES,
     onError: (c) => c.json({ error: 'body_too_large', limitBytes: MAX_RENDER_BODY_BYTES }, 413),
   }),
-  // Oracle P0-1 (W4 review): admin gate runs BEFORE rateLimit so a refused
+  // Oracle P0-1 (W4 review): admin gate runs BEFORE rateLimitD1 so a refused
   // non-admin watermark:false call does not burn one of the user's daily
   // 10 render slots. The middleware peeks at body via Request.clone() and
   // is a no-op for any body that doesn't carry `watermark: false`.
   requireAdminIfWatermarkOff(),
-  rateLimit({
+  // Oracle P1-7 (W4 review): rateLimitD1 (D1-atomic upsert) replaces the
+  // KV-based rateLimit so parallel requests can NEVER bypass the cap.
+  rateLimitD1({
     windowSeconds: RENDER_WINDOW_SECONDS,
     max: RENDER_MAX_PER_WINDOW,
     keyPrefix: 'rl:render',
@@ -465,7 +473,7 @@ formsRoutes.post(
     // of the SHA-256 of the user id — enough entropy to be collision-
     // resistant for audit but short enough to live inside PDF Keywords
     // without bloating it. The session is always present here because the
-    // rateLimit middleware refuses anon with 401 above.
+    // rateLimitD1 middleware refuses anon with 401 above.
     const watermarkOff = body.watermark === false;
     const session = c.get('session');
     const sessionUserId = session?.user?.id ?? '';

@@ -1,3 +1,9 @@
+// Oracle P1-7 (W4 review): KV path retained as a soft-limit fallback only.
+// Critical endpoints (e.g. POST /api/forms/:c/:y/:f/render) now use
+// `rateLimitD1` from `./rate-limit-d1.ts`, which uses an atomic D1
+// INSERT…ON CONFLICT upsert to guarantee parallel requests can NEVER
+// bypass the cap. KV's read-then-write is eventually-consistent and
+// allows N parallel reqs to all read count=N-1 then all write count=N.
 /**
  * rate-limit.ts — Reusable KV-backed per-user fixed-window rate limiter.
  *
@@ -62,6 +68,17 @@ const KV_MIN_TTL_SECONDS = 60;
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
+/**
+ * @deprecated For new critical endpoints prefer `rateLimitD1` from
+ * `./rate-limit-d1.ts`. This KV-based limiter has known eventually-consistent
+ * race conditions where parallel requests can both read N and both write N+1,
+ * silently exceeding the cap. Keep using only for soft-limit advisory caps
+ * where a one- or two-request overshoot per window is acceptable.
+ *
+ * Exported BOTH as `rateLimit` (original name, kept for backward compat
+ * with existing imports / tests) and as `rateLimitKv` (preferred name
+ * going forward, mirrors the `rateLimitD1` naming).
+ */
 export function rateLimit(opts: RateLimitOptions) {
   if (!Number.isFinite(opts.windowSeconds) || opts.windowSeconds <= 0) {
     throw new Error(`rateLimit: windowSeconds must be > 0, got ${String(opts.windowSeconds)}`);
@@ -127,3 +144,9 @@ export function rateLimit(opts: RateLimitOptions) {
     return await next();
   });
 }
+
+/**
+ * Preferred alias for the KV-backed limiter. Use this name in NEW code so
+ * the choice of backend (KV vs D1) is explicit at the call site.
+ */
+export const rateLimitKv = rateLimit;

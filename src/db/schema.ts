@@ -13,7 +13,15 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Better Auth tables (usePlural: true)
@@ -362,6 +370,30 @@ export const strategyRecommendations = sqliteTable(
   },
   (t) => ({
     userYearIdx: index('idx_strategy_user_year').on(t.userId, t.taxYear),
+  }),
+);
+
+// ────────────────────────────────────────────────────────────────────────────
+// Oracle P1-7 (W4 review): D1-atomic rate-limit counter.
+// Replaces KV-based read-then-write (eventually consistent — concurrent reqs
+// could both read N and both write N+1, bypassing the cap). The composite
+// PK (key, window_start) is what enables the atomic upsert pattern
+// `INSERT … ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1
+// RETURNING count`, which D1/SQLite guarantees is serialised per row.
+// expires_at is for a future sweeper job; rows are otherwise harmless.
+// ────────────────────────────────────────────────────────────────────────────
+
+export const rateLimitCounters = sqliteTable(
+  'rate_limit_counters',
+  {
+    key: text('key').notNull(), // e.g. 'rl:render:user-abc'
+    windowStart: integer('window_start').notNull(), // unix seconds
+    count: integer('count').notNull().default(0),
+    expiresAt: integer('expires_at').notNull(), // unix seconds — for sweep
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.key, t.windowStart] }),
+    expiresIdx: index('rate_limit_counters_expires_idx').on(t.expiresAt),
   }),
 );
 

@@ -100,12 +100,23 @@ vi.mock('../../db/queries/form-mappings', () => ({
 //     (used by requireAdminIfWatermarkOff() for role lookup)
 //   - db.insert(auditLog).values(row) → Promise<void>
 //     (used by the watermark-off audit row write)
+//   - db.insert(rateLimitCounters).values(row).onConflictDoUpdate(...).returning(...)
+//     → Promise<[{count: number}]>
+//     (Oracle P1-7: used by rateLimitD1 middleware for atomic counter upsert.
+//      Simulates SQLite's INSERT…ON CONFLICT DO UPDATE per-row atomicity.)
 let mockUserRoles: Map<string, 'admin' | 'user'> = new Map();
 const insertedAuditRows: Array<Record<string, unknown>> = [];
+// Oracle P1-7 (W4 review): per-(key, windowStart) counter rows for
+// rateLimitD1. The map key is `${key}::${windowStart}`. We mutate counts
+// in place so concurrent upserts see the latest value (mimics SQLite's
+// row-level atomicity).
+const mockRateLimitRows: Map<string, { key: string; windowStart: number; count: number }> =
+  new Map();
 
 function resetDbMocks() {
   mockUserRoles = new Map();
   insertedAuditRows.length = 0;
+  mockRateLimitRows.clear();
 }
 
 vi.mock('../../db', () => {
@@ -151,12 +162,44 @@ vi.mock('../../db', () => {
   const select = vi.fn((_cols?: unknown) => ({ from }));
 
   // db.insert(table).values(row) — capture audit rows; ignore others.
-  const insert = vi.fn((table: unknown) => ({
-    values: vi.fn(async (row: Record<string, unknown>) => {
-      const name = String((table as { [k: symbol]: unknown })[Symbol.for('drizzle:Name')] ?? '');
-      if (name === 'audit_log') insertedAuditRows.push(row);
-    }),
-  }));
+  // Oracle P1-7 (W4 review): also handles the rateLimitD1 upsert chain
+  //   .insert(table).values(row).onConflictDoUpdate({...}).returning({...})
+  // which returns [{count}].
+  const insert = vi.fn((table: unknown) => {
+    const tableName = String((table as { [k: symbol]: unknown })[Symbol.for('drizzle:Name')] ?? '');
+    return {
+      values: vi.fn((row: Record<string, unknown>) => {
+        if (tableName === 'audit_log') {
+          insertedAuditRows.push(row);
+          // audit_log path is awaited directly — return a thenable.
+          return Promise.resolve();
+        }
+        if (tableName === 'rate_limit_counters') {
+          // rateLimitD1 upsert path — chainable to onConflictDoUpdate().returning().
+          const key = String(row.key);
+          const windowStart = Number(row.windowStart);
+          const mapKey = `${key}::${windowStart}`;
+          return {
+            onConflictDoUpdate: vi.fn((_opts: unknown) => ({
+              returning: vi.fn(async (_cols?: unknown) => {
+                const existing = mockRateLimitRows.get(mapKey);
+                if (existing) {
+                  existing.count += 1;
+                  mockRateLimitRows.set(mapKey, existing);
+                  return [{ count: existing.count }];
+                }
+                const initial = { key, windowStart, count: Number(row.count) || 1 };
+                mockRateLimitRows.set(mapKey, initial);
+                return [{ count: initial.count }];
+              }),
+            })),
+          };
+        }
+        // Default: swallow.
+        return Promise.resolve();
+      }),
+    };
+  });
 
   return {
     createDb: vi.fn(() => ({ select, insert })),
@@ -591,8 +634,9 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(res.status).toBe(401);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBe('unauthorized');
-    // KV never written for a refused request.
+    // Oracle P1-7 (W4 review): rate-limit row never written for a refused request.
     expect(fakeKv.puts).toHaveLength(0);
+    expect(mockRateLimitRows.size).toBe(0);
   });
 
   it('2. authed + valid mapping + minimal data returns 200 with application/pdf body', async () => {
@@ -736,6 +780,53 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
     const body = (await blocked.json()) as Record<string, unknown>;
     expect(body.error).toBe('rate_limited');
+    // Oracle P1-7 (W4 review): /render is now backed by rateLimitD1, so
+    // the counter row should live in the D1 rate_limit_counters table —
+    // not in KV. Verify both.
+    expect(fakeKv.puts).toHaveLength(0);
+    expect(mockRateLimitRows.size).toBe(1);
+    const [row] = mockRateLimitRows.values();
+    expect(row.count).toBe(11);
+    expect(row.key).toBe('rl:render:user-1');
+  });
+
+  it('7a. ATOMICITY — parallel burst of 15 reqs: exactly 10 are 200, exactly 5 are 429 (Oracle P1-7)', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    // 15 concurrent renders against the 10/day cap — the D1-atomic
+    // rateLimitD1 must reject EXACTLY 5 of them, never more, never less.
+    // The KV-based variant cannot pass this test reliably because two
+    // parallel reqs can both read count=N and both write count=N+1.
+    const results = await Promise.all(
+      Array.from({ length: 15 }, () =>
+        postJson(
+          app,
+          '/api/forms/DE/2024/mantelbogen/render',
+          { data: { user: { firstName: 'Alice' } } },
+          { KV: fakeKv.kv, R2: fakeR2 },
+        ),
+      ),
+    );
+    const status200 = results.filter((r) => r.status === 200).length;
+    const status429 = results.filter((r) => r.status === 429).length;
+    expect(status200).toBe(10);
+    expect(status429).toBe(5);
+    // Only ONE row in D1 (single user × single window), final count = 15.
+    expect(mockRateLimitRows.size).toBe(1);
+    const [row] = mockRateLimitRows.values();
+    expect(row.count).toBe(15);
   });
 
   it('8. watermark:false (admin) produces a PDF that does NOT contain "DRAFT" text + audit row + header', async () => {
@@ -806,9 +897,10 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error?: string };
     expect(body.error).toBe('watermark_off_admin_only');
-    // No audit row + KV never touched (gate runs BEFORE rateLimit).
+    // Oracle P1-7 (W4 review): No audit row + no rate-limit row (gate runs BEFORE rateLimitD1).
     expect(insertedAuditRows).toHaveLength(0);
     expect(fakeKv.puts).toHaveLength(0);
+    expect(mockRateLimitRows.size).toBe(0);
   });
 
   it('8b. watermark:false (anon) returns 403 watermark_off_admin_only (gate runs before rateLimit)', async () => {
@@ -827,6 +919,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     const body = (await res.json()) as { error?: string };
     expect(body.error).toBe('watermark_off_admin_only');
     expect(fakeKv.puts).toHaveLength(0);
+    expect(mockRateLimitRows.size).toBe(0);
   });
 
   it('8c. watermark omitted (any user) → 200 + X-Render-Watermark: on + no extra audit row', async () => {
@@ -1175,8 +1268,10 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBe('body_too_large');
     expect(body.limitBytes).toBe(256 * 1024);
-    // bodyLimit refuses BEFORE rateLimit — no KV write should have happened.
+    // Oracle P1-7 (W4 review): bodyLimit refuses BEFORE rateLimitD1 — no
+    // KV write AND no D1 rate-limit row should exist.
     expect(fakeKv.puts).toHaveLength(0);
+    expect(mockRateLimitRows.size).toBe(0);
   });
 
   // ── Oracle P1-6 (W4 review): country narrowed by FormMappingSchema ──
