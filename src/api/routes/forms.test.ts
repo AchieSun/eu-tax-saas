@@ -56,6 +56,10 @@ interface FieldRow {
   fontSize: number | null;
   fieldKind: string;
   versionId: number | null;
+  // Oracle P2-A (W4 review): per-field render transform. Migration 0005
+  // added this column with `NOT NULL DEFAULT 'none'`, so existing test
+  // fixtures that don't set it explicitly still behave as before.
+  transform: string;
 }
 
 let mockVersion: VersionRow | null = null;
@@ -251,6 +255,11 @@ function makeField(overrides: Partial<FieldRow> = {}): FieldRow {
     fontSize: 10,
     fieldKind: 'coordinate',
     versionId: 3,
+    // Oracle P2-A (W4 review): default to 'none' so existing tests
+    // (which don't care about render-time value transforms) keep their
+    // pre-P2-A behaviour. Tests that exercise the new pipeline override
+    // this via the `overrides` arg.
+    transform: 'none',
     ...overrides,
   };
 }
@@ -1411,4 +1420,87 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(detail.truncated).toBe(false);
     expect(detail.items).toEqual([]);
   });
+
+  // ── Oracle P2-A (W4 review): per-field transform from D1 → /render ────
+  //
+  // Regression guard for the legal-correctness bug fixed by migration 0005:
+  // the /render handler used to hard-code `transform: 'none'` on every
+  // field, so `format-date-de` was a silent no-op (German tax forms got
+  // ISO timestamps). These tests pin the wire: D1 row's `transform`
+  // column flows through to fillForm and the rendered PDF carries the
+  // transformed value.
+
+  it("24. POST /render applies field.transform=format-date-de from D1 row (renders '03.06.2026' not ISO)", async () => {
+    const { PDFDocument } = await import('pdf-lib');
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name', // re-using the synth widget slot for assertion
+        fieldKind: 'acroform',
+        fieldType: 'date',
+        dataPath: 'user.profile.dateOfBirth',
+        transform: 'format-date-de', // ← the column under test
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      {
+        data: {
+          user: { profile: { dateOfBirth: '2026-06-03T12:00:00.000Z' } },
+        },
+      },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/pdf');
+    const pdfBytes = new Uint8Array(await res.arrayBuffer());
+    const pdf = await PDFDocument.load(pdfBytes);
+    const value = pdf.getForm().getTextField('txt_first_name').getText() ?? '';
+    // Before P2-A: '2026-06-03T12:00:00.000Z' (raw input, transform dropped).
+    // After  P2-A: '03.06.2026' (format-date-de applied).
+    expect(value).toBe('03.06.2026');
+  }, 20000);
+
+  it("25. POST /render coerces an unknown/garbage transform value to 'none' instead of throwing 500", async () => {
+    const { PDFDocument } = await import('pdf-lib');
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        // Simulates a manual D1 edit / future schema drift writing a value
+        // that's not in TransformSchema. Route must degrade to 'none'
+        // (raw passthrough) — never throw, never 500.
+        transform: 'definitely-not-a-real-transform-id',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } } },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    const pdfBytes = new Uint8Array(await res.arrayBuffer());
+    const pdf = await PDFDocument.load(pdfBytes);
+    const value = pdf.getForm().getTextField('txt_first_name').getText() ?? '';
+    // Coerced to 'none' → raw value written verbatim.
+    expect(value).toBe('Alice');
+    // No 'transform-failed' warning (because the coercion happened in the
+    // route before fillForm ever saw the bad id).
+    expect(res.headers.get('x-render-warnings')).toBe('0');
+  }, 20000);
 });

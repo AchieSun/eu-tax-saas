@@ -130,6 +130,18 @@ Currency uses hand-rolled German locale (no `Intl`) for deterministic
 output across Node and workerd. An `assertNever` guard fails compilation
 if a new enum value is added without a handler.
 
+**Oracle P2-A (W4 review, Wave A4):** the `form_field_mappings` table now
+has a `transform` column (migration `0005_form_field_transform`,
+`NOT NULL DEFAULT 'none'`). `scripts/ingest-form-mappings.ts` backfills
+it from each YAML field's `transform:` key on ingest, and the
+`POST /:c/:y/:f/render` handler reads it per-row and passes it into
+`fillForm`. Before this landed the route hard-coded `'none'` for every
+field, so e.g. `format-date-de` was a silent no-op and German Mantelbogen
+dates rendered as ISO timestamps — a legal-correctness bug, not a
+cosmetic one. The route defensively coerces any unrecognised string to
+`'none'` (`TransformSchema.safeParse`) so future schema drift can never
+500 mid-render.
+
 ### 3.3 `src/forms/render/watermark.ts` — DRAFT stamp (T3.1b)
 
 ```ts

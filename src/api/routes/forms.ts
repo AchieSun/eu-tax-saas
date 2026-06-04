@@ -82,7 +82,13 @@ import type {
   defaultMantelStyleFields as DefaultMantelStyleFieldsType,
   FieldSpec,
 } from '../../forms/render/synth';
-import { type Field, type FormMapping, FormMappingSchema } from '../../forms/types';
+import {
+  type Field,
+  type FormMapping,
+  FormMappingSchema,
+  type Transform,
+  TransformSchema,
+} from '../../forms/types';
 import type { Bindings, Variables } from '../index';
 import { rateLimitD1 } from '../middleware/rate-limit-d1';
 import { requireAdminIfWatermarkOff } from '../middleware/require-admin-if-watermark-off';
@@ -344,21 +350,32 @@ formsRoutes.post(
     }
 
     // 5. Build FormMapping object the render core expects.
-    //    NOTE: the DB schema has no `transform` column yet — every field
-    //    defaults to 'none'. A follow-up migration will surface the YAML
-    //    transform into D1 so this hard-coded default goes away.
+    //    Oracle P2-A (W4 review): each field's `transform` now comes from
+    //    the D1 row (migration 0005 added the column; ingest backfills it
+    //    from YAML). Previously this was hard-coded to 'none', which made
+    //    `format-date-de`, `format-currency-eur`, `boolean-x`, etc. silent
+    //    no-ops at render time — German tax forms received raw ISO
+    //    timestamps instead of '03.06.2026'. We defensively coerce via
+    //    TransformSchema.safeParse so a row whose `transform` somehow got
+    //    written as garbage (manual SQL edit, future schema drift, etc.)
+    //    degrades to 'none' instead of throwing 500 mid-render.
     //    NOTE: `citation` is required by the type but `notes` may be null
     //    for legacy rows — fall back to 'unknown' so the type stays sound.
+    const coerceTransform = (raw: unknown): Transform => {
+      const parsed = TransformSchema.safeParse(raw);
+      return parsed.success ? parsed.data : 'none';
+    };
     const fields: Field[] = rows.map((r) => {
       const fieldType = (r.fieldType ?? 'text') as 'text' | 'number' | 'date' | 'checkbox';
       const citation = r.notes ?? 'unknown';
+      const transform = coerceTransform(r.transform);
       if (r.fieldKind === 'coordinate') {
         return {
           kind: 'coordinate' as const,
           sourcePath: r.dataPath,
           // CoordinateField excludes 'checkbox' from its type union.
           type: (fieldType === 'checkbox' ? 'text' : fieldType) as 'text' | 'number' | 'date',
-          transform: 'none' as const,
+          transform,
           citation,
           page: r.pageNumber ?? 0,
           x: r.xCoord ?? 0,
@@ -372,7 +389,7 @@ formsRoutes.post(
         pdfField: r.fieldName,
         sourcePath: r.dataPath,
         type: fieldType,
-        transform: 'none' as const,
+        transform,
         citation,
         ...(r.fontSize !== null && r.fontSize !== undefined ? { fontSize: r.fontSize } : {}),
       };

@@ -1,0 +1,1 @@
+ALTER TABLE `form_field_mappings` ADD `transform` text DEFAULT 'none' NOT NULL;

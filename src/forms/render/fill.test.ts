@@ -1153,3 +1153,170 @@ describe('fillForm — warning footer + structured shape (Oracle P1-3)', () => {
     expect(lines[1]).toContain('replaced 1 non-WinAnsi');
   });
 });
+
+// ─── Oracle P2-A (W4 review) — per-field transform application ─────────────
+//
+// Regression guard: before P2-A landed, the /render handler hard-coded
+// `transform: 'none'` on every field row it read from D1, so passing a
+// transform like `format-date-de` from YAML was a silent no-op. These tests
+// pin fillForm's behaviour at the *render-core* boundary: when the FormMapping
+// carries a real transform, the output PDF must contain the transformed
+// value, not the raw input.
+
+describe('fillForm — Oracle P2-A transform application', () => {
+  // Re-use mantelPdf's `txt_first_name` text widget for date/currency cases
+  // and `chk_married` for boolean. Citation/source-path are irrelevant to
+  // the render core — only `transform` matters here.
+  function mappingWith(
+    transform: FormMapping['fields'][number]['transform'],
+    opts?: {
+      pdfField?: string;
+      sourcePath?: string;
+      type?: 'text' | 'number' | 'date' | 'checkbox';
+    },
+  ): FormMapping {
+    return {
+      country: 'DE',
+      year: 2024,
+      form: 'mantelbogen-synth',
+      formTitle: 'Synthetic Mantelbogen for tests',
+      sourceUrl: SOURCE_URL,
+      sourceVersion: SOURCE_VERSION,
+      fields: [
+        {
+          kind: 'acroform',
+          pdfField: opts?.pdfField ?? 'txt_first_name',
+          sourcePath: opts?.sourcePath ?? 'value',
+          type: opts?.type ?? 'text',
+          transform,
+          citation: 'test',
+        },
+      ],
+    };
+  }
+
+  async function readTextField(pdfBytes: Uint8Array, fieldName: string): Promise<string> {
+    const pdf = await PDFDocument.load(pdfBytes);
+    const form = pdf.getForm();
+    return form.getTextField(fieldName).getText() ?? '';
+  }
+
+  it("format-date-de turns an ISO timestamp into German DD.MM.YYYY (was silently 'none' before P2-A)", async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('format-date-de', { type: 'date' }),
+      data: { value: '2026-06-03T12:00:00.000Z' },
+    });
+    expect(result.filledFieldCount).toBe(1);
+    expect(result.warnings).toEqual([]);
+    expect(await readTextField(result.pdfBytes, 'txt_first_name')).toBe('03.06.2026');
+  });
+
+  it('format-currency-eur formats a number as a EUR string', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('format-currency-eur', { type: 'number' }),
+      data: { value: 1234.5 },
+    });
+    expect(result.filledFieldCount).toBe(1);
+    // Output is a non-empty currency-shaped string with EUR sign and the
+    // integer part; locale-specific separators are validated more loosely
+    // so the test is portable across Node ICU builds.
+    const out = await readTextField(result.pdfBytes, 'txt_first_name');
+    expect(out).toMatch(/1[\.,\s]?234/);
+    expect(out).toContain('€');
+  });
+
+  it("boolean-x maps truthy to 'X' on a checkbox field", async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('boolean-x', {
+        pdfField: 'chk_married',
+        type: 'checkbox',
+      }),
+      data: { value: true },
+    });
+    expect(result.filledFieldCount).toBe(1);
+    expect(result.warnings).toEqual([]);
+    // Checkbox round-trip: re-parse and assert the box is now checked.
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getForm().getCheckBox('chk_married').isChecked()).toBe(true);
+  });
+
+  it("transform: 'none' is the inert default (raw value written verbatim)", async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('none', { type: 'text' }),
+      data: { value: 'Hauptstrasse 1' },
+    });
+    expect(result.filledFieldCount).toBe(1);
+    expect(await readTextField(result.pdfBytes, 'txt_first_name')).toBe('Hauptstrasse 1');
+  });
+
+  it('floor / round transforms produce integer strings (regression: previously both no-ops via hard-coded none)', async () => {
+    const floored = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('floor', { type: 'number' }),
+      data: { value: 42.9 },
+    });
+    expect(await readTextField(floored.pdfBytes, 'txt_first_name')).toBe('42');
+
+    const rounded = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('round', { type: 'number' }),
+      data: { value: 42.5 },
+    });
+    expect(await readTextField(rounded.pdfBytes, 'txt_first_name')).toBe('43');
+  });
+
+  it('format-date-iso turns a Date into ISO YYYY-MM-DD (complements format-date-de)', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('format-date-iso', { type: 'date' }),
+      data: { value: '2026-06-03T12:00:00.000Z' },
+    });
+    expect(await readTextField(result.pdfBytes, 'txt_first_name')).toBe('2026-06-03');
+  });
+
+  it('format-currency-no-symbol formats a number without the € sign', async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('format-currency-no-symbol', { type: 'number' }),
+      data: { value: 1234.5 },
+    });
+    const out = await readTextField(result.pdfBytes, 'txt_first_name');
+    expect(out).toMatch(/1[\.,\s]?234/);
+    expect(out).not.toContain('€');
+  });
+
+  it("boolean-x maps falsy to '' (unchecked) on a checkbox field", async () => {
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('boolean-x', {
+        pdfField: 'chk_married',
+        type: 'checkbox',
+      }),
+      data: { value: false },
+    });
+    expect(result.filledFieldCount).toBe(1);
+    const pdf = await PDFDocument.load(result.pdfBytes);
+    expect(pdf.getForm().getCheckBox('chk_married').isChecked()).toBe(false);
+  });
+
+  it("transform errors surface as 'transform-failed' warnings, not exceptions (resilience guarantee)", async () => {
+    // boolean-x throws if the value isn't a boolean. The fill core MUST
+    // catch and warn so one bad field cannot kill the whole render.
+    const result = await fillForm({
+      pdfBytes: mantelPdf,
+      mapping: mappingWith('boolean-x', {
+        pdfField: 'chk_married',
+        type: 'checkbox',
+      }),
+      data: { value: 'not-a-boolean' },
+    });
+    expect(result.filledFieldCount).toBe(0);
+    expect(result.warnings.length).toBe(1);
+    expect(result.warnings[0]?.reason).toBe('transform-failed');
+    expect(result.warnings[0]?.detail).toContain('boolean-x');
+  });
+});

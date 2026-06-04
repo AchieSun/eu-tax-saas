@@ -39,12 +39,8 @@ export const users = sqliteTable('users', {
   subscriptionStatus: text('subscription_status').notNull().default('free'),
   paddleSubscriptionId: text('paddle_subscription_id'),
   paddleCustomerId: text('paddle_customer_id'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 export const sessions = sqliteTable('sessions', {
@@ -56,12 +52,8 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 export const accounts = sqliteTable('accounts', {
@@ -78,12 +70,8 @@ export const accounts = sqliteTable('accounts', {
   scope: text('scope'),
   idToken: text('id_token'),
   password: text('password'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 export const verifications = sqliteTable('verifications', {
@@ -91,12 +79,8 @@ export const verifications = sqliteTable('verifications', {
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -112,9 +96,7 @@ export const userResidency = sqliteTable('user_residency', {
   countries: text('countries', { mode: 'json' }).notNull(), // {"ES": true, ...}
   primaryCountry: text('primary_country'),
   specialStatus: text('special_status', { mode: 'json' }), // {"ES": "beckham", ...}
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 export const residencyAssessments = sqliteTable(
@@ -131,9 +113,7 @@ export const residencyAssessments = sqliteTable(
     reasoning: text('reasoning', { mode: 'json' }).notNull(),
     hasConflict: integer('has_conflict', { mode: 'boolean' }).notNull().default(false),
     conflictWith: text('conflict_with'), // ISO country if conflict
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (t) => ({
     userYearIdx: index('idx_residency_user_year').on(t.userId, t.taxYear),
@@ -155,9 +135,7 @@ export const userDays = sqliteTable(
     date: text('date').notNull(), // YYYY-MM-DD
     source: text('source').notNull().default('manual'), // manual|google_calendar|gps
     note: text('note'), // W3 — free-text annotation
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (t) => ({
     // W3: changed from (userId, country, date) to (userId, date).
@@ -213,9 +191,7 @@ export const userIncome = sqliteTable(
     amountAnnual: real('amount_annual').notNull(),
     currency: text('currency').notNull().default('EUR'),
     withholdingTax: real('withholding_tax').notNull().default(0),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (t) => ({
     userYearIdx: index('idx_income_user_year').on(t.userId, t.taxYear),
@@ -292,19 +268,9 @@ export const formMappingVersions = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({
-    uniqueVersion: uniqueIndex('idx_fmv_unique').on(
-      t.country,
-      t.formType,
-      t.taxYear,
-      t.version,
-    ),
+    uniqueVersion: uniqueIndex('idx_fmv_unique').on(t.country, t.formType, t.taxYear, t.version),
     // Lookup pattern: latest version for a given (country, year, form_type).
-    lookup: index('idx_fmv_lookup').on(
-      t.country,
-      t.taxYear,
-      t.formType,
-      t.version,
-    ),
+    lookup: index('idx_fmv_lookup').on(t.country, t.taxYear, t.formType, t.version),
   }),
 );
 
@@ -334,6 +300,15 @@ export const formFieldMappings = sqliteTable(
     // W4 T0.5: which mapping version produced this row.
     // NULL for rows ingested before T0.5 (backward-compat).
     versionId: integer('version_id').references(() => formMappingVersions.id),
+    // Oracle P2-A (W4 review): per-field value transform applied at render
+    // time. Stored alongside the field row so the /render handler doesn't
+    // hard-code 'none' (which silently made `format-date-de` etc. a no-op
+    // — German tax forms got ISO timestamps instead of '03.06.2026').
+    // Valid values mirror TransformSchema in src/forms/types.ts; ingest
+    // backfills from YAML and the DB column is the source of truth for
+    // the route. NOT NULL DEFAULT 'none' so pre-migration rows stay
+    // backward-compatible (render behavior unchanged for them).
+    transform: text('transform').notNull().default('none'),
   },
   (t) => ({
     uniqueField: uniqueIndex('idx_form_field_unique').on(
@@ -364,9 +339,7 @@ export const strategyRecommendations = sqliteTable(
     confidence: real('confidence'), // 0-1
     actionSteps: text('action_steps', { mode: 'json' }),
     citations: text('citations', { mode: 'json' }),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (t) => ({
     userYearIdx: index('idx_strategy_user_year').on(t.userId, t.taxYear),

@@ -99,9 +99,7 @@ describe('generateIngestSql — structural invariants', () => {
     const sql = generateIngestSql([fixtureMapping]);
     // Must match schema.ts: idx_form_field_unique on
     // (country, form_type, tax_year, field_name)
-    expect(sql).toContain(
-      'ON CONFLICT(country, form_type, tax_year, field_name) DO UPDATE',
-    );
+    expect(sql).toContain('ON CONFLICT(country, form_type, tax_year, field_name) DO UPDATE');
   });
 
   it('undeletes existing rows on conflict (deleted_at = NULL)', () => {
@@ -177,9 +175,10 @@ describe('generateIngestSql — acroform vs coordinate columns', () => {
     const acroLine = lines.find((l) => l.includes("'TaxpayerName'"));
     expect(acroLine).toBeDefined();
     // Coordinate columns and font_size should be NULL for AcroForm.
-    // VALUES segment shape (positions for page_number, x, y, font_size):
-    //   ..., NULL, NULL, NULL, NULL, 'acroform', NULL)
-    expect(acroLine!).toMatch(/NULL,\s*NULL,\s*NULL,\s*NULL,\s*'acroform',\s*NULL\)/);
+    // Oracle P2-A (W4 review): VALUES segment shape (positions for
+    // page_number, x, y, font_size, field_kind, transform, deleted_at):
+    //   ..., NULL, NULL, NULL, NULL, 'acroform', 'none', NULL)
+    expect(acroLine!).toMatch(/NULL,\s*NULL,\s*NULL,\s*NULL,\s*'acroform',\s*'none',\s*NULL\)/);
 
     const coordLine = lines.find((l) => l.includes('150.5'));
     expect(coordLine).toBeDefined();
@@ -210,9 +209,13 @@ describe('mappingToSql — column ordering matches schema', () => {
     const stmts = mappingToSql(fixtureMapping);
     expect(stmts.length).toBe(2);
     for (const stmt of stmts) {
+      // Oracle P2-A (W4 review): `transform` is now in the column list
+      // (migration 0005). Keep it in the exact position the VALUES clause
+      // expects — between `field_kind` and `deleted_at` — so SQLite's
+      // positional INSERT cannot misalign.
       expect(stmt).toContain(
         '(id, country, form_type, tax_year, field_name, data_path, field_type, ' +
-          'page_number, x_coord, y_coord, font_size, field_kind, deleted_at)',
+          'page_number, x_coord, y_coord, font_size, field_kind, transform, deleted_at)',
       );
     }
   });
@@ -234,9 +237,7 @@ describe('parseCliArgs', () => {
 
   it('throws when --out has no value or another flag follows', () => {
     expect(() => parseCliArgs(['--out'], '/scripts')).toThrow(/Missing value/);
-    expect(() => parseCliArgs(['--out', '--something'], '/scripts')).toThrow(
-      /Missing value/,
-    );
+    expect(() => parseCliArgs(['--out', '--something'], '/scripts')).toThrow(/Missing value/);
   });
 });
 
@@ -298,10 +299,7 @@ describe('generateIngestSqlWithVersions — version row + version_id back-fill',
       year: fixtureMapping.year,
       country: fixtureMapping.country,
     };
-    const sqlReordered = await generateIngestSqlWithVersions(
-      [reorderedFixture],
-      FIXED_NOW,
-    );
+    const sqlReordered = await generateIngestSqlWithVersions([reorderedFixture], FIXED_NOW);
     const hash = await canonicalJSONHash(fixtureMapping);
     expect(sqlReordered).toContain(`'${hash}'`);
     expect(sqlA).toContain(`'${hash}'`);
@@ -331,10 +329,7 @@ describe('generateIngestSqlWithVersions — version row + version_id back-fill',
     const hashMutated = await canonicalJSONHash(mutated);
     expect(hashOriginal).not.toBe(hashMutated);
 
-    const sqlOriginal = await generateIngestSqlWithVersions(
-      [fixtureMapping],
-      FIXED_NOW,
-    );
+    const sqlOriginal = await generateIngestSqlWithVersions([fixtureMapping], FIXED_NOW);
     const sqlMutated = await generateIngestSqlWithVersions([mutated], FIXED_NOW);
 
     // The new SQL carries the new hash, not the old one.
@@ -349,11 +344,7 @@ describe('generateIngestSqlWithVersions — version row + version_id back-fill',
     expect(sqlMutated).toMatch(backfillRe);
 
     // emitVersionInsert directly: changed input → different statement bytes.
-    const stmtOriginal = emitVersionInsert(
-      fixtureMapping,
-      hashOriginal,
-      FIXED_NOW,
-    );
+    const stmtOriginal = emitVersionInsert(fixtureMapping, hashOriginal, FIXED_NOW);
     const stmtMutated = emitVersionInsert(mutated, hashMutated, FIXED_NOW);
     expect(stmtOriginal).not.toBe(stmtMutated);
   });
@@ -369,12 +360,10 @@ describe('generateIngestSqlWithVersions — version row + version_id back-fill',
     // Hash is a 64-char hex SHA-256 digest — anything else must be rejected
     // (catches us if a caller ever passes a truncated / base64 / labelled
     // hash by mistake).
-    expect(() => emitVersionInsert(fixtureMapping, 'not-a-hash', FIXED_NOW)).toThrow(
+    expect(() => emitVersionInsert(fixtureMapping, 'not-a-hash', FIXED_NOW)).toThrow(/64-char hex/);
+    expect(() => emitVersionInsert(fixtureMapping, hash.toUpperCase(), FIXED_NOW)).toThrow(
       /64-char hex/,
     );
-    expect(() =>
-      emitVersionInsert(fixtureMapping, hash.toUpperCase(), FIXED_NOW),
-    ).toThrow(/64-char hex/);
 
     // nowMs must be a non-negative integer.
     expect(() => emitVersionInsert(fixtureMapping, hash, -1)).toThrow(/non-negative/);
@@ -405,8 +394,7 @@ describe('generateIngestSqlWithVersions — DE 2024 Mantelbogen (W4 T1.3b)', () 
     year: 2024,
     form: 'mantelbogen',
     formTitle: 'Einkommensteuer Hauptvordruck (Mantelbogen) ESt 1 A 2024',
-    sourceUrl:
-      'https://www.formulare-bfinv.de/ffw/action/invoke.do?id=034037_24',
+    sourceUrl: 'https://www.formulare-bfinv.de/ffw/action/invoke.do?id=034037_24',
     sourceVersion:
       'BMF 2024 Rev 2024ESt1A011NET (Sep 2024) — coordinates UNVERIFIED until real PDF acquired',
     fields: Array.from({ length: 20 }, (_, i) => ({
@@ -420,10 +408,7 @@ describe('generateIngestSqlWithVersions — DE 2024 Mantelbogen (W4 T1.3b)', () 
   };
 
   it('emits version-insert + ≥20 field INSERTs + version_id UPDATE in one transaction', async () => {
-    const sql = await generateIngestSqlWithVersions(
-      [mantelbogenMapping],
-      FIXED_NOW,
-    );
+    const sql = await generateIngestSqlWithVersions([mantelbogenMapping], FIXED_NOW);
 
     // 1. Single version-insert statement scoped to (DE, mantelbogen, 2024).
     expect(sql.match(/INSERT INTO form_mapping_versions/g)?.length).toBe(1);
@@ -443,5 +428,57 @@ describe('generateIngestSqlWithVersions — DE 2024 Mantelbogen (W4 T1.3b)', () 
     // 4. One BEGIN / COMMIT pair wraps everything.
     expect(sql.match(/BEGIN TRANSACTION;/g)?.length).toBe(1);
     expect(sql.match(/^COMMIT;$/gm)?.length).toBe(1);
+  });
+});
+
+// ─── Oracle P2-A (W4 review) — transform column round-trip ─────────────────
+
+describe('mappingToSql — Oracle P2-A transform column', () => {
+  it('emits the YAML `transform` value verbatim and updates it on conflict', () => {
+    const mapping: FormMapping = {
+      ...fixtureMapping,
+      fields: [
+        {
+          kind: 'acroform',
+          pdfField: 'DateOfBirth',
+          sourcePath: 'user.profile.dateOfBirth',
+          type: 'date',
+          transform: 'format-date-de',
+          citation: 'BMF Mantelbogen 2024 Zeile 8',
+        },
+        {
+          kind: 'acroform',
+          pdfField: 'IsResident',
+          sourcePath: 'userResidency.isResident',
+          type: 'checkbox',
+          transform: 'boolean-x',
+          citation: 'BMF Mantelbogen 2024 Zeile 1',
+        },
+        {
+          kind: 'acroform',
+          pdfField: 'PlainText',
+          sourcePath: 'user.profile.firstName',
+          type: 'text',
+          transform: 'none',
+          citation: 'BMF Mantelbogen 2024 Zeile 10',
+        },
+      ],
+    };
+    const stmts = mappingToSql(mapping);
+    expect(stmts.length).toBe(3);
+
+    // Each emitted INSERT carries the field's exact `transform` value as a
+    // SQL string literal. Before P2-A the DB had no transform column, so
+    // the render handler hard-coded 'none' and silently dropped these.
+    expect(stmts[0]).toContain("'format-date-de'");
+    expect(stmts[1]).toContain("'boolean-x'");
+    expect(stmts[2]).toContain("'none'");
+
+    // ON CONFLICT path also refreshes `transform` — required so that a
+    // YAML edit (e.g. flipping a field from 'none' → 'format-date-de')
+    // re-ingests cleanly without a manual UPDATE.
+    for (const stmt of stmts) {
+      expect(stmt).toContain('transform = excluded.transform');
+    }
   });
 });

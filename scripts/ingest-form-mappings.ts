@@ -92,6 +92,11 @@ function fieldNameOf(field: FormMapping['fields'][number]): string {
  *   y_coord             real NULL
  *   font_size           real NULL
  *   field_kind          text NOT NULL DEFAULT 'acroform' ← YAML `kind`
+ *   transform           text NOT NULL DEFAULT 'none'    ← YAML `transform`
+ *                       (Oracle P2-A: source of truth for render-time
+ *                       value formatting. Skipping this column would silently
+ *                       degrade every numeric/date/boolean field back to
+ *                       `'none'`, so `format-date-de` becomes a no-op.)
  *   deleted_at          integer NULL    (Unix ms — set to NULL to undelete)
  *
  * Columns intentionally left to DB defaults / nulls:
@@ -109,19 +114,24 @@ export function mappingToSql(mapping: FormMapping): string[] {
     const pageNumber = isAcroform ? 'NULL' : sqlValue(field.page);
     const xCoord = isAcroform ? 'NULL' : sqlValue(field.x);
     const yCoord = isAcroform ? 'NULL' : sqlValue(field.y);
-    const fontSize =
-      field.fontSize !== undefined ? sqlValue(field.fontSize) : 'NULL';
+    const fontSize = field.fontSize !== undefined ? sqlValue(field.fontSize) : 'NULL';
+    // Oracle P2-A (W4 review): backfill `transform` from the YAML. The
+    // Zod `TransformSchema` defaults to `'none'` at parse time, so this
+    // is always a valid enum value — no extra validation needed. Until
+    // this landed, the route hard-coded `'none'` per field which silently
+    // turned `format-date-de` etc. into no-ops.
+    const transform = sqlValue(field.transform);
     // Deterministic composite id so re-runs hit the same row.
     const id = `${mapping.country}-${mapping.year}-${mapping.form}-${fieldName}`;
 
     lines.push(
       `INSERT INTO form_field_mappings ` +
         `(id, country, form_type, tax_year, field_name, data_path, field_type, ` +
-        `page_number, x_coord, y_coord, font_size, field_kind, deleted_at) ` +
+        `page_number, x_coord, y_coord, font_size, field_kind, transform, deleted_at) ` +
         `VALUES (` +
         `${sqlEscape(id)}, ${sqlEscape(mapping.country)}, ${sqlEscape(mapping.form)}, ` +
         `${mapping.year}, ${sqlEscape(fieldName)}, ${sqlEscape(dataPath)}, ${sqlEscape(fieldType)}, ` +
-        `${pageNumber}, ${xCoord}, ${yCoord}, ${fontSize}, ${sqlEscape(field.kind)}, NULL` +
+        `${pageNumber}, ${xCoord}, ${yCoord}, ${fontSize}, ${sqlEscape(field.kind)}, ${transform}, NULL` +
         `) ` +
         `ON CONFLICT(country, form_type, tax_year, field_name) DO UPDATE SET ` +
         `data_path = excluded.data_path, ` +
@@ -131,6 +141,7 @@ export function mappingToSql(mapping: FormMapping): string[] {
         `y_coord = excluded.y_coord, ` +
         `font_size = excluded.font_size, ` +
         `field_kind = excluded.field_kind, ` +
+        `transform = excluded.transform, ` +
         `deleted_at = NULL;`,
     );
   }
@@ -318,9 +329,7 @@ export async function collectYamlFiles(root: string): Promise<string[]> {
 /**
  * Load + validate every production mapping under `formsRoot` from disk.
  */
-export async function loadProductionMappings(
-  formsRoot: string,
-): Promise<FormMapping[]> {
+export async function loadProductionMappings(formsRoot: string): Promise<FormMapping[]> {
   const files = await collectYamlFiles(formsRoot);
   const mappings: FormMapping[] = [];
   for (const file of files) {
@@ -370,9 +379,7 @@ export async function main(args: string[], scriptDir: string): Promise<void> {
   if (opts.outPath) {
     await writeFile(opts.outPath, sql);
     // Status goes to stderr so stdout stays pure SQL when piped.
-    console.error(
-      `Wrote SQL for ${mappings.length} mapping(s) to ${opts.outPath}`,
-    );
+    console.error(`Wrote SQL for ${mappings.length} mapping(s) to ${opts.outPath}`);
   } else {
     process.stdout.write(sql);
   }
