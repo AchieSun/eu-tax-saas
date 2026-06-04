@@ -27,15 +27,26 @@ and reviewers auditing the audit/legal posture of the render path.
 | CORS allowlist (APP_URL + dev localhost only) (P0-3) | ✅ W4-G3 |
 | PDF metadata provenance (mapping version + hash + userIdHash) (P0-4) | ✅ W4-G3 |
 | Typed `eqAllActive` cross-form leak guard (P0-5) | ✅ W4-G3 |
+| R2 source PDF size+page caps — 10MiB / 50p (Oracle P1-1) | ✅ W5-A1 |
+| Body-limit 256 KiB on `/render` + audit wire-up (P1-2) | ✅ W5-A1 |
+| Country path-param as `z.enum` from `FormMappingSchema` (P1-6) | ✅ W5-A1 |
+| Dynamic `pdf-lib` import — keeps GET cold-start lean (P1-8) | ✅ W5-A1 |
+| Structured `FillWarning[]` + in-PDF footer + `X-Render-Warning-Detail` (P1-3) | ✅ W5-A2 |
+| Frontend `issues[]` surfacing + warning panel + `X-Requested-With` (P1-4) | ✅ W5-A2 |
+| `computeWatermarkFit` overflow downscale (P1-5) | ✅ W5-A2 |
+| D1-atomic rate-limit via `INSERT…ON CONFLICT` (P1-7) | ✅ W5-A3 |
+| Per-field `transform` column wired YAML → ingest → render (P2-A) | ✅ W5-A4 |
+| NFC-normalize winansi + `getByPath` `__proto__` guard (P2-B) | ✅ W5-A5 |
 
-**Not yet in W4** (deferred to W5+):
+**Not yet** (deferred):
 - Real BMF Mantelbogen PDF acquisition + AcroForm field-name resolution
-  (today the YAML mapping uses `TBD_<key>` placeholders, see T1.3b).
+  (today the YAML mapping uses `TBD_<key>` placeholders, see T1.3b; P0-2
+  now refuses to render these — no more silent placeholder leakage).
 - Coordinate verification for any flat / scanned forms.
-- NotoSans embedded font (W5 — drops the WinAnsi `?` fallback for CJK).
+- NotoSans embedded font (W5 Wave B — drops the WinAnsi `?` fallback for CJK).
 - Anlage N / KAP / S / G mappings.
 - NL / PT / ES / UK forms.
-- Paddle billing tier gating (the 10/day cap is hardcoded for free users).
+- Paddle billing tier gating (the D1-atomic 10/day cap is hardcoded for free users post P1-7).
 
 ---
 
@@ -350,7 +361,7 @@ must preserve them:
 Run locally:
 
 ```bash
-pnpm test          # whole suite (~30 files, ~410 tests, post-Oracle-P0)
+pnpm test          # whole suite (~31 files, ~474 tests, post-Oracle-P0+P1+P2)
 pnpm test:e2e      # just the e2e smoke test
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # biome check src
@@ -427,3 +438,33 @@ first to dump widget names + page coords; copy those into the YAML's
 If the PDF is flat (scanned), set `kind: coordinate` for each field and
 measure pixel positions in a PDF viewer that shows mm/pt rulers
 (Acrobat Pro, PDF-XChange).
+
+---
+
+## 8. W5 Wave A — Oracle P1+P2 closure summary
+
+W4 shipped GREEN minus 5 P0 (closed in W4-G3 → `a61e7c5`). Oracle's
+follow-up review listed 8 P1 + 10 P2 items. W5 Wave A landed **8 of 8
+P1 + 2 of 10 P2** in five atomic per-wave commits:
+
+| Wave | Commit | Findings | Tests delta |
+| --- | --- | --- | --- |
+| A1 | `ccf34ca` | P1-1 R2 caps · P1-2 body-limit+audit · P1-6 country enum · P1-8 dynamic pdf-lib | +9 |
+| A2 | `0d66bde` | P1-3 structured warnings+footer · P1-4 frontend UX · P1-5 watermark fit | +22 |
+| A3 | `5e2c26b` | P1-7 D1-atomic rate-limit (migration 0004) | +12 |
+| A4 | `24078fb` | P2-A transform column (migration 0005) | +12 |
+| A5 | `e4f7c34` | P2-B NFC normalize + `__proto__` guard | +9 |
+
+Total: 410 → **474 tests** (+64 across W4-G3 + W5-A), tsc 0 errors,
+biome 0 new errors. The remaining 8 P2 items are minor (per-finding
+classification: doc drift, log redaction, opaque error paths,
+non-exploitable footguns) and are tracked as standalone tickets for
+W5 Wave B+ rather than a single sweep.
+
+W5-A closes the Oracle gate. Render pipeline is now hardened against:
+PDF bombs, body OOM, atomic-burst rate-limit bypass, hardcoded-`none`
+transform leakage, NFD copy-paste corruption, prototype-pollution paths,
+and frontend error-shape divergence.
+
+Next surfaces (W5 Wave B+): NotoSans embedded font, Paddle billing,
+Anlage N/KAP/S/G mappings, real BMF PDF acquisition.
