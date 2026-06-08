@@ -72,8 +72,18 @@ strategiesRoutes.get('/', (c) => {
 
 // ── POST /api/strategies/evaluate ──────────────────────────────────────────
 // Body: CalculatorInput. Returns the baseline tax + per-strategy evaluation.
-// Pure: no DB, no auth (mirrors POST /api/calculate which also takes raw inputs).
-strategiesRoutes.post('/evaluate', async (c) => {
+// Pure compute: no DB writes, no auth. Oracle P1#3: rate-limited at 30/min
+// per (user|anon) bucket since each call iterates 22 strategies × calculator
+// — non-trivial CPU on a Worker.
+strategiesRoutes.post(
+  '/evaluate',
+  rateLimitD1({
+    keyPrefix: 'rl:strategies:eval',
+    max: 30,
+    windowSeconds: 60,
+    requireSession: false,
+  }),
+  async (c) => {
   let body: unknown;
   try {
     body = await c.req.json();
@@ -146,7 +156,8 @@ strategiesRoutes.post('/evaluate', async (c) => {
     },
     evaluations,
   });
-});
+  },
+);
 
 // ── POST /api/strategies/persist ───────────────────────────────────────────
 // Auth + rate-limited. Persists a single evaluation row to D1.

@@ -5,10 +5,33 @@
  * persist endpoint depends on D1 + session auth — covered separately
  * once a session fixture exists in the repo.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Oracle P1#3: POST /evaluate now uses rateLimitD1 middleware (anonymous).
+// Mock createDb so the middleware's D1 insert succeeds without a real binding.
+vi.mock('../../db', () => ({
+  createDb: vi.fn(() => ({
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoUpdate: vi.fn(() => ({
+          returning: vi.fn(async () => [{ count: 1 }]),
+        })),
+      })),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(() => ({
+        limit: vi.fn(async () => undefined),
+      })),
+    })),
+  })),
+}));
+
 // Ensure all bundled strategies auto-register before the route handlers run.
 import '../../strategies';
 import { strategiesRoutes } from './strategies';
+
+// Stub Bindings — `createDb` is mocked above so the D1 instance is opaque.
+const TEST_ENV = { DB: {} } as unknown as Parameters<typeof strategiesRoutes.request>[2];
 
 describe('GET /api/strategies/status', () => {
   it('reports implemented + registered count', async () => {
@@ -93,7 +116,7 @@ describe('POST /api/strategies/evaluate', () => {
         filingStatus: 'single',
         region: 'MAD',
       }),
-    });
+    }, TEST_ENV);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
@@ -127,7 +150,7 @@ describe('POST /api/strategies/evaluate', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: 'not-json-{',
-    });
+    }, TEST_ENV);
     expect(res.status).toBe(400);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.error).toBe('invalid_json');
@@ -143,7 +166,7 @@ describe('POST /api/strategies/evaluate', () => {
         incomeType: 'salary',
         grossIncome: 50_000,
       }),
-    });
+    }, TEST_ENV);
     expect(res.status).toBe(400);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
@@ -163,7 +186,7 @@ describe('POST /api/strategies/evaluate', () => {
         filingStatus: 'single',
         // intentionally NO region — Beckham is a national flat rate
       }),
-    });
+    }, TEST_ENV);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
@@ -190,7 +213,7 @@ describe('POST /api/strategies/evaluate', () => {
         specialStatus: 'fig',
         filingStatus: 'single',
       }),
-    });
+    }, TEST_ENV);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       evaluations: Array<{ id: string; applicable: boolean }>;
