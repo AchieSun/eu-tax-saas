@@ -147,11 +147,30 @@ export interface Strategy {
    * Pure function. MUST NOT mutate inputs. SHOULD return applicable:false
    * with a clear reason rather than throwing when ineligible.
    *
-   * `baseline` is the F1 CalculatorResult with specialStatus='none' — i.e.
-   * the user's tax if no strategy applies. evaluate() returns the delta
-   * vs that baseline.
+   * `baseline` is the F1 tax result with specialStatus='none' — i.e. the
+   * user's tax if no strategy applies. evaluate() returns the delta vs
+   * that baseline. We accept the structural minimum (`BaselineTax`) so
+   * that ES/PT/UK/DE/NL calculator variants (which differ in `breakdown`
+   * shape) are all assignable.
    */
-  evaluate(input: CalculatorInput, baseline: CalculatorResult): StrategyEvaluation;
+  evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation;
+}
+
+/**
+ * Minimum structural shape required from a F1 CalculatorResult for strategy
+ * delta math. Every per-country calculator's return type satisfies this.
+ * Defined here (rather than re-using CalculatorResult) because
+ * EsCalculatorResult uses a different `breakdown` shape, which would block
+ * direct assignment.
+ */
+export interface BaselineTax {
+  country: Country;
+  taxYear: number;
+  grossIncome: number;
+  taxOwed: number;
+  netIncome: number;
+  effectiveRate: number;
+  marginalRate: number;
 }
 
 /**
