@@ -12,6 +12,9 @@
 - **Country**: ES (Spain)
 - **Concept**: Alternative collective investment vehicles (Sociedad de Inversión de Capital Variable replacements after 2023 reform). Allows deferral of capital gains within qualified Spanish CIVs.
 - **Legal basis**: Ley 35/2006 IRPF art. 94 + Ley 27/2014 IS art. 29.
+- **Source URLs**:
+  - Ley 35/2006 (IRPF) — https://www.boe.es/buscar/act.php?id=BOE-A-2006-20764
+  - Ley 27/2014 (IS) — https://www.boe.es/buscar/act.php?id=BOE-A-2014-12328
 - **Why seeded (not bundled A/B)**: Eligibility depends on personal investment profile + advisor structuring; cannot be reduced to a flat rule. LLM must reason about user's investment horizon and asset class.
 - **Forbidden patterns**: Must NOT suggest the obsolete pre-2023 SICAV-100 structure; reform replaced it with stricter participation rules.
 - **Typical savings range**: 8,000–15,000 EUR/year for HNW investors with ≥ 100k EUR equity portfolio.
@@ -23,6 +26,9 @@
 - **Country**: ES
 - **Concept**: Deduction for investment in newly listed companies / startups under Ley de Startups 28/2022.
 - **Legal basis**: Ley 35/2006 IRPF art. 68.1 + Ley 28/2022 art. 7.
+- **Source URLs**:
+  - Ley 28/2022 (Startups) — https://www.boe.es/buscar/act.php?id=BOE-A-2022-21739
+  - AEAT certified-startup registry — https://www.enisa.es/es/financia-tu-empresa/info/empresa-emergente
 - **Why seeded**: Requires manual evaluation of specific startup eligibility (sector, age, certification). LLM walks user through qualification checklist.
 - **Forbidden patterns**: Must NOT generalize to all equity investments; only certified `empresa emergente` qualifies.
 - **Typical savings range**: 3,000–10,000 EUR/year.
@@ -34,6 +40,9 @@
 - **Country**: DE (Germany)
 - **Concept**: Family foundation (Familienstiftung) for intergenerational wealth holding with reduced inheritance tax exposure.
 - **Legal basis**: Erbschaftsteuergesetz § 9 Abs. 1 Nr. 4 + AO § 51 ff.
+- **Source URLs**:
+  - ErbStG — https://www.gesetze-im-internet.de/erbstg_1974/
+  - AO §§ 51 ff. — https://www.gesetze-im-internet.de/ao_1977/__51.html
 - **Why seeded**: Setup is highly individualized; only suitable for users with > 1M EUR transferrable assets and intention to lock capital for 30+ years. LLM screens viability.
 - **Forbidden patterns**: Must NOT propose for users below the 400k EUR exemption threshold per beneficiary (would be net-negative due to setup costs).
 - **Typical savings range**: 30,000–80,000 EUR over lifetime; bias toward inheritance/gift tax not income tax.
@@ -45,6 +54,9 @@
 - **Country**: PT (Portugal)
 - **Concept**: Golden Visa qualifying investment via Portuguese-domiciled REITs / regulated investment funds (post-2023 reform: real estate routes removed).
 - **Legal basis**: Lei 102/2017 art. 90.º-A + DL 14/2023 art. 5.
+- **Source URLs**:
+  - Lei 23/2007 (consolidated, art. 90.º-A) — https://www.pgdlisboa.pt/leis/lei_mostra_articulado.php?nid=920
+  - Decreto-Lei 41/2023 (Golden Visa reform) — https://diariodarepublica.pt/dr/detalhe/decreto-lei/41-2023-213993037
 - **Why seeded**: Eligibility tied to user's residency goals + capital availability. LLM tailors to non-EU clients seeking EU residence.
 - **Forbidden patterns**: MUST refuse to recommend the now-defunct real estate route. MUST NOT confuse with NHR (which is in our `FORBIDDEN_STRATEGY_IDS` blocklist).
 - **Typical savings range**: Indirect — residency value, not direct tax deduction. LLM should be explicit this is residency planning, not income tax minimization.
@@ -56,6 +68,9 @@
 - **Country**: EU-wide (cross-border)
 - **Concept**: Safe-harbor reporting under DAC6 for legitimate cross-border arrangements that fall outside reportable hallmarks A-E.
 - **Legal basis**: Council Directive (EU) 2018/822 (DAC6) + national transpositions.
+- **Source URLs**:
+  - Directive 2018/822 (EUR-Lex) — https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32018L0822
+  - EU Commission DAC6 guidance — https://taxation-customs.ec.europa.eu/taxation/tax-cooperation-control/administrative-cooperation/enhanced-administrative-cooperation-field-direct-taxation/council-directive-eu-2018822-dac6_en
 - **Why seeded**: Highly fact-specific; LLM helps user document why their arrangement is non-reportable.
 - **Forbidden patterns**: Must NOT advise structures designed primarily to circumvent reporting. Must reference local advisor confirmation requirement.
 - **Typical savings range**: Indirect — compliance cost avoidance (5,000–20,000 EUR in advisor fees + penalty avoidance).
@@ -67,6 +82,9 @@
 - **Country**: NL (Netherlands)
 - **Concept**: Post-2027 Box 3 actual-yield wealth tax regime restructuring (replacing the fictitious-yield system ruled unconstitutional in 2021).
 - **Legal basis**: Wet IB 2001 hoofdstuk 5 + Wet rechtsherstel box 3 + Wet werkelijk rendement box 3 (in voorbereiding).
+- **Source URLs**:
+  - Wet IB 2001 hoofdstuk 5 — https://wetten.overheid.nl/BWBR0011353/2025-01-01/0/Hoofdstuk5
+  - Belastingdienst box 3 reform tracker — https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/vermogen_en_aanmerkelijk_belang/vermogen/box_3/
 - **Why seeded**: Regime is in transition; LLM must surface latest legislative status and warn about uncertainty.
 - **Forbidden patterns**: Must NOT recommend strategies relying on the rejected fictitious-yield calculation. MUST flag transitional uncertainty in confidence score.
 - **Typical savings range**: 1,500–8,000 EUR/year on portfolios > 200k EUR.
@@ -78,6 +96,9 @@
 - **Country**: FR (France)
 - **Concept**: PEA-PME (Plan d'Épargne en Actions pour les PME) holding strategy for SME equity with 5-year tax shelter window.
 - **Legal basis**: Code monétaire et financier art. L221-32-1 + CGI art. 150-0 A.
+- **Source URLs**:
+  - CoMoFi art. L221-32-1 (Légifrance) — https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000028416422
+  - CGI art. 150-0 A — https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049669519
 - **Why seeded**: Requires individual portfolio mapping; LLM checks current SME holdings against PEA-PME eligibility.
 - **Forbidden patterns**: Must NOT bundle with standard PEA (different limits, different tax base). Must respect 225,000 EUR cap (combined PEA + PEA-PME).
 - **Typical savings range**: 2,000–6,000 EUR/year post-5-year window.
@@ -89,6 +110,9 @@
 - **Country**: EU-wide
 - **Concept**: Consolidation of pension rights across EU member states under PEPP (Pan-European Personal Pension Product) or bilateral coordination (Reg. 883/2004).
 - **Legal basis**: Regulation (EU) 2019/1238 (PEPP) + Regulation (EC) 883/2004 (social security coordination).
+- **Source URLs**:
+  - Regulation 2019/1238 (PEPP) — https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019R1238
+  - Regulation 883/2004 (social-security coordination) — https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02004R0883-20140101
 - **Why seeded**: Highly individual — depends on user's contribution history across countries. LLM gathers facts and proposes coordination path.
 - **Forbidden patterns**: Must NOT suggest transferring pension rights into a single jurisdiction without weighing loss of country-specific guarantees. MUST advise consultation with local pension authority.
 - **Typical savings range**: Cumulative — improved pension value of 20,000–100,000 EUR over retirement, not annual income tax savings.
