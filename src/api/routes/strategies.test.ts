@@ -9,21 +9,27 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Oracle P1#3: POST /evaluate now uses rateLimitD1 middleware (anonymous).
 // Mock createDb so the middleware's D1 insert succeeds without a real binding.
+// values() returns a thenable that ALSO carries onConflictDoUpdate, so it
+// works for both the rate-limit upsert (chains onConflictDoUpdate) AND the
+// persist endpoint (awaits values() directly).
 vi.mock('../../db', () => ({
-  createDb: vi.fn(() => ({
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        onConflictDoUpdate: vi.fn(() => ({
-          returning: vi.fn(async () => [{ count: 1 }]),
+  createDb: vi.fn(() => {
+    const valuesReturn = Object.assign(Promise.resolve(undefined), {
+      onConflictDoUpdate: vi.fn(() => ({
+        returning: vi.fn(async () => [{ count: 1 }]),
+      })),
+    });
+    return {
+      insert: vi.fn(() => ({
+        values: vi.fn(() => valuesReturn),
+      })),
+      delete: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => undefined),
         })),
       })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(async () => undefined),
-      })),
-    })),
-  })),
+    };
+  }),
 }));
 
 // Ensure all bundled strategies auto-register before the route handlers run.
@@ -332,5 +338,171 @@ describe('POST /api/strategies/ai-recommend', () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.error).toBe('validation');
+  });
+});
+
+describe('POST /api/strategies/persist (Oracle Wave A+B P2#3)', () => {
+  function parentAppWithSession(userId: string | null = 'test-user-3') {
+    type Vars = {
+      session: { user: { id: string } } | null;
+    };
+    const { Hono } = require('hono') as typeof import('hono');
+    const parent = new Hono<{ Bindings: typeof TEST_ENV; Variables: Vars }>();
+    parent.use('*', async (c, next) => {
+      c.set('session', userId === null ? null : { user: { id: userId } });
+      await next();
+    });
+    parent.route('/api/strategies', strategiesRoutes);
+    return parent;
+  }
+
+  it('returns 401 when no session is attached', async () => {
+    const res = await strategiesRoutes.request(
+      '/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyId: 'es.beckham',
+          taxYear: 2025,
+          confidence: 1,
+          eligible: true,
+          reason: 'test',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('unauthorized');
+  });
+
+  it('returns 400 on invalid JSON', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{not valid json',
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('invalid_json');
+  });
+
+  it('returns 400 on validation failure (missing required field)', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // strategyId missing
+          taxYear: 2025,
+          confidence: 0.9,
+          eligible: true,
+          reason: 'test',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('validation');
+  });
+
+  it('returns 400 on out-of-range confidence', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyId: 'es.beckham',
+          taxYear: 2025,
+          confidence: 1.5, // > 1
+          eligible: true,
+          reason: 'test',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('validation');
+  });
+
+  it('returns 404 on unknown strategy_id', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyId: 'xx.does_not_exist',
+          taxYear: 2025,
+          confidence: 0.8,
+          eligible: true,
+          reason: 'test',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('unknown_strategy_id');
+  });
+
+  it('persists a valid recommendation and returns a uuid', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyId: 'es.beckham',
+          taxYear: 2025,
+          estimatedSavings: 12_345,
+          confidence: 0.85,
+          eligible: true,
+          reason: 'High-income ES resident — Beckham regime applies',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; id: string };
+    expect(body.ok).toBe(true);
+    expect(body.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
+  it('persists with estimatedSavings=null (uncomputable savings)', async () => {
+    const parent = parentAppWithSession();
+    const res = await parent.request(
+      '/api/strategies/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyId: 'pt.despesas_saude',
+          taxYear: 2025,
+          estimatedSavings: null,
+          confidence: 0.5,
+          eligible: true,
+          reason: 'PT health expenses — actual savings depends on medicalExpensesEur',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; id: string };
+    expect(body.ok).toBe(true);
   });
 });
