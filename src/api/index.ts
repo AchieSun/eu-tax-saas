@@ -50,6 +50,10 @@ export interface Bindings {
   DEEPSEEK_API_KEY?: string;
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
+  /** DeepSeek per-1M-token input cost (USD). Override list price. Default 0.27. */
+  DEEPSEEK_COST_INPUT_USD_PER_M?: string;
+  /** DeepSeek per-1M-token output cost (USD). Override list price. Default 1.1. */
+  DEEPSEEK_COST_OUTPUT_USD_PER_M?: string;
 }
 
 export interface Variables {

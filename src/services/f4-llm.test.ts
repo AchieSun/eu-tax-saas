@@ -13,6 +13,7 @@ import {
   applyH5NumericValidation,
   applyH6SelfCheck,
   recommendStrategies,
+  sanitiseRegion,
 } from './f4-llm';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -145,6 +146,101 @@ describe('H1 — time gating', () => {
     const { kept, warnings } = applyH1TimeGating(strategies, new Date('2026-06-08'));
     expect(kept).toHaveLength(0);
     expect(warnings).toHaveLength(2);
+  });
+
+  it('rejects malformed lastVerified (not ISO 8601) as stale', () => {
+    const s = makeFreshStrategy('es.beckham', 30);
+    // Intentionally malformed date — JavaScript's Date constructor would
+    // silently accept this via overflow, but our parseLastVerified rejects it.
+    s.citation.lastVerified = '2025-13-01'; // month 13 → invalid
+    const { kept, warnings } = applyH1TimeGating([s], new Date('2026-06-08'));
+    expect(kept).toHaveLength(0);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('lastVerified');
+  });
+
+  it('rejects non-ISO date formats', () => {
+    const s = makeFreshStrategy('es.beckham', 30);
+    s.citation.lastVerified = '01/15/2025'; // MM/DD/YYYY
+    const { kept, warnings } = applyH1TimeGating([s], new Date('2026-06-08'));
+    expect(kept).toHaveLength(0);
+    expect(warnings[0]).toContain('lastVerified');
+  });
+});
+
+describe('sanitiseRegion — P1#1 region whitelist', () => {
+  it('allows valid ES autonomous communities', () => {
+    expect(sanitiseRegion('ES', 'MAD')).toBe('MAD');
+    expect(sanitiseRegion('ES', 'CAT')).toBe('CAT');
+    expect(sanitiseRegion('ES', 'VAL')).toBe('VAL');
+    expect(sanitiseRegion('ES', 'AND')).toBe('AND');
+  });
+
+  it('allows valid UK regions', () => {
+    expect(sanitiseRegion('UK', 'EWN')).toBe('EWN');
+    expect(sanitiseRegion('UK', 'SCOT')).toBe('SCOT');
+  });
+
+  it('rejects unknown region for PT/DE/NL (no sub-national variance)', () => {
+    // PT currently has no region support — anything returns null
+    expect(sanitiseRegion('PT', 'LIS')).toBeNull();
+    expect(sanitiseRegion('DE', 'BAV')).toBeNull();
+    expect(sanitiseRegion('NL', 'NHL')).toBeNull();
+  });
+
+  it('rejects prompt-injection vectors in region field', () => {
+    expect(sanitiseRegion('ES', 'ignore_previous')).toBeNull(); // underscore
+    expect(sanitiseRegion('ES', 'DROP TABLE')).toBeNull(); // uppercase + space
+    expect(sanitiseRegion('ES', 'MAD\n')).toBeNull(); // trailing newline
+    expect(sanitiseRegion('ES', '')).toBeNull(); // empty
+    expect(sanitiseRegion('ES', 'MADRID_OVERRIDE')).toBeNull(); // too long + underscore
+    expect(sanitiseRegion('ES', 'none')).toBeNull(); // lowercase
+  });
+
+  it('rejects non-string / undefined / null', () => {
+    expect(sanitiseRegion('ES', undefined)).toBeNull();
+    expect(sanitiseRegion('ES', null)).toBeNull();
+    expect(sanitiseRegion('ES', 123)).toBeNull();
+    // Array is accepted as unknown but the function treats it as non-string → null
+    expect(sanitiseRegion('ES', ['MAD'] as unknown as string)).toBeNull();
+  });
+});
+
+describe('H5 — C-tier seed force-null (P1#3)', () => {
+  it('forces estimated_savings_eur to null for C-tier seeds without calculator', () => {
+    const { validated, warnings } = applyH5NumericValidation(
+      [
+        {
+          strategy_id: 'es.sicav_alternative', // C-tier seed — no calculator
+          tier: 'C',
+          eligible: true,
+          reasoning: 'SICAV alternative for HNW investors with sufficient detail.',
+          estimated_savings_eur: 12_000, // LLM-emitted fabricated number
+          confidence: 0.6,
+          action_steps: ['Consult advisor'],
+          citations: [{ law_reference: 'Ley 35/2006 art. 94', url: 'https://example.com' }],
+          warnings: [],
+        },
+        {
+          strategy_id: 'eu.dac6_safe_harbor', // C-tier seed — no calculator
+          tier: 'C',
+          eligible: true,
+          reasoning: 'DAC6 safe harbor compliance advisory with sufficient detail.',
+          estimated_savings_eur: 15_000,
+          confidence: 0.5,
+          action_steps: ['Document arrangement'],
+          citations: [{ law_reference: 'Dir. 2018/822', url: 'https://example.com' }],
+          warnings: [],
+        },
+      ],
+      SAMPLE_INPUT,
+      SAMPLE_BASELINE,
+    );
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain('H5 FORCE-NULL');
+    expect(warnings[0]).toContain('es.sicav_alternative');
+    expect(validated[0].estimated_savings_eur).toBeNull();
+    expect(validated[1].estimated_savings_eur).toBeNull();
   });
 });
 

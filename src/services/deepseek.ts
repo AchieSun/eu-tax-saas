@@ -164,6 +164,16 @@ export class DeepSeekClient {
 
   // ── Public API ──────────────────────────────────────────────────────────
 
+  /** For introspection: which model alias is used for primary chat calls. */
+  get chatModel(): string {
+    return MODEL_CHAT;
+  }
+
+  /** For introspection: which model alias is used for self-check / H6 calls. */
+  get reasonerModel(): string {
+    return MODEL_REASONER;
+  }
+
   /**
    * Chat completion (deepseek-chat). Supports tool calling.
    */
@@ -178,6 +188,12 @@ export class DeepSeekClient {
   /**
    * Self-check / reasoning call (deepseek-reasoner). Longer default timeout
    * for chain-of-thought processing.
+   *
+   * NOTE: As of 2026-06, DeepSeek's `deepseek-reasoner` alias resolves to the
+   * same `deepseek-v4-flash` model as `deepseek-chat`. The H6 audit layer is
+   * therefore a same-model self-check with a different system prompt and
+   * temperature, not a true independent CoT reviewer. See also:
+   * `scripts/ping-deepseek.ts` for live alias resolution diagnostics.
    */
   async selfCheck(messages: ChatMessage[], opts: ChatOptions = {}): Promise<DeepSeekResponse> {
     return this.complete(messages, {

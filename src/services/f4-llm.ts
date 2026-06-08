@@ -62,23 +62,76 @@ const H6_DOWNGRADE_CAP = 0.5;
 /** Max rounds of tool-calls within a single chat() session. */
 const MAX_TOOL_ROUNDS = 3;
 
-/** Default DeepSeek per-1M-token pricing (USD; approximate, used only for cost meter). */
-const COST_PER_MILLION_INPUT_USD = 0.27;
-const COST_PER_MILLION_OUTPUT_USD = 1.1;
+/**
+ * DeepSeek per-1M-token pricing (USD). Used ONLY for the cost meter; not for
+ * billing. Configurable via env so deployments can update without code change.
+ * Defaults reflect deepseek-chat list price as of 2026-06.
+ */
+function resolveTokenPricing(env: Bindings): {
+  inputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+} {
+  const input = parseFloat(env.DEEPSEEK_COST_INPUT_USD_PER_M ?? '');
+  const output = parseFloat(env.DEEPSEEK_COST_OUTPUT_USD_PER_M ?? '');
+  return {
+    inputUsdPerMillion: Number.isFinite(input) && input >= 0 ? input : 0.27,
+    outputUsdPerMillion: Number.isFinite(output) && output >= 0 ? output : 1.1,
+  };
+}
 
 /** Default max LLM strategies returned. */
 const DEFAULT_MAX_LLM_STRATEGIES = 5;
 
-/** End-of-life regime sentinels — never recommended even if LLM proposes. */
+/**
+ * End-of-life regime sentinels — never recommended even if LLM proposes.
+ * Includes known aliases / variant slugs the LLM might emit for the same
+ * abolished regime (defence in depth — H1 + post-filter both consult this set).
+ */
 const FORBIDDEN_STRATEGY_IDS = new Set([
+  // PT — Regime dos Residentes Não Habituais (closed to new entrants 2024-01-01)
   'pt.nhr',
+  'pt.non_habitual_resident',
+  'pt.residente_nao_habitual',
+  // UK — Non-Dom remittance basis (abolished 2025-04-06, replaced by FIG)
   'uk.remittance_basis',
   'uk.non_dom_remittance',
+  'uk.non_dom',
+  'uk.non_domicile',
+  // NL — 2024 sliding 30%/20%/10% transitional scale (reverted to flat 30% in 2025)
   'nl.30pct_sliding_2024',
+  'nl.30percent_sliding',
+  'nl.30pct_sliding',
+  'nl.sliding',
+  'nl.30_20_10_sliding',
 ]);
 
 /** Hard prefix mandated by G2 for any AI-derived recommendation. */
 const AI_PREFIX = '[AI建议·未经确定性验证]';
+
+/**
+ * Region whitelist per supported country. Prevents prompt-injection via the
+ * `region` field, which is `z.string().optional()` in the calculator schema
+ * (used by F1 for sub-national variance such as ES CCAAs and UK SCOT/EWN).
+ * Anything not in this set is sanitised to `undefined` before reaching the LLM.
+ */
+const ALLOWED_REGIONS_BY_COUNTRY: Record<string, ReadonlySet<string>> = {
+  ES: new Set(['MAD', 'CAT', 'VAL', 'AND']),
+  UK: new Set(['EWN', 'SCOT']),
+  // PT / DE / NL: no sub-national variance currently affecting calculations
+  PT: new Set([]),
+  DE: new Set([]),
+  NL: new Set([]),
+};
+
+/** Sanitise region before serialising into a prompt; returns null when invalid. */
+export function sanitiseRegion(country: string, region: unknown): string | null {
+  if (typeof region !== 'string') return null;
+  if (region.length === 0 || region.length > 8) return null;
+  if (!/^[A-Z]{2,8}$/.test(region)) return null;
+  const allowed = ALLOWED_REGIONS_BY_COUNTRY[country];
+  if (!allowed || !allowed.has(region)) return null;
+  return region;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -124,6 +177,23 @@ export interface RecommendStrategiesResult {
 // H1 — Time gating
 // ────────────────────────────────────────────────────────────────────────────
 
+/** Strict ISO 8601 date (YYYY-MM-DD) — what Strategy.citation.lastVerified MUST use. */
+const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/**
+ * Parse a Strategy.citation.lastVerified string. Returns NaN on any deviation
+ * from strict ISO 8601 YYYY-MM-DD to prevent silent acceptance of malformed
+ * dates that JavaScript's Date constructor permissively allows
+ * (e.g. "2025-13-32" → "2026-02-01" via overflow).
+ */
+function parseLastVerified(s: string): number {
+  if (!ISO_DATE_RE.test(s)) return Number.NaN;
+  const t = new Date(`${s}T00:00:00Z`).getTime();
+  // Defence in depth: even if regex passes, reject any value the Date
+  // constructor produced via overflow (shouldn't happen, but cheap to check).
+  return Number.isNaN(t) ? Number.NaN : t;
+}
+
 /**
  * Drop strategies whose `lastVerified` is older than H1_MAX_AGE_DAYS OR whose
  * id is in the forbidden set. Returns the surviving subset plus a list of
@@ -142,8 +212,14 @@ export function applyH1TimeGating(
       warnings.push(`H1 dropped forbidden regime: ${s.id}`);
       continue;
     }
-    const verified = new Date(`${s.citation.lastVerified}T00:00:00Z`).getTime();
-    if (Number.isNaN(verified) || verified < cutoff) {
+    const verified = parseLastVerified(s.citation.lastVerified);
+    if (Number.isNaN(verified)) {
+      warnings.push(
+        `H1 dropped strategy ${s.id}: lastVerified "${s.citation.lastVerified}" is not ISO 8601 YYYY-MM-DD`,
+      );
+      continue;
+    }
+    if (verified < cutoff) {
       warnings.push(`H1 dropped stale strategy ${s.id} (verified ${s.citation.lastVerified})`);
       continue;
     }
@@ -155,6 +231,60 @@ export function applyH1TimeGating(
 // ────────────────────────────────────────────────────────────────────────────
 // H3 — Tool calling loop
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Zod schema mirroring the calculate_tax tool's parameter contract (see
+ * TOOL_DEFINITIONS in prompts/f4-harness). Accepts both snake_case (LLM-native)
+ * and camelCase (defensive) field names. Pre-validates LLM tool args before
+ * we hand them to the F1 calculator so we get structured error responses
+ * instead of post-hoc calculator exceptions.
+ *
+ * Oracle Wave C P2: tighten H3 input contract.
+ */
+const calculateTaxArgsSchema = z
+  .object({
+    country: z.enum(['ES', 'PT', 'DE', 'NL', 'UK']),
+    tax_year: z.number().int().min(2024).max(2030).optional(),
+    taxYear: z.number().int().min(2024).max(2030).optional(),
+    gross_income: z.number().nonnegative().optional(),
+    grossIncome: z.number().nonnegative().optional(),
+    income_type: z
+      .enum([
+        'salary',
+        'self_employed',
+        'dividends',
+        'interest',
+        'rental',
+        'capital_gains',
+        'crypto',
+        'other',
+      ])
+      .optional(),
+    incomeType: z
+      .enum([
+        'salary',
+        'self_employed',
+        'dividends',
+        'interest',
+        'rental',
+        'capital_gains',
+        'crypto',
+        'other',
+      ])
+      .optional(),
+    special_status: z
+      .enum(['none', 'beckham', 'ifici', 'fig', '30pct_ruling', 'forschungspauschale'])
+      .optional(),
+    specialStatus: z
+      .enum(['none', 'beckham', 'ifici', 'fig', '30pct_ruling', 'forschungspauschale'])
+      .optional(),
+    filing_status: z.enum(['single', 'married_joint', 'married_separate']).optional(),
+    filingStatus: z.enum(['single', 'married_joint', 'married_separate']).optional(),
+    region: z.string().max(8).optional(),
+  })
+  .refine((d) => d.gross_income !== undefined || d.grossIncome !== undefined, {
+    message: 'gross_income (or grossIncome) is required',
+  });
 
 interface ToolDispatchResult {
   toolMessages: ChatMessage[];
@@ -179,24 +309,40 @@ function dispatchToolCalls(toolCalls: DeepSeekToolCall[]): ToolDispatchResult {
     try {
       parsed = JSON.parse(call.function.arguments) as Record<string, unknown>;
     } catch (err) {
-      toolErrors.push(`H3 invalid tool args: ${(err as Error).message}`);
+      toolErrors.push(`H3 invalid tool args (JSON): ${(err as Error).message}`);
       toolMessages.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: JSON.stringify({ error: 'invalid_arguments' }),
+        content: JSON.stringify({ error: 'invalid_json' }),
       });
       continue;
     }
+    // Pre-validate via Zod before touching the calculator (Oracle Wave C P2)
+    const argsParse = calculateTaxArgsSchema.safeParse(parsed);
+    if (!argsParse.success) {
+      const summary = argsParse.error.issues
+        .slice(0, 3)
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ');
+      toolErrors.push(`H3 tool args failed schema: ${summary}`);
+      toolMessages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: JSON.stringify({ error: 'invalid_arguments', detail: summary }),
+      });
+      continue;
+    }
+    const args = argsParse.data;
     try {
-      // Map LLM tool schema → CalculatorInput shape
+      // Map LLM tool schema → CalculatorInput shape (snake_case OR camelCase)
       const calcInput = {
-        country: parsed.country,
-        taxYear: parsed.tax_year ?? parsed.taxYear ?? 2025,
-        incomeType: parsed.income_type ?? parsed.incomeType ?? 'salary',
-        grossIncome: parsed.gross_income ?? parsed.grossIncome,
-        specialStatus: parsed.special_status ?? parsed.specialStatus ?? 'none',
-        filingStatus: parsed.filing_status ?? parsed.filingStatus ?? 'single',
-        region: parsed.region,
+        country: args.country,
+        taxYear: args.tax_year ?? args.taxYear ?? 2025,
+        incomeType: args.income_type ?? args.incomeType ?? 'salary',
+        grossIncome: (args.gross_income ?? args.grossIncome) as number,
+        specialStatus: args.special_status ?? args.specialStatus ?? 'none',
+        filingStatus: args.filing_status ?? args.filingStatus ?? 'single',
+        region: sanitiseRegion(args.country, args.region) ?? undefined,
       };
       const result = calculateTax(calcInput);
       toolMessages.push({
@@ -229,14 +375,51 @@ function dispatchToolCalls(toolCalls: DeepSeekToolCall[]): ToolDispatchResult {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Strategy IDs that have a 1-to-1 mapping into the F1 calculator's
+ * `specialStatus` flag. For these, we can re-run the calculator with the
+ * implied status and verify the LLM's estimated_savings_eur against ground truth.
+ */
+const REGIME_MAP: Record<string, CalculatorInput['specialStatus']> = {
+  'es.beckham': 'beckham',
+  'pt.ifici': 'ifici',
+  'uk.fig': 'fig',
+  'nl.30percent': '30pct_ruling',
+  'de.forschungspauschale': 'forschungspauschale',
+};
+
+/**
+ * C-tier seed strategy IDs that have NO deterministic calculator mapping.
+ * For these, the LLM MUST NOT emit a numeric `estimated_savings_eur` — the
+ * H5 numeric layer forces it to null and surfaces a warning so the UI can
+ * tell the user "rough planning, no exact figure available".
+ *
+ * Spec: app/src/legal/c-tier-seeds.md (Wave C seeds 1-8)
+ * Oracle Wave C P1#3: closes the savings-fabrication escape hatch.
+ */
+const C_TIER_SEED_IDS_WITHOUT_CALCULATOR = new Set([
+  'es.sicav_alternative',
+  'es.deduccion_inversion_emergentes',
+  'de.familienstiftung',
+  'pt.golden_visa_reit',
+  'eu.dac6_safe_harbor',
+  'nl.box3_alternative_post2027',
+  'fr.pea_pme_optimization',
+  'eu.cross_border_pension_consolidation',
+]);
+
+/**
  * For each LLM recommendation with a numeric `estimated_savings_eur`, attempt
  * to validate by re-running the calculator with the same input + the strategy's
  * implied special_status (if extractable from id). If deviation > 5%, OVERRIDE
  * with the calculator value (don't just warn).
  *
- * Limitation: we can only validate strategies that map cleanly to a calculator
- * invocation (i.e. specialStatus opt-in regimes). Pure deduction strategies
- * are left as-is; the H4 rule injection is the primary anchor there.
+ * For known C-tier seed IDs that have no calculator mapping, FORCE
+ * estimated_savings_eur to null — these strategies are inherently fact-specific
+ * (residency planning, foundations, cross-border coordination) and any numeric
+ * value emitted by the LLM is fabricated.
+ *
+ * For unknown strategy_ids with no calculator mapping, leave unchanged (H6
+ * self-check is the next line of defence).
  */
 export function applyH5NumericValidation(
   recommendations: StrategyRecommendation[],
@@ -249,16 +432,16 @@ export function applyH5NumericValidation(
       return rec;
     }
 
-    // Try to infer special_status from id. Conservative — only validate the
-    // 5 known regime IDs we have calculators for.
-    const regimeMap: Record<string, CalculatorInput['specialStatus']> = {
-      'es.beckham': 'beckham',
-      'pt.ifici': 'ifici',
-      'uk.fig': 'fig',
-      'nl.30percent': '30pct_ruling',
-      'de.forschungspauschale': 'forschungspauschale',
-    };
-    const specialStatus = regimeMap[rec.strategy_id];
+    // C-tier seed without calculator mapping → force null (Oracle Wave C P1#3)
+    if (C_TIER_SEED_IDS_WITHOUT_CALCULATOR.has(rec.strategy_id)) {
+      warnings.push(
+        `H5 FORCE-NULL ${rec.strategy_id}: C-tier seed has no deterministic calculator; ` +
+          `LLM-emitted €${rec.estimated_savings_eur} discarded`,
+      );
+      return { ...rec, estimated_savings_eur: null };
+    }
+
+    const specialStatus = REGIME_MAP[rec.strategy_id];
     if (!specialStatus) {
       // No way to deterministically validate — leave unchanged (H6 will catch)
       return rec;
@@ -306,6 +489,7 @@ const selfCheckResponseSchema = z.object({
 export async function applyH6SelfCheck(
   client: DeepSeekClient,
   recommendations: StrategyRecommendation[],
+  primaryModelEcho?: string,
 ): Promise<{
   adjusted: StrategyRecommendation[];
   rejectedIndices: Set<number>;
@@ -320,6 +504,7 @@ export async function applyH6SelfCheck(
   const prompt = buildSelfCheckPrompt(recommendations);
   let raw: string;
   let usage: DeepSeekUsage | undefined;
+  let selfCheckModel: string | undefined;
   try {
     const res = await client.selfCheck([
       { role: 'system', content: 'You are a strict tax-compliance auditor.' },
@@ -327,9 +512,25 @@ export async function applyH6SelfCheck(
     ]);
     raw = res.choices[0]?.message.content ?? '';
     usage = res.usage;
+    selfCheckModel = res.model;
   } catch (err) {
     warnings.push(`H6 self-check call failed: ${(err as Error).message}`);
     return { adjusted: recommendations, rejectedIndices: new Set(), warnings, usage: undefined };
+  }
+
+  // Oracle Wave C P1#2/4: detect when selfCheck and chat resolve to the same
+  // underlying model (i.e. deepseek-reasoner is currently a flash alias). H6
+  // becomes a same-model self-audit with reduced independence — surface this
+  // to operators via the warnings channel so it shows up in the UI/logs.
+  if (
+    selfCheckModel !== undefined &&
+    primaryModelEcho !== undefined &&
+    selfCheckModel === primaryModelEcho
+  ) {
+    warnings.push(
+      `H6 model-identity warning: self-check resolved to "${selfCheckModel}" (same as primary chat). ` +
+        `Independent-reviewer assumption weakened; treat audit verdicts as soft signal.`,
+    );
   }
 
   const json = extractJsonObject(raw);
@@ -422,14 +623,18 @@ function strategyToRuleEngineResult(s: Strategy, ev: StrategyEvaluation): RuleEn
   };
 }
 
-function computeCost(usage: { prompt_tokens: number; completion_tokens: number }): number {
+function computeCost(
+  usage: { prompt_tokens: number; completion_tokens: number },
+  pricing: { inputUsdPerMillion: number; outputUsdPerMillion: number },
+): number {
   return (
-    (usage.prompt_tokens / 1_000_000) * COST_PER_MILLION_INPUT_USD +
-    (usage.completion_tokens / 1_000_000) * COST_PER_MILLION_OUTPUT_USD
+    (usage.prompt_tokens / 1_000_000) * pricing.inputUsdPerMillion +
+    (usage.completion_tokens / 1_000_000) * pricing.outputUsdPerMillion
   );
 }
 
 function buildUserPrompt(input: CalculatorInput, baseline: BaselineTax): string {
+  const regionStr = sanitiseRegion(input.country, input.region) ?? '(none)';
   return `# Taxpayer profile
 - Country: ${input.country}
 - Tax year: ${input.taxYear}
@@ -437,7 +642,7 @@ function buildUserPrompt(input: CalculatorInput, baseline: BaselineTax): string 
 - Gross income: €${input.grossIncome}
 - Special status: ${input.specialStatus}
 - Filing status: ${input.filingStatus}
-- Region: ${input.region ?? '(none)'}
+- Region: ${regionStr}
 - Age: ${input.age ?? '(not provided)'}
 
 # Baseline (deterministic — no strategy applied)
@@ -469,6 +674,7 @@ export async function recommendStrategies(
   const client = opts.client ?? new DeepSeekClient(opts.env);
   const warnings: string[] = [];
   const maxLlm = opts.maxLlmStrategies ?? DEFAULT_MAX_LLM_STRATEGIES;
+  const pricing = resolveTokenPricing(opts.env);
 
   // ── H1: drop stale / forbidden strategies ─────────────────────────────────
   const { kept: h1Kept, warnings: h1Warnings } = applyH1TimeGating(opts.existingStrategies);
@@ -503,6 +709,7 @@ export async function recommendStrategies(
   let promptTokens = 0;
   let completionTokens = 0;
   let finalContent = '';
+  let primaryModelEcho: string | undefined;
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     let response: Awaited<ReturnType<DeepSeekClient['chat']>> | undefined;
@@ -527,6 +734,7 @@ export async function recommendStrategies(
       promptTokens += response.usage.prompt_tokens;
       completionTokens += response.usage.completion_tokens;
     }
+    primaryModelEcho = response.model;
     const choice = response.choices[0];
     const message = choice.message;
 
@@ -563,7 +771,7 @@ export async function recommendStrategies(
       usage: {
         promptTokens,
         completionTokens,
-        cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }),
+        cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }, pricing),
       },
     };
   }
@@ -586,7 +794,7 @@ export async function recommendStrategies(
         usage: {
           promptTokens,
           completionTokens,
-          cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }),
+          cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }, pricing),
         },
       };
     }
@@ -618,7 +826,7 @@ export async function recommendStrategies(
   recommendations = validated;
 
   // ── H6: self-check via deepseek-reasoner ──────────────────────────────────
-  const h6 = await applyH6SelfCheck(client, recommendations);
+  const h6 = await applyH6SelfCheck(client, recommendations, primaryModelEcho);
   warnings.push(...h6.warnings);
   if (h6.usage) {
     promptTokens += h6.usage.prompt_tokens;
@@ -661,10 +869,13 @@ export async function recommendStrategies(
     usage: {
       promptTokens,
       completionTokens,
-      cost: computeCost({
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-      }),
+      cost: computeCost(
+        {
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+        },
+        pricing,
+      ),
     },
   };
 }
