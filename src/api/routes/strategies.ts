@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { createDb } from '../../db';
 import { strategyRecommendations } from '../../db/schema';
 import { calculateTax, calculatorInputSchema } from '../../rules';
+import type { CalculatorInput } from '../../rules/common/types';
 import { SUPPORTED_COUNTRIES } from '../../rules/common/types';
 import type { Country } from '../../rules/common/types';
 import { STRATEGIES, getStrategyById, listStrategiesByCountry } from '../../strategies';
@@ -84,9 +85,21 @@ strategiesRoutes.post('/evaluate', async (c) => {
     return c.json({ ok: false, error: 'validation', issues: parsed.error.issues }, 400);
   }
   const input = parsed.data;
+  // Oracle P0#1: baseline uses specialStatus='none', but some country calculators
+  // require a region in that mode that the regime itself does not (e.g. ES Beckham
+  // is a single national flat rate; non-Beckham ES requires a CCAA). Mirror the
+  // defensive defaulting from `compareCountries()` in src/rules/index.ts so the
+  // baseline never crashes for inputs that the regime-aware path accepts.
+  const baselineInput: CalculatorInput = { ...input, specialStatus: 'none' };
+  if (baselineInput.country === 'ES' && !baselineInput.region) {
+    baselineInput.region = 'MAD';
+  }
+  if (baselineInput.country === 'UK' && !baselineInput.region) {
+    baselineInput.region = 'EWN';
+  }
   let baseline: ReturnType<typeof calculateTax>;
   try {
-    baseline = calculateTax({ ...input, specialStatus: 'none' });
+    baseline = calculateTax(baselineInput);
   } catch (err) {
     return c.json({ ok: false, error: (err as Error).message }, 400);
   }

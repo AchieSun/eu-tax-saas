@@ -150,6 +150,34 @@ describe('POST /api/strategies/evaluate', () => {
     expect(body.error).toBe('validation');
   });
 
+  it('Oracle P0#1: ES Beckham without region returns 200 (baseline defaults to MAD)', async () => {
+    const res = await strategiesRoutes.request('/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        country: 'ES',
+        taxYear: 2025,
+        incomeType: 'salary',
+        grossIncome: 200_000,
+        specialStatus: 'beckham',
+        filingStatus: 'single',
+        // intentionally NO region — Beckham is a national flat rate
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      baseline: { country: string; taxOwed: number };
+      evaluations: Array<{ id: string; applicable: boolean; estimatedSavingsEur: number | null }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.baseline.country).toBe('ES');
+    expect(body.baseline.taxOwed).toBeGreaterThan(0);
+    const beckham = body.evaluations.find((e) => e.id === 'es.beckham');
+    expect(beckham?.applicable).toBe(true);
+    expect(beckham?.estimatedSavingsEur ?? 0).toBeGreaterThan(0);
+  });
+
   it('UK 80k case: applicable strategies include uk.fig + uk.pension_relief', async () => {
     const res = await strategiesRoutes.request('/evaluate', {
       method: 'POST',
