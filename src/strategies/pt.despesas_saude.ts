@@ -7,7 +7,16 @@
  * Source (verified 2026-06-08):
  *   - Art. 78.º-C CIRS: https://info.portaldasfinancas.gov.pt/pt/informacao_fiscal/codigos_tributarios/cirs_rep/Pages/irs78c.aspx
  *
- * Max possible saving: €1,000 (when health expenses ≥ €6,667). Default: max.
+ * Numeric policy (Oracle Wave A+B P2#2):
+ *   - The actual saving is min(€1,000, 0.15 × medicalExpensesEur).
+ *   - We DO NOT have a `medicalExpensesEur` field on CalculatorInput today,
+ *     so we cannot compute the exact saving. Returning the €1,000 ceiling by
+ *     default would silently overstate the typical user's benefit (median PT
+ *     household medical spend ≈ €1,500/yr → saving ≈ €225, not €1,000).
+ *   - Therefore: `estimatedSavingsEur = null` with `confidence = 0.5` and a
+ *     reason that surfaces the input gap. The UI can render this as
+ *     "no estimate — needs your medical-expense data" rather than a misleading
+ *     "€1,000/yr" badge.
  */
 
 import type { CalculatorInput } from '../rules/common/types';
@@ -16,7 +25,10 @@ import type { BaselineTax, Strategy, StrategyEvaluation } from './types';
 
 const ID = 'pt.despesas_saude';
 
-const PT_HEALTH_CAP = 1_000;
+const PT_HEALTH_CAP_EUR = 1_000;
+const PT_HEALTH_RATE = 0.15;
+/** Spend at which 15% × spend reaches the €1,000 cap. */
+const PT_HEALTH_CAP_SPEND_EUR = PT_HEALTH_CAP_EUR / PT_HEALTH_RATE;
 
 const STRATEGY: Strategy = {
   id: ID,
@@ -39,11 +51,18 @@ const STRATEGY: Strategy = {
     if (input.country !== 'PT') {
       return { applicable: false, reason: '此抵免项仅适用于葡萄牙', confidence: 1 };
     }
+    // Without a `medicalExpensesEur` field on the input, we cannot compute the
+    // 15% × spend deduction. Surface the input gap rather than defaulting to
+    // the €1,000 ceiling (which is the BEST case at ≥ €6,667 spend, NOT the
+    // expected case for an average PT taxpayer with ~€1,500 annual spend).
     return {
       applicable: true,
-      reason: `最高可抵免 €${PT_HEALTH_CAP}/年 (15% × 医疗支出上限 €6,667)。需提供实际医疗支出 (medicalExpensesEur) 才能精确估算`,
-      estimatedSavingsEur: PT_HEALTH_CAP,
-      confidence: 0.7,
+      reason:
+        '葡萄牙医疗费用 15% 抵免 (上限 €1,000/年)。需提供年度医疗支出 (medicalExpensesEur) 才能给出实际节税估算 — ' +
+        `15% × 支出, 支出 ≥ €${Math.round(PT_HEALTH_CAP_SPEND_EUR).toLocaleString()} 时达到上限。` +
+        '当前未估算金额。',
+      estimatedSavingsEur: null,
+      confidence: 0.5,
     };
   },
 };

@@ -22,12 +22,14 @@ const PT_BASE: CalculatorInput = {
 };
 
 describe('pt.despesas_saude', () => {
-  it('eligible-with-cap: PT returns max cap 1000 EUR', () => {
+  it('eligible-with-null-savings: PT returns null and lower confidence (P2#2 anti-hallucination)', () => {
     const baseline = calculateTax(PT_BASE);
     const result = STRATEGY.evaluate(PT_BASE, baseline);
     expect(result.applicable).toBe(true);
-    expect(result.estimatedSavingsEur).toBe(1000);
-    expect(result.confidence).toBe(0.7);
+    // Oracle Wave A+B P2#2: do NOT default to the €1,000 cap when actual
+    // medical-expense data is missing; surface the input gap instead.
+    expect(result.estimatedSavingsEur).toBeNull();
+    expect(result.confidence).toBe(0.5);
   });
 
   it('ineligible-blocker: wrong country (DE) returns applicable=false', () => {
@@ -43,9 +45,11 @@ describe('pt.despesas_saude', () => {
     expect(STRATEGY.citation.url).toMatch(/portaldasfinancas/);
   });
 
-  it('reason mentions 15% and €1,000 cap', () => {
+  it('reason mentions 15% rate and €6,667 cap-spend threshold', () => {
     const baseline = calculateTax(PT_BASE);
     const result = STRATEGY.evaluate(PT_BASE, baseline);
-    expect(result.reason).toMatch(/1000|1,000|6,667/);
+    expect(result.reason).toMatch(/15%/);
+    expect(result.reason).toMatch(/6,667/);
+    expect(result.reason).toMatch(/未估算/);
   });
 });
