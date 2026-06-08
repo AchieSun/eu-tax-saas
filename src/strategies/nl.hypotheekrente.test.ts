@@ -48,4 +48,16 @@ describe('nl.hypotheekrente', () => {
     const result = STRATEGY.evaluate(NL_SALARY, baseline);
     expect(result.reason).toMatch(/36\.97%/);
   });
+
+  it('assumptions array lists annualMortgageInterestEur default with rationale', () => {
+    const baseline = calculateTax(NL_SALARY);
+    const result = STRATEGY.evaluate(NL_SALARY, baseline);
+    expect(result.assumptions).toBeDefined();
+    expect(result.assumptions).toHaveLength(1);
+    expect(result.assumptions![0]).toMatchObject({
+      field: 'annualMortgageInterestEur',
+      defaultValue: 5000,
+    });
+    expect(result.assumptions![0].rationale).toMatch(/CBS|mortgage|median/);
+  });
 });

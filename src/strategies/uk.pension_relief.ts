@@ -50,6 +50,13 @@ const STRATEGY: Strategy = {
       reason: `按供款 £${ASSUMED_CONTRIBUTION.toLocaleString()} × 边际税率 ${(baseline.marginalRate * 100).toFixed(1)}% 估算可省 £${saving}/年。年度额度上限 £${UK_PENSION_ANNUAL_ALLOWANCE_2025.toLocaleString()} (或 100% 收入,取较低者)`,
       estimatedSavingsEur: saving,
       confidence: 0.7,
+      assumptions: [
+        {
+          field: 'pensionContributionEur',
+          defaultValue: ASSUMED_CONTRIBUTION,
+          rationale: `Conservative round-number proxy (£${ASSUMED_CONTRIBUTION}); actual annual allowance ceiling £${UK_PENSION_ANNUAL_ALLOWANCE_2025} or 100% of earnings, whichever lower`,
+        },
+      ],
     };
   },
 };

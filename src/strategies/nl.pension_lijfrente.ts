@@ -50,6 +50,14 @@ const STRATEGY: Strategy = {
       reason: `按贡献 €${ASSUMED_LIJFRENTE_CONTRIBUTION.toLocaleString()} × 边际税率 ${(baseline.marginalRate * 100).toFixed(1)}% 估算节省 €${saving}/年。实际节税额上限取决于您的 jaarruimte (一般 ≤ €34,550)`,
       estimatedSavingsEur: saving,
       confidence: 0.65,
+      assumptions: [
+        {
+          field: 'lijfrenteContributionEur',
+          defaultValue: ASSUMED_LIJFRENTE_CONTRIBUTION,
+          rationale:
+            'Conservative round-number proxy; actual jaarruimte ceiling 2025 ≈ €34,550 — use Belastingdienst tool to confirm yours',
+        },
+      ],
     };
   },
 };

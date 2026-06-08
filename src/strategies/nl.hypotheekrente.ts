@@ -50,6 +50,14 @@ const STRATEGY: Strategy = {
       reason: `按年利息 €${ASSUMED_ANNUAL_INTEREST.toLocaleString()} × 36.97% 估算,可省约 €${saving}/年。需提供实际年利息支出 (annualMortgageInterestEur) 才能精确计算`,
       estimatedSavingsEur: saving,
       confidence: 0.65,
+      assumptions: [
+        {
+          field: 'annualMortgageInterestEur',
+          defaultValue: ASSUMED_ANNUAL_INTEREST,
+          rationale:
+            'Default proxy for NL median mortgage interest (~€5,000/yr; CBS StatLine hypotheekrenteaftrek 2024 distribution)',
+        },
+      ],
     };
   },
 };

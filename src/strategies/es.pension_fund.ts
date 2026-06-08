@@ -58,6 +58,13 @@ const STRATEGY: Strategy = {
       reason: `贡献 €${ES_PENSION_INDIVIDUAL_CAP} 个人养老金可按边际税率 ${(baseline.marginalRate * 100).toFixed(1)}% 节税约 €${saving}/年。若雇主同样匹配,联合上限可达 €8,500`,
       estimatedSavingsEur: saving,
       confidence: 0.7,
+      assumptions: [
+        {
+          field: 'pensionContributionEur',
+          defaultValue: ES_PENSION_INDIVIDUAL_CAP,
+          rationale: `Assumes user contributes the €${ES_PENSION_INDIVIDUAL_CAP} individual cap (LIRPF art. 51). Employer-matched contributions raise the joint cap to €8,500/yr (Ley 12/2022)`,
+        },
+      ],
     };
   },
 };

@@ -118,6 +118,34 @@ export const evaluationSchema = z.object({
   estimatedSavingsEur: z.number().nullable().optional(),
   /** 0..1 — 1.0 = fully deterministic, < 0.75 = LLM/heuristic. */
   confidence: z.number().min(0).max(1),
+  /**
+   * Structured list of assumptions baked into the savings estimate. Lets the
+   * UI render a transparent "based on these defaults" note next to each
+   * recommendation, and lets downstream layers (LLM H4 rule injection,
+   * scenario tooling) reason about which inputs to ask the user for next.
+   *
+   * Each entry SHOULD describe:
+   *   - WHAT input field is assumed (e.g. "annualMortgageInterestEur")
+   *   - WHAT default value we used (e.g. 5000)
+   *   - WHY this default (e.g. "Belastingdienst median 2024")
+   *
+   * Empty/undefined means: no synthetic defaults were applied — the estimate
+   * is computed strictly from supplied input (or is null when uncomputable).
+   *
+   * Spec: Oracle Wave A+B P2#1 — assumption-labeling standardisation.
+   */
+  assumptions: z
+    .array(
+      z.object({
+        /** The CalculatorInput-shape field the assumption stands in for. */
+        field: z.string().min(1),
+        /** Default value applied (number / string for human display). */
+        defaultValue: z.union([z.number(), z.string()]),
+        /** Short rationale for the chosen default (Chinese or English OK). */
+        rationale: z.string().min(1),
+      }),
+    )
+    .optional(),
 });
 export type StrategyEvaluation = z.infer<typeof evaluationSchema>;
 

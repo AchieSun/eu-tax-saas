@@ -52,6 +52,13 @@ const STRATEGY: Strategy = {
       reason: `若您的实际工作支出超过 €${DE_WK_PAUSCHBETRAG_2025} Pauschale,每超 €100 按边际税率 ${(baseline.marginalRate * 100).toFixed(1)}% 可省 €${(baseline.marginalRate * 100).toFixed(0)}。本估算假设超额 €${ASSUMED_EXCESS_OVER_PAUSCHALE}/年`,
       estimatedSavingsEur: saving,
       confidence: 0.6,
+      assumptions: [
+        {
+          field: 'workExpensesAboveZeroEur',
+          defaultValue: DE_WK_PAUSCHBETRAG_2025 + ASSUMED_EXCESS_OVER_PAUSCHALE,
+          rationale: `Assumes user has €${ASSUMED_EXCESS_OVER_PAUSCHALE} of itemised work expenses above the €${DE_WK_PAUSCHBETRAG_2025} Arbeitnehmer-Pauschbetrag (typical for commuters > 30km or permanent home office)`,
+        },
+      ],
     };
   },
 };

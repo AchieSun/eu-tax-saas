@@ -63,6 +63,16 @@ const STRATEGY: Strategy = {
         '当前未估算金额。',
       estimatedSavingsEur: null,
       confidence: 0.5,
+      assumptions: [
+        {
+          field: 'medicalExpensesEur',
+          defaultValue: 0,
+          rationale:
+            'True savings depend on actual medical spend (15% × spend, capped at €1,000/yr). ' +
+            `We default to €0 because median PT household medical spend ≈ €1,500/yr ` +
+            `(→ €225 saving), making the €1,000 statutory ceiling misleading as a default.`,
+        },
+      ],
     };
   },
 };
