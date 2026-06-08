@@ -33,6 +33,7 @@ import { calculateRoutes } from './routes/calculate';
 import { daysRoutes } from './routes/days';
 import { formsRoutes } from './routes/forms';
 import { residencyRoutes } from './routes/residency';
+import { strategiesRoutes } from './routes/strategies';
 
 export interface Bindings {
   DB: D1Database;
@@ -155,6 +156,10 @@ app.use('/api/admin/*', auditMiddleware());
 // row from P0-1 (the two complement each other rather than overlapping).
 app.use('/api/forms', auditMiddleware());
 app.use('/api/forms/*', auditMiddleware());
+// F4 strategy library — persist endpoint writes recommendations to D1;
+// list/evaluate are pure but hashing them is still useful for analytics.
+app.use('/api/strategies', auditMiddleware());
+app.use('/api/strategies/*', auditMiddleware());
 
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);
@@ -162,6 +167,7 @@ app.route('/api/days', daysRoutes);
 app.route('/api/residency', residencyRoutes);
 app.route('/api/forms', formsRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/strategies', strategiesRoutes);
 
 // ── 404 fallback ────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
