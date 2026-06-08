@@ -16,7 +16,7 @@
  * (only doubt: user must actually leave formally + accept religious choice).
  */
 
-import type { CalculatorInput } from '../rules/common/types';
+import type { CalculatorInput, TaxBreakdownItem } from '../rules/common/types';
 import { registerStrategy } from './registry';
 import type { BaselineTax, Strategy, StrategyEvaluation } from './types';
 
@@ -49,8 +49,24 @@ const STRATEGY: Strategy = {
     }
     const region = (input.region ?? '').toUpperCase();
     const rate = BY_BW_REGIONS.includes(region) ? KISTG_RATE_BY_BW : KISTG_RATE_DEFAULT;
-    // Approximate Einkommensteuer portion of baseline as ~94% of total (excludes SolZ).
-    const estIncomeTax = baseline.taxOwed / 1.055;
+    // Oracle P1#6: the old implementation back-out the Einkommensteuer as
+    // `baseline.taxOwed / 1.055`, which silently assumes SolZ applies at the
+    // full 5.5%. Below the SolZ exemption (≈ €19,950 income tax for singles
+    // in 2025), SolZ is zero and Einkommensteuer == taxOwed. Dividing by
+    // 1.055 in that band understates Einkommensteuer by ~5% and therefore
+    // the church tax saving estimate too. The DE calculator emits a
+    // breakdown line `{label: 'Einkommensteuer (§ 32a EStG)', amount: ...}`
+    // — read it directly. BaselineTax (the strategy contract type) does
+    // not include `breakdown` because ES uses a different shape, but DE
+    // always emits the standard `TaxBreakdownItem[]` and this evaluator
+    // is country-gated to DE above, so the structural narrow is safe.
+    const baselineWithBreakdown = baseline as BaselineTax & {
+      breakdown?: ReadonlyArray<TaxBreakdownItem>;
+    };
+    const einkommensteuerLine = baselineWithBreakdown.breakdown?.find((b) =>
+      b.label.startsWith('Einkommensteuer'),
+    );
+    const estIncomeTax = einkommensteuerLine?.amount ?? baseline.taxOwed / 1.055;
     const saving = Math.round(estIncomeTax * rate);
     if (saving <= 0) {
       return {
