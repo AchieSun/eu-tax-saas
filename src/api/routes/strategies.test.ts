@@ -104,19 +104,23 @@ describe('GET /api/strategies', () => {
 
 describe('POST /api/strategies/evaluate', () => {
   it('returns baseline + evaluations sorted (applicable first, saving desc)', async () => {
-    const res = await strategiesRoutes.request('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        country: 'ES',
-        taxYear: 2025,
-        incomeType: 'salary',
-        grossIncome: 200_000,
-        specialStatus: 'beckham',
-        filingStatus: 'single',
-        region: 'MAD',
-      }),
-    }, TEST_ENV);
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 200_000,
+          specialStatus: 'beckham',
+          filingStatus: 'single',
+          region: 'MAD',
+        }),
+      },
+      TEST_ENV,
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
@@ -146,27 +150,35 @@ describe('POST /api/strategies/evaluate', () => {
   });
 
   it('returns 400 on invalid JSON', async () => {
-    const res = await strategiesRoutes.request('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: 'not-json-{',
-    }, TEST_ENV);
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not-json-{',
+      },
+      TEST_ENV,
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.error).toBe('invalid_json');
   });
 
   it('returns 400 on validation failure (bad country)', async () => {
-    const res = await strategiesRoutes.request('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        country: 'XX',
-        taxYear: 2025,
-        incomeType: 'salary',
-        grossIncome: 50_000,
-      }),
-    }, TEST_ENV);
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'XX',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 50_000,
+        }),
+      },
+      TEST_ENV,
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
@@ -174,19 +186,23 @@ describe('POST /api/strategies/evaluate', () => {
   });
 
   it('Oracle P0#1: ES Beckham without region returns 200 (baseline defaults to MAD)', async () => {
-    const res = await strategiesRoutes.request('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        country: 'ES',
-        taxYear: 2025,
-        incomeType: 'salary',
-        grossIncome: 200_000,
-        specialStatus: 'beckham',
-        filingStatus: 'single',
-        // intentionally NO region — Beckham is a national flat rate
-      }),
-    }, TEST_ENV);
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 200_000,
+          specialStatus: 'beckham',
+          filingStatus: 'single',
+          // intentionally NO region — Beckham is a national flat rate
+        }),
+      },
+      TEST_ENV,
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
@@ -202,18 +218,22 @@ describe('POST /api/strategies/evaluate', () => {
   });
 
   it('UK 80k case: applicable strategies include uk.fig + uk.pension_relief', async () => {
-    const res = await strategiesRoutes.request('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        country: 'UK',
-        taxYear: 2025,
-        incomeType: 'salary',
-        grossIncome: 80_000,
-        specialStatus: 'fig',
-        filingStatus: 'single',
-      }),
-    }, TEST_ENV);
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'UK',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 80_000,
+          specialStatus: 'fig',
+          filingStatus: 'single',
+        }),
+      },
+      TEST_ENV,
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       evaluations: Array<{ id: string; applicable: boolean }>;
@@ -221,5 +241,96 @@ describe('POST /api/strategies/evaluate', () => {
     const applicableIds = body.evaluations.filter((e) => e.applicable).map((e) => e.id);
     expect(applicableIds).toContain('uk.fig');
     expect(applicableIds).toContain('uk.pension_relief');
+  });
+});
+
+describe('POST /api/strategies/ai-recommend', () => {
+  it('returns 401 when no session is attached', async () => {
+    const res = await strategiesRoutes.request(
+      '/ai-recommend',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 100_000,
+          specialStatus: 'none',
+          filingStatus: 'single',
+          region: 'MAD',
+        }),
+      },
+      { ...TEST_ENV, DEEPSEEK_API_KEY: 'sk-test' },
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('unauthorized');
+  });
+
+  it('returns 503 when DEEPSEEK_API_KEY is unset (with session)', async () => {
+    // Provide a session via Hono routing override by using a wrapper Hono app
+    // that sets the session var before delegating. The simplest approach is to
+    // mount strategiesRoutes inside a parent app and seed `c.set('session', ...)`.
+    const { Hono } = await import('hono');
+    type Vars = {
+      session: { user: { id: string } } | null;
+    };
+    const parent = new Hono<{ Bindings: typeof TEST_ENV; Variables: Vars }>();
+    parent.use('*', async (c, next) => {
+      c.set('session', { user: { id: 'test-user-1' } });
+      await next();
+    });
+    parent.route('/api/strategies', strategiesRoutes);
+    const res = await parent.request(
+      '/api/strategies/ai-recommend',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 100_000,
+          specialStatus: 'none',
+          filingStatus: 'single',
+          region: 'MAD',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('llm_unavailable');
+  });
+
+  it('returns 400 on invalid input (with session and key)', async () => {
+    const { Hono } = await import('hono');
+    type Vars = {
+      session: { user: { id: string } } | null;
+    };
+    const parent = new Hono<{ Bindings: typeof TEST_ENV; Variables: Vars }>();
+    parent.use('*', async (c, next) => {
+      c.set('session', { user: { id: 'test-user-2' } });
+      await next();
+    });
+    parent.route('/api/strategies', strategiesRoutes);
+    const res = await parent.request(
+      '/api/strategies/ai-recommend',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'XX',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 100_000,
+        }),
+      },
+      { ...TEST_ENV, DEEPSEEK_API_KEY: 'sk-test' },
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe('validation');
   });
 });

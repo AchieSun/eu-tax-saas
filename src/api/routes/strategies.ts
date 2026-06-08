@@ -23,6 +23,7 @@ import { calculateTax, calculatorInputSchema } from '../../rules';
 import type { CalculatorInput } from '../../rules/common/types';
 import { SUPPORTED_COUNTRIES } from '../../rules/common/types';
 import type { Country } from '../../rules/common/types';
+import { recommendStrategies } from '../../services/f4-llm';
 import { STRATEGIES, getStrategyById, listStrategiesByCountry } from '../../strategies';
 import type { Strategy, StrategyEvaluation } from '../../strategies/types';
 import type { Bindings, Variables } from '../index';
@@ -84,78 +85,78 @@ strategiesRoutes.post(
     requireSession: false,
   }),
   async (c) => {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ ok: false, error: 'invalid_json' }, 400);
-  }
-  const parsed = calculatorInputSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ ok: false, error: 'validation', issues: parsed.error.issues }, 400);
-  }
-  const input = parsed.data;
-  // Oracle P0#1: baseline uses specialStatus='none', but some country calculators
-  // require a region in that mode that the regime itself does not (e.g. ES Beckham
-  // is a single national flat rate; non-Beckham ES requires a CCAA). Mirror the
-  // defensive defaulting from `compareCountries()` in src/rules/index.ts so the
-  // baseline never crashes for inputs that the regime-aware path accepts.
-  const baselineInput: CalculatorInput = { ...input, specialStatus: 'none' };
-  if (baselineInput.country === 'ES' && !baselineInput.region) {
-    baselineInput.region = 'MAD';
-  }
-  if (baselineInput.country === 'UK' && !baselineInput.region) {
-    baselineInput.region = 'EWN';
-  }
-  let baseline: ReturnType<typeof calculateTax>;
-  try {
-    baseline = calculateTax(baselineInput);
-  } catch (err) {
-    return c.json({ ok: false, error: (err as Error).message }, 400);
-  }
-  // Evaluate ALL strategies; surface eligible AND ineligible so the UI can
-  // explain *why* something was excluded (anti-hallucination G2).
-  const evaluations = STRATEGIES.map((s: Strategy) => {
-    let result: StrategyEvaluation;
+    let body: unknown;
     try {
-      result = s.evaluate(input, baseline);
-    } catch (err) {
-      result = {
-        applicable: false,
-        reason: `策略评估失败: ${(err as Error).message}`,
-        confidence: 0,
-        estimatedSavingsEur: null,
-      };
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid_json' }, 400);
     }
-    return {
-      id: s.id,
-      tier: s.tier,
-      category: s.category,
-      titleZh: s.titleZh,
-      citation: s.citation,
-      ...result,
-    };
-  });
-  // Sort: applicable first, then by estimated saving desc, then by confidence desc.
-  evaluations.sort((a, b) => {
-    if (a.applicable !== b.applicable) return a.applicable ? -1 : 1;
-    const sa = a.estimatedSavingsEur ?? 0;
-    const sb = b.estimatedSavingsEur ?? 0;
-    if (sb !== sa) return sb - sa;
-    return b.confidence - a.confidence;
-  });
-  return c.json({
-    ok: true,
-    baseline: {
-      country: baseline.country,
-      taxYear: baseline.taxYear,
-      grossIncome: baseline.grossIncome,
-      taxOwed: baseline.taxOwed,
-      effectiveRate: baseline.effectiveRate,
-      marginalRate: baseline.marginalRate,
-    },
-    evaluations,
-  });
+    const parsed = calculatorInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: 'validation', issues: parsed.error.issues }, 400);
+    }
+    const input = parsed.data;
+    // Oracle P0#1: baseline uses specialStatus='none', but some country calculators
+    // require a region in that mode that the regime itself does not (e.g. ES Beckham
+    // is a single national flat rate; non-Beckham ES requires a CCAA). Mirror the
+    // defensive defaulting from `compareCountries()` in src/rules/index.ts so the
+    // baseline never crashes for inputs that the regime-aware path accepts.
+    const baselineInput: CalculatorInput = { ...input, specialStatus: 'none' };
+    if (baselineInput.country === 'ES' && !baselineInput.region) {
+      baselineInput.region = 'MAD';
+    }
+    if (baselineInput.country === 'UK' && !baselineInput.region) {
+      baselineInput.region = 'EWN';
+    }
+    let baseline: ReturnType<typeof calculateTax>;
+    try {
+      baseline = calculateTax(baselineInput);
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message }, 400);
+    }
+    // Evaluate ALL strategies; surface eligible AND ineligible so the UI can
+    // explain *why* something was excluded (anti-hallucination G2).
+    const evaluations = STRATEGIES.map((s: Strategy) => {
+      let result: StrategyEvaluation;
+      try {
+        result = s.evaluate(input, baseline);
+      } catch (err) {
+        result = {
+          applicable: false,
+          reason: `策略评估失败: ${(err as Error).message}`,
+          confidence: 0,
+          estimatedSavingsEur: null,
+        };
+      }
+      return {
+        id: s.id,
+        tier: s.tier,
+        category: s.category,
+        titleZh: s.titleZh,
+        citation: s.citation,
+        ...result,
+      };
+    });
+    // Sort: applicable first, then by estimated saving desc, then by confidence desc.
+    evaluations.sort((a, b) => {
+      if (a.applicable !== b.applicable) return a.applicable ? -1 : 1;
+      const sa = a.estimatedSavingsEur ?? 0;
+      const sb = b.estimatedSavingsEur ?? 0;
+      if (sb !== sa) return sb - sa;
+      return b.confidence - a.confidence;
+    });
+    return c.json({
+      ok: true,
+      baseline: {
+        country: baseline.country,
+        taxYear: baseline.taxYear,
+        grossIncome: baseline.grossIncome,
+        taxOwed: baseline.taxOwed,
+        effectiveRate: baseline.effectiveRate,
+        marginalRate: baseline.marginalRate,
+      },
+      evaluations,
+    });
   },
 );
 
@@ -209,3 +210,83 @@ strategiesRoutes.post(
 );
 
 export default strategiesRoutes;
+
+// ── POST /api/strategies/ai-recommend ──────────────────────────────────────
+// F4 Wave C: Auth required, rate-limited (10/hour per user). Wraps the
+// 6-layer LLM harness (recommendStrategies). Returns C-tier AI suggestions
+// alongside the rule-based evaluations the user has already seen.
+strategiesRoutes.post(
+  '/ai-recommend',
+  rateLimitD1({
+    keyPrefix: 'rl:strategies:ai',
+    max: 10,
+    windowSeconds: 3600,
+    requireSession: true,
+  }),
+  async (c) => {
+    const session = c.get('session');
+    if (!session?.user?.id) {
+      return c.json({ ok: false, error: 'unauthorized' }, 401);
+    }
+    if (!c.env.DEEPSEEK_API_KEY) {
+      return c.json({ ok: false, error: 'llm_unavailable' }, 503);
+    }
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid_json' }, 400);
+    }
+    const parsed = calculatorInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: 'validation', issues: parsed.error.issues }, 400);
+    }
+    const input = parsed.data;
+    const baselineInput: CalculatorInput = { ...input, specialStatus: 'none' };
+    if (baselineInput.country === 'ES' && !baselineInput.region) {
+      baselineInput.region = 'MAD';
+    }
+    if (baselineInput.country === 'UK' && !baselineInput.region) {
+      baselineInput.region = 'EWN';
+    }
+    let baseline: ReturnType<typeof calculateTax>;
+    try {
+      baseline = calculateTax(baselineInput);
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message }, 400);
+    }
+    const existing = listStrategiesByCountry(input.country, input.taxYear);
+    try {
+      const result = await recommendStrategies({
+        env: c.env,
+        input,
+        baseline,
+        existingStrategies: existing,
+        maxLlmStrategies: 3,
+      });
+      return c.json({
+        ok: true,
+        baseline: {
+          country: baseline.country,
+          taxYear: baseline.taxYear,
+          taxOwed: baseline.taxOwed,
+        },
+        recommendations: result.llmRecommendations.map((r) => ({
+          id: r.id,
+          tier: r.tier,
+          titleZh: r.titleZh,
+          reasoning: r.raw.reasoning,
+          confidence: r.confidence,
+          estimatedSavingsEur: r.estimatedSavingsEur,
+          actionSteps: r.raw.action_steps,
+          citations: r.raw.citations,
+          aiDisclaimer: '[AI建议·未经确定性验证]',
+        })),
+        warnings: result.warnings,
+        usage: result.usage,
+      });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message }, 500);
+    }
+  },
+);
