@@ -33,3 +33,19 @@ import './de.expatriate';
 import './eu.splittingverfahren';
 import './es.deduccion_arrendamiento';
 import './pt.jovem';
+
+// B-tier (semi-deterministic / informational) strategies.
+import './eu.country_arbitrage';
+import './eu.dtt_relief';
+import './eu.183day_planning';
+import './es.deduccion_vivienda_habitual';
+import './es.pension_fund';
+import './pt.deducao_dependentes';
+import './pt.despesas_saude';
+import './pt.pension_ppr';
+import './de.werbungskosten';
+import './de.riester';
+import './de.kirchensteuer_austritt';
+import './nl.hypotheekrente';
+import './nl.pension_lijfrente';
+import './uk.pension_relief';
