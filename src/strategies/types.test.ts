@@ -190,3 +190,13 @@ describe('strategyDefinitionSchema', () => {
     expect(parsed.eligibility.countries).toEqual(['ES']);
   });
 });
+
+// ── Oracle P1#2: _resetRegistryForTests guard ───────────────────────────────
+
+describe('_resetRegistryForTests — production guard', () => {
+  it('does NOT throw when called from a vitest test (NODE_ENV=test or vi global)', () => {
+    // The beforeEach above already invokes _resetRegistryForTests successfully,
+    // but assert it explicitly to lock in the behaviour after the guard landed.
+    expect(() => _resetRegistryForTests()).not.toThrow();
+  });
+});

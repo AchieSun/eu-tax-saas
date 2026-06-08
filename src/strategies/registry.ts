@@ -77,8 +77,16 @@ export function registerStrategy(s: Strategy): void {
   rebuildSnapshot();
 }
 
-/** Test-only: clear the registry. */
+/** Test-only: clear the registry. Guarded so a production caller cannot
+ *  accidentally wipe the registry — Workers has no `process.env` so we
+ *  detect test mode via `NODE_ENV==='test'` OR the vitest global `vi`. */
 export function _resetRegistryForTests(): void {
+  const isNodeTest =
+    typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+  const isViTest = typeof globalThis !== 'undefined' && 'vi' in globalThis;
+  if (!isNodeTest && !isViTest) {
+    throw new Error('_resetRegistryForTests is only callable in test environment');
+  }
   REGISTRY.clear();
   rebuildSnapshot();
 }
