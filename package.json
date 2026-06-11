@@ -30,7 +30,7 @@
   "dependencies": {
     "@solidjs/router": "^0.15.3",
     "@solidjs/start": "^1.1.4",
-    "better-auth": "^1.2.0",
+    "better-auth": "^1.6.16",
     "drizzle-orm": "^0.38.4",
     "hono": "^4.6.20",
     "pdf-lib": "^1.17.1",
