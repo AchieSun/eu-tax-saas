@@ -20,7 +20,8 @@ id = "REPLACE_WITH_KV_ID_AFTER_CREATE"
 binding = "R2"
 bucket_name = "eu-tax-saas-pdfs"
 
-# Vectorize - RAG index (for future F5 AI Q&A, not used in MVP)
+# Vectorize - RAG index (F5). Uncomment after running docs/F5-VECTORIZE-SETUP.md.
+# See docs/F5-AI-GATEWAY-SETUP.md for DeepSeek AI Gateway provisioning.
 # [[vectorize]]
 # binding = "VECTORIZE"
 # index_name = "tax-law"
