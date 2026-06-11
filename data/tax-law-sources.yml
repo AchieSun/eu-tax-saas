@@ -1,0 +1,248 @@
+version: 1
+description: Official tax-law source manifest for W5-F5 RAG seed crawler. Wave 1 is HTML-first and limited to public official sources.
+sources:
+  - jurisdiction: ES
+    lang: es
+    title: Ley 35/2006 del IRPF consolidated text
+    url: https://www.boe.es/buscar/act.php?id=BOE-A-2006-20764
+    sourceType: html
+    authority: BOE
+    taxYear: 2025
+    topic: irpf-personal-income-tax
+    licenseNote: BOE public-sector legal text; reuse subject to BOE legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: ES
+    lang: es
+    title: Reglamento del IRPF Real Decreto 439/2007
+    url: https://www.boe.es/buscar/act.php?id=BOE-A-2007-6820
+    sourceType: html
+    authority: BOE
+    taxYear: 2025
+    topic: irpf-regulation
+    licenseNote: BOE public-sector legal text; reuse subject to BOE legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: ES
+    lang: es
+    title: Non-Resident Income Tax Law RDL 5/2004
+    url: https://www.boe.es/buscar/act.php?id=BOE-A-2004-4527
+    sourceType: html
+    authority: BOE
+    taxYear: 2025
+    topic: non-resident-income-tax
+    licenseNote: BOE public-sector legal text; reuse subject to BOE legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: ES
+    lang: es
+    title: Agencia Tributaria Renta campaign portal
+    url: https://sede.agenciatributaria.gob.es/Sede/Renta.html
+    sourceType: html
+    authority: Agencia Tributaria
+    taxYear: 2025
+    topic: tax-return-campaign
+    licenseNote: Spanish Tax Agency public guidance; reuse subject to site legal notice.
+    lastVerifiedAt: 2026-06-11
+
+  - jurisdiction: PT
+    lang: pt
+    title: Codigo do IRS CIRS index
+    url: https://info.portaldasfinancas.gov.pt/pt/informacao_fiscal/codigos_tributarios/cirs_rep/Pages/codigo-do-irs-indice.aspx
+    sourceType: html
+    authority: Portal das Financas
+    taxYear: 2025
+    topic: irs-personal-income-tax
+    licenseNote: Autoridade Tributaria public tax-code guidance; reuse subject to portal legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: PT
+    lang: en
+    title: Non-Habitual Resident tax regime official page
+    url: https://info.portaldasfinancas.gov.pt/en/tax-information/living-in-portugal/work-and-retirement/nhr-tax-regime
+    sourceType: html
+    authority: Portal das Financas
+    taxYear: 2025
+    topic: nhr-transitional-regime
+    licenseNote: Autoridade Tributaria public guidance; reuse subject to portal legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: PT
+    lang: pt
+    title: IRS principal filing deadlines
+    url: https://info.portaldasfinancas.gov.pt/pt/apoio_ao_contribuinte/Cidadaos/Rendimentos/Declaracao/prazos/Paginas/default.aspx
+    sourceType: html
+    authority: Portal das Financas
+    taxYear: 2025
+    topic: filing-deadlines-deductions
+    licenseNote: Autoridade Tributaria public guidance; reuse subject to portal legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: PT
+    lang: pt
+    title: gov.pt IRS guide for individuals
+    url: https://www.gov.pt/guias/imposto-sobre-o-rendimento-das-pessoas-singulares-irs-em-portugal
+    sourceType: html
+    authority: Portal das Financas
+    taxYear: 2025
+    topic: irs-citizen-guide
+    licenseNote: Portuguese government public guidance; reuse subject to gov.pt legal notice.
+    lastVerifiedAt: 2026-06-11
+
+  - jurisdiction: UK
+    lang: en
+    title: HMRC manuals collection
+    url: https://www.gov.uk/government/collections/hmrc-manuals
+    sourceType: html
+    authority: GOV.UK
+    taxYear: 2025
+    topic: hmrc-technical-manuals
+    licenseNote: Open Government Licence v3.0.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: UK
+    lang: en
+    title: Statutory Residence Test RDR3 guidance
+    url: https://www.gov.uk/government/publications/rdr3-statutory-residence-test-srt/guidance-note-for-statutory-residence-test-srt-rdr3
+    sourceType: html
+    authority: HMRC
+    taxYear: 2025
+    topic: statutory-residence-test
+    licenseNote: Open Government Licence v3.0.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: UK
+    lang: en
+    title: Residence and FIG regime manual SRT introduction
+    url: https://www.gov.uk/hmrc-internal-manuals/residence-and-fig-regime-manual/rfig20040
+    sourceType: html
+    authority: HMRC
+    taxYear: 2025
+    topic: fig-residence-manual
+    licenseNote: Open Government Licence v3.0.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: UK
+    lang: en
+    title: Income Tax Act 2007 contents
+    url: https://www.legislation.gov.uk/ukpga/2007/3/contents
+    sourceType: html
+    authority: legislation.gov.uk
+    taxYear: 2025
+    topic: income-tax-act
+    licenseNote: Open Government Licence v3.0.
+    lastVerifiedAt: 2026-06-11
+
+  - jurisdiction: NL
+    lang: nl
+    title: Income tax brackets and rates
+    url: https://www.belastingdienst.nl/wps/wcm/connect/nl/werk-en-inkomen/content/hoeveel-inkomstenbelasting-betalen
+    sourceType: html
+    authority: Belastingdienst
+    taxYear: 2025
+    topic: income-tax-brackets
+    licenseNote: Belastingdienst public guidance; reuse subject to rijksoverheid copyright rules.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: NL
+    lang: en
+    title: Coming to work in the Netherlands 30 percent facility
+    url: https://www.belastingdienst.nl/wps/wcm/connect/en/individuals/content/coming-to-work-in-the-netherlands-30-percent-facility
+    sourceType: html
+    authority: Belastingdienst
+    taxYear: 2025
+    topic: thirty-percent-ruling
+    licenseNote: Belastingdienst public guidance; reuse subject to rijksoverheid copyright rules.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: NL
+    lang: nl
+    title: Wet inkomstenbelasting 2001 consolidated text
+    url: https://wetten.overheid.nl/BWBR0011353/2025-01-01
+    sourceType: html
+    authority: wetten.overheid.nl
+    taxYear: 2025
+    topic: wet-ib-2001
+    licenseNote: Dutch government legislation; reuse subject to wetten.overheid.nl terms.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: NL
+    lang: nl
+    title: Tax calculation methodology FISIN
+    url: https://www.belastingdienst.nl/wps/wcm/connect/fisin/fisin2025/belastingberekening
+    sourceType: html
+    authority: Belastingdienst
+    taxYear: 2025
+    topic: tax-calculation-methodology
+    licenseNote: Belastingdienst public guidance; reuse subject to rijksoverheid copyright rules.
+    lastVerifiedAt: 2026-06-11
+
+  - jurisdiction: DE
+    lang: de
+    title: Einkommensteuergesetz EStG consolidated HTML
+    url: https://www.gesetze-im-internet.de/estg/BJNR010050934.html
+    sourceType: html
+    authority: gesetze-im-internet
+    taxYear: 2025
+    topic: estg-income-tax-act
+    licenseNote: Federal Ministry of Justice public legal text; reuse subject to site legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: DE
+    lang: de
+    title: Abgabenordnung AO consolidated HTML
+    url: https://www.gesetze-im-internet.de/ao_1977/BJNR006130976.html
+    sourceType: html
+    authority: gesetze-im-internet
+    taxYear: 2025
+    topic: tax-procedure-code
+    licenseNote: Federal Ministry of Justice public legal text; reuse subject to site legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: DE
+    lang: de
+    title: BMF double tax treaties overview
+    url: https://www.bundesfinanzministerium.de/Web/DE/Themen/Steuern/Internationales_Steuerrecht/Staatenbezogene_Informationen/staatenbezogene_info.html
+    sourceType: html
+    authority: BMF
+    taxYear: 2025
+    topic: double-tax-treaties
+    licenseNote: German Federal Ministry of Finance public guidance; reuse subject to site legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: DE
+    lang: de
+    title: Lohnsteuer help and wage tax topics
+    url: https://www.bundesfinanzministerium.de/Web/DE/Themen/Steuern/Steuerarten/Lohnsteuer/lohnsteuer.html
+    sourceType: html
+    authority: BMF
+    taxYear: 2025
+    topic: wage-tax-guidance
+    licenseNote: German Federal Ministry of Finance public guidance; reuse subject to site legal notice.
+    lastVerifiedAt: 2026-06-11
+
+  - jurisdiction: EU
+    lang: en
+    title: COM 2010 769 removing cross-border tax obstacles for EU citizens
+    url: https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:52010DC0769
+    sourceType: html
+    authority: EUR-Lex
+    taxYear: 2025
+    topic: cross-border-tax-obstacles
+    licenseNote: EUR-Lex legal notice; EU public documents generally reusable with source attribution unless otherwise indicated.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: EU
+    lang: en
+    title: Your Europe double taxation guide
+    url: https://europa.eu/youreurope/citizens/work/taxes/double-taxation/index_en.htm
+    sourceType: html
+    authority: Your Europe
+    taxYear: 2025
+    topic: double-taxation-citizen-guide
+    licenseNote: Europa public guidance; reuse subject to Europa legal notice.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: EU
+    lang: en
+    title: Directive 2018 822 DAC6 administrative cooperation
+    url: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32018L0822
+    sourceType: html
+    authority: EUR-Lex
+    taxYear: 2025
+    topic: dac6-reporting
+    licenseNote: EUR-Lex legal notice; EU public documents generally reusable with source attribution unless otherwise indicated.
+    lastVerifiedAt: 2026-06-11
+  - jurisdiction: EU
+    lang: en
+    title: PEPP Regulation 2019 1238
+    url: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32019R1238
+    sourceType: html
+    authority: EUR-Lex
+    taxYear: 2025
+    topic: cross-border-pension-pepp
+    licenseNote: EUR-Lex legal notice; EU public documents generally reusable with source attribution unless otherwise indicated.
+    lastVerifiedAt: 2026-06-11
