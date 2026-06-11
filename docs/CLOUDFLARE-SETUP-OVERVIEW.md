@@ -387,3 +387,109 @@ Cloudflare 免费/低价资源都有配额。上线前建议在 Dashboard 看一
 - `F5-AI-GATEWAY-SETUP.md`：AI Gateway / DeepSeek 路由专项步骤。
 - `../../CLOUDFLARE_WORKERS_REFERENCE.md`：工程实现参考，不是从零操作入口。
 - `../../docs/12-deployment-guide.md`：更大的部署规划文档，部分资源名可能早于当前 `wrangler.toml`，以本文档为准。
+
+---
+
+## 20. 上线就绪补充项（Launch Readiness）
+
+> 以下章节不是 Cloudflare 资源创建本身，而是上线前后必须考虑的工程与合规项。基础 Cloudflare 资源（1–19 节）做完后，再按下面逐项推进。状态标记说明：
+>
+> - `[必需]`：上线前必须完成，否则线上会出现严重问题（数据丢失、合规风险、无法收款等）。
+> - `[推荐]`：上线后近期内应完成，影响可观测性、可维护性、应急能力。
+> - `[计划中]`：目前未实现，后续 milestone 才会接入，记录在此避免遗漏。
+
+### 20.1 监控与告警：Sentry / PostHog `[推荐]` / `[计划中]`
+
+- Sentry：用于 Workers 端错误聚合、source map 解析、告警通知。当前代码尚未接入 `@sentry/cloudflare`，属于 `[计划中]`。接入时需要新增 secret `SENTRY_DSN`（通过 `wrangler secret put SENTRY_DSN` 设置，按 env 分别设置 staging / production）。
+- PostHog：用于前端事件、漏斗、留存分析。如果走前端直连，公开 key 通过 `[vars]` 注入即可；如果走后端代理，则需要 `POSTHOG_API_KEY` 作为 secret，目前同样属于 `[计划中]`。
+- 在没有 Sentry 之前，错误观测先依赖 `npx wrangler tail`、Cloudflare Dashboard Logs 和 AI Gateway 日志（见 14 节）。
+
+### 20.2 上线相关 Secrets 补充 `[必需]` / `[推荐]`
+
+第 12 节列出了核心 secrets。下列为上线节奏中要陆续追加的：
+
+| Secret | 用途 | 状态 | 设置方式 |
+| --- | --- | --- | --- |
+| `RESEND_API_KEY` | Resend 发送邮件（验证码、通知、PDF 邮件投递） | `[必需]` 上线前 | `npx wrangler secret put RESEND_API_KEY --env production` |
+| `SENTRY_DSN` | Sentry 错误上报 | `[推荐]` 接入 Sentry 时 | `npx wrangler secret put SENTRY_DSN --env production` |
+| `PADDLE_API_KEY` / `PADDLE_WEBHOOK_SECRET` | Paddle 支付 | `[必需]` 接入支付前 | 见 20.6 |
+
+> 不要把上面任何值写进文档、提交到 Git、或贴到聊天。所有 secret 仅通过 `wrangler secret put` 在本机交互输入。
+
+### 20.3 D1 备份与恢复 `[必需]`
+
+- 定期 export：使用 `npx wrangler d1 export eu-tax-saas-db --remote --output=backups/eu-tax-saas-db-YYYYMMDD.sql`，把导出文件放到安全的离线存储（不要进 Git）。
+- 建议至少每天一次 production 导出，重大 schema 迁移前手动导出一次。
+- 恢复演练：在 staging D1 上执行一次 `wrangler d1 execute eu-tax-saas-db --remote --file=backups/xxx.sql` 验证可用，避免真正故障时第一次才用。
+- 迁移注意：D1 schema 变更通过 `drizzle/migrations` 管理，应用前确认 migration 不会丢失列或破坏已有数据；回滚 Worker 代码不会自动回滚 D1 schema。
+
+### 20.4 R2 生命周期与对象治理 `[推荐]`
+
+- 在 Cloudflare Dashboard → R2 → `eu-tax-saas-pdfs` → **Object lifecycle** 配置规则。建议：
+  - `tmp/` 前缀：保留 7 天后自动删除（临时上传、未完成的解析任务）。
+  - `generated/` 前缀：根据业务保留期（例如 90 天或按计费方案）后归档或删除。
+  - 失败任务残留：用统一前缀（如 `failed/`）并设置较短保留期。
+- 大文件统一走 multipart upload；不要把 R2 当无限网盘，关注 Class A / Class B 操作次数（见 16 节）。
+
+### 20.5 CI/CD 与 GitHub Actions Token `[推荐]`
+
+15 节已说明手动准备 Cloudflare API token。落地 GitHub Actions 时补充：
+
+- Repository → Settings → Secrets and variables → Actions 中存放：
+  - `CLOUDFLARE_API_TOKEN`：最小权限（Workers Scripts Edit；如需 D1/KV/R2 操作再分别授权）。
+  - `CLOUDFLARE_ACCOUNT_ID`：非密钥，但同样建议放 Secrets。
+- workflow 中区分 staging / production job，只有 `main` 分支或带 release tag 才允许部署到 production。
+- D1 migrations 在部署 step 之前执行：`pnpm db:migrate:remote`（按 env 切换 wrangler 参数）。
+- 不要在 workflow 日志里 echo 任何 secret；token 一旦泄漏立即在 Dashboard 撤销并重建。
+
+### 20.6 Paddle Sandbox → Production 切换 `[必需]`
+
+接入支付按下面顺序，避免线上误扣或 webhook 静默失败：
+
+1. **Sandbox 阶段**：先在 Paddle Sandbox 注册产品、价格、Webhook endpoint（指向 staging Worker，例如 `https://staging.eu-tax-saas.com/api/webhooks/paddle`）。
+2. Secret 设置：
+   ```bash
+   npx wrangler secret put PADDLE_API_KEY --env staging
+   npx wrangler secret put PADDLE_WEBHOOK_SECRET --env staging
+   ```
+3. Webhook 测试：使用 Paddle Dashboard 的 “Send test event” 触发 `subscription.created` / `transaction.completed` 等事件，确认 staging Worker 200 响应且写入 D1。配合 `npx wrangler tail --env staging` 观察日志。
+4. 校验签名：webhook handler 必须用 `PADDLE_WEBHOOK_SECRET` 校验签名，不要只看请求来源 IP。
+5. **切到 Production**：在 Paddle 切换为 Live 模式，重新生成正式 API key 和 webhook secret，分别 `--env production` 写入；webhook URL 指向 `https://eu-tax-saas.com/api/webhooks/paddle`。
+6. 小额真实交易验证：用真实卡完成一笔最低价订单，确认订阅状态、发票、退款流程，再开放给用户。
+
+### 20.7 应急响应流程 `[必需]`
+
+线上出问题时按这个顺序，不要边查边猜：
+
+1. **判断影响面**：通过 Dashboard Logs / `wrangler tail` / AI Gateway 日志 / 用户反馈，确认是全量故障还是局部。
+2. **决定回滚 vs 修复**：
+   - 全量、关键路径（登录、支付、AI 核心）故障 → 立即 Dashboard → Worker → Deployments → Rollback 到上一个稳定版本。
+   - 局部、非关键问题 → 评估能否在 30 分钟内 hotfix，否则也回滚。
+3. **数据一致性检查**：回滚 Worker 不会回滚 D1 schema。如果故障期间已发生 schema 迁移，需要单独评估是否要手动修复数据或前向兼容。
+4. **对外沟通**：影响付费用户时，发布 status 公告（邮件 / 站内 / status page）。
+5. **事后复盘**：24 小时内写 post-mortem，记录 timeline、根因、改进项，并把改进项放进下一个 sprint。
+6. **支付侧特别注意**：Paddle webhook 重试机制存在，回滚或修复完成后检查未处理事件，避免漏单或重复入账。
+
+### 20.8 法律合规与同意管理 `[必需]`
+
+面向欧洲用户必须具备：
+
+- **Privacy Policy（隐私政策）**：明确数据收集范围、保留期、第三方处理者（Cloudflare / DeepSeek / Resend / Paddle 等）、用户权利（访问、删除、可携带）。
+- **Terms of Service（服务条款）**：服务边界、SLA（如有）、AI 输出免责声明（"非法律或税务专业意见，仅供参考"）、退款政策。
+- **Cookie / 同意管理**：欧洲 GDPR 要求严格意义上的明确同意（opt-in）。至少区分必要 cookie（登录 session）与分析/广告 cookie；分析类（如 PostHog）需要用户同意后再加载。
+- **数据处理协议（DPA）**：与 Cloudflare、DeepSeek、Resend、Paddle 等签署或确认其标准 DPA，公司主体在 EEA 外时还要关注 SCC（Standard Contractual Clauses）。
+- 上述法律文本建议律师 review，不要直接复制其他网站。
+
+### 20.9 端到端测试与 AI 验证 `[推荐]`
+
+- **E2E**：使用 Playwright 覆盖关键用户路径（注册/登录、上传 PDF、生成报告、订阅支付）。在 CI 中针对 staging 跑 smoke E2E；本地用 `pnpm test:e2e`（脚本接入后再补）。
+- **F4 / 幻觉验证**：RAG + AI 输出需要持续验证答案是否引用了正确的税法条款，避免幻觉对用户造成实际损失。建议建立：
+  - 一份固定的 evaluation set（典型问题 + 期望引用 + 期望结论方向）。
+  - 每次模型或 prompt 改动后跑一遍，回归对比。
+  - 生产抽样审查：定期人工抽查 AI Gateway 日志中的一部分回答。
+- 测试和评估通过前，不要把新模型/新 prompt 推到 production 默认路径。
+
+### 20.10 本节定位
+
+> 20.x 系列是**上线就绪补充项**，不属于"创建 Cloudflare 资源"这一基础范畴。1–19 节做完只能保证项目能跑起来，20.x 做完才能让项目以可观测、可恢复、可合规、可收款的状态正式对外。
+
