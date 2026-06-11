@@ -20,6 +20,11 @@
 arrive in W2-W6 per `docs/14-mvp-task-breakdown.md` and the matching AI Prompt library at
 `docs/15-ai-prompts/`.
 
+## Cloudflare setup
+
+如果你是从零开始配置 Cloudflare，先看中文总入口：`docs/CLOUDFLARE-SETUP-OVERVIEW.md`。
+它会按顺序带你完成 Cloudflare 账号、Wrangler 登录、D1、KV、R2、Queue、Vectorize、AI Gateway、secrets 和 `pnpm build` 验证。
+
 ## Quick start
 
 ```powershell

@@ -1,4 +1,5 @@
 name = "eu-tax-saas"
+# Cloudflare 从零资源创建顺序见 docs/CLOUDFLARE-SETUP-OVERVIEW.md
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
@@ -67,7 +68,7 @@ name = "eu-tax-saas-prod"
 ENVIRONMENT = "production"
 APP_URL = "https://eu-tax-saas.com"
 
-# Secrets (set via `wrangler secret put`):
+# Secrets (set via `wrangler secret put`; see docs/CLOUDFLARE-SETUP-OVERVIEW.md):
 # - BETTER_AUTH_SECRET (32+ char random string)
 # - PADDLE_API_KEY
 # - PADDLE_WEBHOOK_SECRET
