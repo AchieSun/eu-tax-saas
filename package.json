@@ -24,7 +24,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply eu-tax-saas-db --remote",
     "db:studio": "drizzle-kit studio",
     "extract:acroform": "tsx tools/extract-acroform-fields.ts",
-    "ingest:form-mappings": "tsx scripts/ingest-form-mappings.ts"
+    "ingest:form-mappings": "tsx scripts/ingest-form-mappings.ts",
+    "ingest:tax-law": "tsx scripts/ingest-tax-law.ts"
   },
   "dependencies": {
     "@solidjs/router": "^0.15.3",
@@ -46,6 +47,7 @@
     "drizzle-kit": "^0.30.2",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.1",
+    "tsx": "4.22.4",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "wrangler": "^3.103.1"
@@ -56,6 +58,8 @@
   },
   "packageManager": "pnpm@11.5.1",
   "lint-staged": {
-    "*.{ts,tsx,json}": ["biome check --write"]
+    "*.{ts,tsx,json}": [
+      "biome check --write"
+    ]
   }
 }
