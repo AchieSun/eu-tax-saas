@@ -204,3 +204,89 @@ unique index defined in `src/db/schema.ts`. Re-running:
 
 The row `id` is deterministic: `<country>-<year>-<form>-<fieldName>`.
 
+---
+
+# ingest-tax-law — F5 RAG seed crawler (W5-F5 Wave 1)
+
+Curated official tax-law crawler for the W5-F5 RAG knowledge base. It reads
+`data/tax-law-sources.yml`, fetches only allowlisted official sources, normalises
+HTML into plain text, chunks it deterministically, and emits JSONL files ready
+for the future Vectorize upsert wave.
+
+Wave 1 is **HTML-first**. PDF entries are intentionally skipped until the PDF
+parser/upsert wave lands.
+
+## Required environment for real crawls
+
+Real network crawls require a contact email so official sites can identify the
+bot operator:
+
+```bash
+export EU_TAX_SAAS_BOT_CONTACT="you@example.com"
+```
+
+PowerShell:
+
+```powershell
+$env:EU_TAX_SAAS_BOT_CONTACT = "you@example.com"
+```
+
+Dry-runs do not require this variable and do not make network calls.
+
+## Usage
+
+```bash
+# Dry-run first: schema-valid local JSONL, no network
+pnpm ingest:tax-law -- --dry-run --jurisdiction ES --limit 2
+
+# Emit dry-run chunks to stdout for inspection
+pnpm ingest:tax-law -- --dry-run --jurisdiction EU --limit 1 --out -
+
+# Real crawl of one source into data/tax-law-chunks/ES.jsonl
+pnpm ingest:tax-law -- --jurisdiction ES --limit 1 --out data/tax-law-chunks
+```
+
+## Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--jurisdiction ES\|PT\|UK\|NL\|DE\|EU\|ALL` | `ALL` | Filter manifest sources |
+| `--out <dir>` | `data/tax-law-chunks` | Output directory; use `-` for stdout |
+| `--manifest <path>` | `data/tax-law-sources.yml` | Override source manifest |
+| `--dry-run` | `false` | No network; writes one schema-valid stub chunk per source |
+| `--limit N` | unlimited | Limit number of selected sources |
+
+## Output schema
+
+Each JSONL line validates against `src/services/rag/types.ts` →
+`TaxLawChunkSchema`:
+
+```json
+{
+  "id": "sha256...",
+  "jurisdiction": "ES",
+  "sourceUrl": "https://www.boe.es/...",
+  "sourceTitle": "Ley 35/2006...",
+  "authority": "BOE",
+  "taxYear": 2025,
+  "topic": "irpf-personal-income-tax",
+  "lang": "es",
+  "chunkIndex": 0,
+  "charCount": 1234,
+  "text": "official source text",
+  "contentHash": "sha256...",
+  "fetchedAt": "2026-06-11T00:00:00.000Z",
+  "vector": null
+}
+```
+
+`vector: null` is intentional in Wave 1. Wave 2 will compute Workers AI BGE-M3
+embeddings and call `VECTORIZE.upsert()`.
+
+## Safety
+
+- Do not point this script at arbitrary URLs.
+- Only edit `data/tax-law-sources.yml` with public official government sources.
+- The runtime host allow-list lives in `src/services/rag/types.ts`.
+- No secrets are required for Wave 1 dry-runs.
+

@@ -22,6 +22,9 @@ wrangler.toml.local
 coverage/
 *.log
 
+# Generated RAG chunks (recreate with pnpm ingest:tax-law)
+data/tax-law-chunks/
+
 # IDE
 .vscode/
 .idea/
