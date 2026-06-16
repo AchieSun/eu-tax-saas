@@ -8,13 +8,13 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "eu-tax-saas-db"
-database_id = "REPLACE_WITH_D1_ID_AFTER_CREATE"
+database_id = "d9b652fc-0183-44ab-9f4f-c8e9b341b3fe"
 migrations_dir = "drizzle/migrations"
 
 # KV - Cache and rate limiter storage (Better Auth requires this)
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_ID_AFTER_CREATE"
+id = "1e407b97d4214ec38d93906f4643964f"
 
 # R2 - PDF storage (tax form templates + generated PDFs)
 [[r2_buckets]]
