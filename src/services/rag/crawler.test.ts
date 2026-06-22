@@ -120,11 +120,12 @@ describe('fetchSource', () => {
   });
 
   it('rejects unexpected content types', async () => {
-    const fetchFn = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        new Response('{"ok":true}', { headers: { 'content-type': 'application/json' }, status: 200 }),
-      );
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('{"ok":true}', {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      }),
+    );
     await expect(fetchSource(SAMPLE_SOURCE, fetchFn)).rejects.toThrow(/expected HTML/);
   });
 

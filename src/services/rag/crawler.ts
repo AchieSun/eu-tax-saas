@@ -224,7 +224,9 @@ function validateContentType(source: TaxLawSource, contentType: string): void {
   const normalized = contentType.toLowerCase();
   if (source.sourceType === 'html') {
     if (!normalized.includes('text/html') && !normalized.includes('application/xhtml+xml')) {
-      throw new CrawlerHttpError(`Fetch refused for ${source.url}: expected HTML, got ${contentType}`);
+      throw new CrawlerHttpError(
+        `Fetch refused for ${source.url}: expected HTML, got ${contentType}`,
+      );
     }
     return;
   }

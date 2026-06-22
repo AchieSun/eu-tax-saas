@@ -8,9 +8,9 @@
 import type { CalculatorInput, CalculatorResult } from './common/types';
 import { calculatorInputSchema } from './common/types';
 import { calculateDe } from './de/calculator';
+import { calculateEs } from './es/calculator';
 import { calculateNl } from './nl/calculator';
 import { calculatePt } from './pt/calculator';
-import { calculateEs } from './es/calculator';
 import { calculateUk } from './uk/calculator';
 
 export type AnyCalculatorResult =

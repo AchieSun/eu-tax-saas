@@ -13,9 +13,13 @@
  * Hono wiring lives in src/api/index.ts.
  */
 
+import type {
+  D1Database,
+  IncomingRequestCfProperties,
+  KVNamespace,
+} from '@cloudflare/workers-types';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import type { D1Database, IncomingRequestCfProperties, KVNamespace } from '@cloudflare/workers-types';
 import { createDb } from '../db';
 import * as schema from '../db/schema';
 
@@ -34,11 +38,7 @@ export interface AuthEnv {
  * @param cf — Request cf properties (geolocation). Optional.
  * @param baseURL — Origin derived from `new URL(request.url).origin`.
  */
-export function createAuth(
-  env?: AuthEnv,
-  _cf?: IncomingRequestCfProperties,
-  baseURL?: string,
-) {
+export function createAuth(env?: AuthEnv, _cf?: IncomingRequestCfProperties, baseURL?: string) {
   // Empty stub for CLI schema generation (`npx @better-auth/cli generate`)
   // biome-ignore lint/suspicious/noExplicitAny: stub object only
   const db = env ? createDb(env.DB) : ({} as any);

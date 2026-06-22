@@ -5,18 +5,18 @@
  * determineUkResidence threshold table.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  computeFamilyTie,
+  type SrtTiesAnswers,
+  arriverTiesRequired,
   computeAccommodationTie,
-  computeWorkTie,
-  computeNinetyDayTie,
   computeCountryTie,
+  computeFamilyTie,
+  computeNinetyDayTie,
   computeSrtTies,
+  computeWorkTie,
   determineUkResidence,
   leaverTiesRequired,
-  arriverTiesRequired,
-  type SrtTiesAnswers,
 } from './srt-ties';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -89,33 +89,47 @@ describe('computeWorkTie', () => {
 
 describe('computeNinetyDayTie', () => {
   it('returns true when prior year 1 has ≥91 days', () => {
-    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 91, ukDaysPriorYear2: 0 }))).toBe(true);
+    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 91, ukDaysPriorYear2: 0 }))).toBe(
+      true,
+    );
   });
 
   it('returns true when prior year 2 has ≥91 days (even if year 1 is 0)', () => {
-    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 0, ukDaysPriorYear2: 120 }))).toBe(true);
+    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 0, ukDaysPriorYear2: 120 }))).toBe(
+      true,
+    );
   });
 
   it('returns false when both prior years are <91', () => {
-    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 90, ukDaysPriorYear2: 90 }))).toBe(false);
+    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 90, ukDaysPriorYear2: 90 }))).toBe(
+      false,
+    );
   });
 
   it('returns false when both prior years are 0', () => {
-    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 0, ukDaysPriorYear2: 0 }))).toBe(false);
+    expect(computeNinetyDayTie(baseAnswers({ ukDaysPriorYear1: 0, ukDaysPriorYear2: 0 }))).toBe(
+      false,
+    );
   });
 });
 
 describe('computeCountryTie', () => {
   it('returns true for leaver with countryWithMostDays === "UK"', () => {
-    expect(computeCountryTie(baseAnswers({ isLeaver: true, countryWithMostDays: 'UK' }))).toBe(true);
+    expect(computeCountryTie(baseAnswers({ isLeaver: true, countryWithMostDays: 'UK' }))).toBe(
+      true,
+    );
   });
 
   it('returns false for leaver with countryWithMostDays !== "UK"', () => {
-    expect(computeCountryTie(baseAnswers({ isLeaver: true, countryWithMostDays: 'ES' }))).toBe(false);
+    expect(computeCountryTie(baseAnswers({ isLeaver: true, countryWithMostDays: 'ES' }))).toBe(
+      false,
+    );
   });
 
   it('returns null for arriver (not applicable)', () => {
-    expect(computeCountryTie(baseAnswers({ isLeaver: false, countryWithMostDays: 'UK' }))).toBe(null);
+    expect(computeCountryTie(baseAnswers({ isLeaver: false, countryWithMostDays: 'UK' }))).toBe(
+      null,
+    );
   });
 });
 
@@ -140,9 +154,7 @@ describe('computeSrtTies', () => {
   });
 
   it('family + work (40 days) → 2 ties', () => {
-    const result = computeSrtTies(
-      baseAnswers({ familyResidentInUk: true, ukWorkDays: 40 }),
-    );
+    const result = computeSrtTies(baseAnswers({ familyResidentInUk: true, ukWorkDays: 40 }));
     expect(result.count).toBe(2);
     expect(result.ties.family).toBe(true);
     expect(result.ties.work).toBe(true);

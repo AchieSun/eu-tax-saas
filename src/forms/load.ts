@@ -18,7 +18,7 @@
  */
 
 import { parse as parseYaml } from 'yaml';
-import { FormMappingSchema, type FormMapping } from './types';
+import { type FormMapping, FormMappingSchema } from './types';
 
 // `import.meta.glob` with `query: '?raw'` + `import: 'default'` returns each
 // matched file's raw string contents (eagerly, at module init).
@@ -49,11 +49,7 @@ export function parseFormMapping(yamlContent: string): FormMapping {
  * Returns `null` when no matching YAML is embedded. Throws if a matching
  * YAML exists but is malformed (fail loud — bad data must never reach D1).
  */
-export function loadFormMapping(
-  country: string,
-  year: number,
-  form: string,
-): FormMapping | null {
+export function loadFormMapping(country: string, year: number, form: string): FormMapping | null {
   const path = `./${country}/${year}/${form}.yml`;
   const content = yamlModules[path];
   if (!content) return null;
@@ -73,9 +69,7 @@ export function loadAllMappings(): FormMapping[] {
     try {
       results.push(parseFormMapping(content));
     } catch (e) {
-      throw new Error(
-        `Failed to parse ${path}: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      throw new Error(`Failed to parse ${path}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   return results;

@@ -6,8 +6,8 @@
  * auditLog insert without hitting real D1.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auditMiddleware } from './audit';
 
 // ── Module-level mocks ─────────────────────────────────────────────────────
@@ -50,7 +50,10 @@ beforeEach(() => {
 const mockEnv = { DB: {} as never };
 
 function createTestApp(session: unknown = null) {
-  const app = new Hono<{ Bindings: { DB: never }; Variables: { session?: { user: { id: string } } } }>();
+  const app = new Hono<{
+    Bindings: { DB: never };
+    Variables: { session?: { user: { id: string } } };
+  }>();
 
   // Session mock middleware (runs before audit)
   app.use('*', async (c, next) => {
@@ -85,18 +88,22 @@ describe('auditMiddleware', () => {
   it('writes audit row with inputHash for POST requests', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
-    const res = await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ foo: 'bar' }),
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foo: 'bar' }),
+      },
+      mockEnv,
+    );
 
     expect(res.status).toBe(200);
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.method).toBe('POST');
-    expect(lastAuditValues!.inputHash).toBeTruthy();
-    expect(typeof lastAuditValues!.inputHash).toBe('string');
-    expect((lastAuditValues!.inputHash as string).length).toBe(64); // SHA-256 hex
+    expect(lastAuditValues?.method).toBe('POST');
+    expect(lastAuditValues?.inputHash).toBeTruthy();
+    expect(typeof lastAuditValues?.inputHash).toBe('string');
+    expect((lastAuditValues?.inputHash as string).length).toBe(64); // SHA-256 hex
   });
 
   it('GET requests skip audit entirely (no D1 row written)', async () => {
@@ -111,100 +118,128 @@ describe('auditMiddleware', () => {
   it('sets userIdOrNull to null for anonymous requests', async () => {
     const app = createTestApp(null); // no session
 
-    await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x: 1 }),
-    }, mockEnv);
+    await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: 1 }),
+      },
+      mockEnv,
+    );
 
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.userIdOrNull).toBeNull();
+    expect(lastAuditValues?.userIdOrNull).toBeNull();
   });
 
   it('sets userIdOrNull from session for authenticated requests', async () => {
     const app = createTestApp({ user: { id: 'user-42' } });
 
-    await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x: 1 }),
-    }, mockEnv);
+    await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: 1 }),
+      },
+      mockEnv,
+    );
 
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.userIdOrNull).toBe('user-42');
+    expect(lastAuditValues?.userIdOrNull).toBe('user-42');
   });
 
   it('writes audit row with statusCode 5xx when handler throws', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
-    const res = await app.request('/api/test/error', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trigger: 'error' }),
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/error',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'error' }),
+      },
+      mockEnv,
+    );
 
     expect(res.status).toBe(500);
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.statusCode).toBe(500);
+    expect(lastAuditValues?.statusCode).toBe(500);
   });
 
   it('handles large body (>64KB) without crashing', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const largeBody = 'x'.repeat(70_000); // ~70 KB
 
-    const res = await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: largeBody }),
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: largeBody }),
+      },
+      mockEnv,
+    );
 
     expect(res.status).toBe(200);
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.inputHash).toBeTruthy();
-    expect((lastAuditValues!.inputHash as string).length).toBe(64);
+    expect(lastAuditValues?.inputHash).toBeTruthy();
+    expect((lastAuditValues?.inputHash as string).length).toBe(64);
   });
 
   it('records correct route and method metadata (POST)', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
-    await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x: 1 }),
-    }, mockEnv);
-    expect(lastAuditValues!.route).toBe('/api/test/echo');
-    expect(lastAuditValues!.method).toBe('POST');
-    expect(lastAuditValues!.source).toBe('api');
+    await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: 1 }),
+      },
+      mockEnv,
+    );
+    expect(lastAuditValues?.route).toBe('/api/test/echo');
+    expect(lastAuditValues?.method).toBe('POST');
+    expect(lastAuditValues?.source).toBe('api');
   });
 
   it('oversized body (Content-Length > 1MB) sets inputHash to "oversized" without reading full body', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
 
-    const res = await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': '2000000' },
-      body: JSON.stringify({ small: 'payload' }),
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': '2000000' },
+        body: JSON.stringify({ small: 'payload' }),
+      },
+      mockEnv,
+    );
 
     expect(res.status).toBe(200);
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.inputHash).toBe('oversized');
+    expect(lastAuditValues?.inputHash).toBe('oversized');
   });
 
   it('100KB body with 64KB cap: only hashes first 64KB, no crash', async () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const body = JSON.stringify({ data: 'x'.repeat(100 * 1024) });
 
-    const res = await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      },
+      mockEnv,
+    );
 
     expect(res.status).toBe(200);
     expect(lastAuditValues).not.toBeNull();
-    expect(lastAuditValues!.inputHash).toBeTruthy();
-    expect((lastAuditValues!.inputHash as string).length).toBe(64);
+    expect(lastAuditValues?.inputHash).toBeTruthy();
+    expect((lastAuditValues?.inputHash as string).length).toBe(64);
 
     // Verify it's the hash of only the first 64KB
     const encoder = new TextEncoder();
@@ -213,7 +248,7 @@ describe('auditMiddleware', () => {
     const expectedHex = [...new Uint8Array(expectedHash)]
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    expect(lastAuditValues!.inputHash).toBe(expectedHex);
+    expect(lastAuditValues?.inputHash).toBe(expectedHex);
   });
 
   // ── Oracle P1-NEW-1 (W5-A followup) ────────────────────────────────
@@ -223,11 +258,15 @@ describe('auditMiddleware', () => {
     // body is at least MAX_HASH_BYTES + change. JSON.stringify adds ~12
     // bytes of envelope which is fine — we assert against the slice.
     const largeValue = 'y'.repeat(100 * 1024);
-    const res = await app.request('/api/test/echo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: largeValue }),
-    }, mockEnv);
+    const res = await app.request(
+      '/api/test/echo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: largeValue }),
+      },
+      mockEnv,
+    );
     expect(res.status).toBe(200);
 
     // Re-derive the exact bytes hono returned to verify the slice.
@@ -244,14 +283,14 @@ describe('auditMiddleware', () => {
       .join('');
 
     // Audit middleware must have hashed only the slice, not the full body.
-    expect(lastAuditValues!.resultHash).toBe(expectedHex);
+    expect(lastAuditValues?.resultHash).toBe(expectedHex);
 
     // Defensive: confirm full-body hash is NOT what got recorded.
     const fullDigest = await crypto.subtle.digest('SHA-256', fullBuf);
     const fullHex = [...new Uint8Array(fullDigest)]
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    expect(lastAuditValues!.resultHash).not.toBe(fullHex);
+    expect(lastAuditValues?.resultHash).not.toBe(fullHex);
   });
 
   // ── Oracle P1-NEW-2 (W5-A followup) ────────────────────────────────

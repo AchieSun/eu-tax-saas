@@ -20,23 +20,17 @@
 
 import {
   type Component,
+  For,
+  Show,
   createMemo,
   createResource,
   createSignal,
-  For,
   onCleanup,
-  Show,
 } from 'solid-js';
 import CountryPalette from './calendar/CountryPalette';
 import MonthGrid, { type PaintMap } from './calendar/MonthGrid';
 import { bulkSaveDays, deleteDay, fetchDays } from './calendar/api';
-import {
-  COUNTRIES,
-  COUNTRY_META,
-  type Country,
-  ERASE,
-  type PaintTool,
-} from './calendar/types';
+import { COUNTRIES, COUNTRY_META, type Country, ERASE, type PaintTool } from './calendar/types';
 
 // ── Date helpers (local-timezone YYYY-MM-DD, no UTC drift) ───────────────────
 
@@ -64,8 +58,18 @@ function daysInMonth(d: Date): number {
 }
 
 const MONTH_LABELS_ZH = [
-  '一月', '二月', '三月', '四月', '五月', '六月',
-  '七月', '八月', '九月', '十月', '十一月', '十二月',
+  '一月',
+  '二月',
+  '三月',
+  '四月',
+  '五月',
+  '六月',
+  '七月',
+  '八月',
+  '九月',
+  '十月',
+  '十一月',
+  '十二月',
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -181,7 +185,12 @@ const CalendarView: Component = () => {
     const anchor = monthAnchor();
     const n = daysInMonth(anchor);
     const counts: Record<Country, number> = {
-      DE: 0, NL: 0, PT: 0, ES: 0, UK: 0, OTHER: 0,
+      DE: 0,
+      NL: 0,
+      PT: 0,
+      ES: 0,
+      UK: 0,
+      OTHER: 0,
     };
     const pending = pendingChanges();
     const server = serverDays();
@@ -234,8 +243,8 @@ const CalendarView: Component = () => {
       <header class="cal-hero">
         <h1 class="cal-h1">居留日历 · 标记每日所在国家</h1>
         <p class="cal-sub">
-          按下并拖动鼠标，把多个日期一次性标记为同一国家。本表是 F2 居留判定与
-          183 天计算的<strong>唯一原始输入</strong>。
+          按下并拖动鼠标，把多个日期一次性标记为同一国家。本表是 F2 居留判定与 183 天计算的
+          <strong>唯一原始输入</strong>。
         </p>
       </header>
 
@@ -314,11 +323,7 @@ const CalendarView: Component = () => {
               ? (savingState() as { kind: 'error'; message: string }).message
               : ''}
           </span>
-          <button
-            type="button"
-            class="cal-btn cal-btn-ghost"
-            onClick={() => void onSave()}
-          >
+          <button type="button" class="cal-btn cal-btn-ghost" onClick={() => void onSave()}>
             重试
           </button>
         </div>
@@ -409,7 +414,14 @@ const CalendarView: Component = () => {
         </section>
       </Show>
 
-      <Show when={!isUnauthorized() && markedInMonth() === 0 && pendingChanges().size === 0 && !daysResource.loading}>
+      <Show
+        when={
+          !isUnauthorized() &&
+          markedInMonth() === 0 &&
+          pendingChanges().size === 0 &&
+          !daysResource.loading
+        }
+      >
         <p class="cal-empty">尚未标记任何日 —— 点选上方画笔，拖动日期格开始。</p>
       </Show>
 

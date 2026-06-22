@@ -10,19 +10,19 @@
  * column population.
  */
 
-import { describe, it, expect } from 'vitest';
-import {
-  generateIngestSql,
-  generateIngestSqlWithVersions,
-  emitVersionInsert,
-  emitVersionIdUpdate,
-  mappingToSql,
-  sqlEscape,
-  sqlValue,
-  parseCliArgs,
-} from './ingest-form-mappings';
+import { describe, expect, it } from 'vitest';
 import { canonicalJSONHash } from '../src/forms/hash';
 import type { FormMapping } from '../src/forms/types';
+import {
+  emitVersionIdUpdate,
+  emitVersionInsert,
+  generateIngestSql,
+  generateIngestSqlWithVersions,
+  mappingToSql,
+  parseCliArgs,
+  sqlEscape,
+  sqlValue,
+} from './ingest-form-mappings';
 
 // ─── Fixture ────────────────────────────────────────────────────────────────
 
@@ -232,7 +232,7 @@ describe('parseCliArgs', () => {
   it('parses --out as an absolute path', () => {
     const opts = parseCliArgs(['--out', 'forms.sql'], '/repo/app/scripts');
     expect(opts.outPath).not.toBeNull();
-    expect(opts.outPath!.endsWith('forms.sql')).toBe(true);
+    expect(opts.outPath?.endsWith('forms.sql')).toBe(true);
   });
 
   it('throws when --out has no value or another flag follows', () => {

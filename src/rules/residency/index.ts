@@ -24,8 +24,8 @@
  *   - Treaty residency overrides outside the OECD Model (UN Model, bilateral protocols)
  */
 
-import { srtTest, type SrtInput } from '../uk/calculator';
 import type { Country } from '../common/types';
+import { type SrtInput, srtTest } from '../uk/calculator';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Public types
@@ -360,9 +360,7 @@ function assessUk(input: ResidencyInput): ResidencyResult {
   const ties = input.srtTiesCount ?? input.srt?.ties ?? 0;
 
   if (input.srtTiesCount === undefined && input.srt?.ties === undefined) {
-    warnings.push(
-      'UK判定基于假设ties=0 — 请调用 POST /api/residency/uk-srt-ties 获取准确ties。',
-    );
+    warnings.push('UK判定基于假设ties=0 — 请调用 POST /api/residency/uk-srt-ties 获取准确ties。');
   }
 
   const srtInput: SrtInput = {
@@ -371,7 +369,7 @@ function assessUk(input: ResidencyInput): ResidencyResult {
     ties,
     fullTimeWorkOverseas: input.srt?.fullTimeWorkOverseas ?? false,
     daysWorkingInUk: input.srt?.daysWorkingInUk ?? 0,
-    hasUkHome91Days: input.srt?.hasUkHome91Days ?? (input.hasPermanentHome === true),
+    hasUkHome91Days: input.srt?.hasUkHome91Days ?? input.hasPermanentHome === true,
     presentInUkHome30Days: input.srt?.presentInUkHome30Days ?? false,
     noOverseasHomeOrLittlePresent: input.srt?.noOverseasHomeOrLittlePresent ?? false,
     fullTimeUkWork365: input.srt?.fullTimeUkWork365 ?? false,

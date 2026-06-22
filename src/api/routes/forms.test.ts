@@ -1552,7 +1552,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(transformFailed).toBeTruthy();
     expect(transformFailed?.fieldName).toBe('txt_first_name');
     expect(transformFailed?.dataPath).toBe('user.firstName');
-    expect(transformFailed?.detail).toContain("definitely-not-a-real-transform-id");
+    expect(transformFailed?.detail).toContain('definitely-not-a-real-transform-id');
   }, 20000);
 
   // ── Oracle P1-NEW-6 (W5-A followup): X-Render-Warning-Detail byte cap ──

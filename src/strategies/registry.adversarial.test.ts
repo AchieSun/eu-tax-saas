@@ -43,12 +43,12 @@ describe('Forbidden regimes (G2 anti-hallucination)', () => {
   it('does NOT describe NL 30/20/10 sliding scale as ACTIVE (reverted to flat 30% in 2025)', () => {
     const nl30 = STRATEGIES.find((s) => s.id === 'nl.30percent');
     expect(nl30).toBeDefined();
-    const text = `${nl30!.titleZh} ${nl30!.descriptionZh}`;
+    const text = `${nl30?.titleZh} ${nl30?.descriptionZh}`;
     // The descriptionZh MAY mention 30/20/10 to explain that it was reverted
     // (that is a historically correct note). What it MUST NOT do is describe
     // 30/20/10 as the active rule. The titleZh — which is the short, active
     // claim — must contain neither "30/20/10" nor sliding/階梯/滑梯 language.
-    expect(nl30!.titleZh).not.toMatch(/30\/20\/10|sliding|滑梯|阶梯/i);
+    expect(nl30?.titleZh).not.toMatch(/30\/20\/10|sliding|滑梯|阶梯/i);
     // And the descriptionZh, if it mentions 30/20/10 at all, must do so in a
     // reverted/cancelled context (取消|撤销|reverted|cancelled|abolished).
     if (/30\/20\/10/.test(text)) {
@@ -59,7 +59,7 @@ describe('Forbidden regimes (G2 anti-hallucination)', () => {
   it('Beckham strategy uses ≤ 6 tax years (5+1), NEVER 10 years', () => {
     const beckham = STRATEGIES.find((s) => s.id === 'es.beckham');
     expect(beckham).toBeDefined();
-    expect(beckham!.eligibility.taxYears.length).toBeGreaterThanOrEqual(1);
-    expect(beckham!.eligibility.taxYears.length).toBeLessThanOrEqual(6);
+    expect(beckham?.eligibility.taxYears.length).toBeGreaterThanOrEqual(1);
+    expect(beckham?.eligibility.taxYears.length).toBeLessThanOrEqual(6);
   });
 });

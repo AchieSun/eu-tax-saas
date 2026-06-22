@@ -3,8 +3,8 @@
  * Covers ES / PT / DE / NL / UK + OECD Model Tax Convention art. 4 tiebreaker.
  */
 
-import { describe, it, expect } from 'vitest';
-import { assessResidency, assessAllCountries, type ResidencyInput } from './index';
+import { describe, expect, it } from 'vitest';
+import { type ResidencyInput, assessAllCountries, assessResidency } from './index';
 
 describe('F2 Residency — ES', () => {
   const esBase = (o: Partial<ResidencyInput> = {}): ResidencyInput => ({
@@ -34,9 +34,9 @@ describe('F2 Residency — ES', () => {
   });
 
   it('spouse+children in ES → resident', () => {
-    expect(
-      assessResidency(esBase({ daysInCountry: 50, spouseChildrenIn: 'ES' })).isResident,
-    ).toBe(true);
+    expect(assessResidency(esBase({ daysInCountry: 50, spouseChildrenIn: 'ES' })).isResident).toBe(
+      true,
+    );
   });
 
   it('nothing → not resident high confidence', () => {
@@ -68,9 +68,9 @@ describe('F2 Residency — PT', () => {
   });
 
   it('100 days + permanent home → resident', () => {
-    expect(
-      assessResidency(ptBase({ daysInCountry: 100, hasPermanentHome: true })).isResident,
-    ).toBe(true);
+    expect(assessResidency(ptBase({ daysInCountry: 100, hasPermanentHome: true })).isResident).toBe(
+      true,
+    );
   });
 
   it('30 days, no home → not resident', () => {
@@ -78,9 +78,9 @@ describe('F2 Residency — PT', () => {
   });
 
   it('0 days, permanent home → not resident (needs some presence)', () => {
-    expect(
-      assessResidency(ptBase({ daysInCountry: 0, hasPermanentHome: true })).isResident,
-    ).toBe(false);
+    expect(assessResidency(ptBase({ daysInCountry: 0, hasPermanentHome: true })).isResident).toBe(
+      false,
+    );
   });
 
   it('applied rule cited', () => {
@@ -102,9 +102,9 @@ describe('F2 Residency — DE', () => {
   });
 
   it('Wohnsitz (permanent home + any presence) → resident', () => {
-    expect(
-      assessResidency(deBase({ daysInCountry: 10, hasPermanentHome: true })).isResident,
-    ).toBe(true);
+    expect(assessResidency(deBase({ daysInCountry: 10, hasPermanentHome: true })).isResident).toBe(
+      true,
+    );
   });
 
   it('200 days no home → resident via gewöhnlicher aufenthalt', () => {
@@ -112,9 +112,9 @@ describe('F2 Residency — DE', () => {
   });
 
   it('0 days + permanent home → not resident', () => {
-    expect(
-      assessResidency(deBase({ daysInCountry: 0, hasPermanentHome: true })).isResident,
-    ).toBe(false);
+    expect(assessResidency(deBase({ daysInCountry: 0, hasPermanentHome: true })).isResident).toBe(
+      false,
+    );
   });
 
   it('30 days no home → not resident', () => {
@@ -122,9 +122,9 @@ describe('F2 Residency — DE', () => {
   });
 
   it('Wohnsitz confidence high', () => {
-    expect(
-      assessResidency(deBase({ daysInCountry: 10, hasPermanentHome: true })).confidence,
-    ).toBe('high');
+    expect(assessResidency(deBase({ daysInCountry: 10, hasPermanentHome: true })).confidence).toBe(
+      'high',
+    );
   });
 });
 
@@ -201,9 +201,7 @@ describe('F2 Residency — UK (SRT)', () => {
   });
 
   it('60 days arriver + 4 ties → resident', () => {
-    expect(
-      assessResidency(ukBase({ daysInCountry: 60, srt: { ties: 4 } })).isResident,
-    ).toBe(true);
+    expect(assessResidency(ukBase({ daysInCountry: 60, srt: { ties: 4 } })).isResident).toBe(true);
   });
 
   it('60 days leaver + 1 tie → not resident', () => {

@@ -54,10 +54,10 @@ describe('nl.hypotheekrente', () => {
     const result = STRATEGY.evaluate(NL_SALARY, baseline);
     expect(result.assumptions).toBeDefined();
     expect(result.assumptions).toHaveLength(1);
-    expect(result.assumptions![0]).toMatchObject({
+    expect(result.assumptions?.[0]).toMatchObject({
       field: 'annualMortgageInterestEur',
       defaultValue: 5000,
     });
-    expect(result.assumptions![0].rationale).toMatch(/CBS|mortgage|median/);
+    expect(result.assumptions?.[0].rationale).toMatch(/CBS|mortgage|median/);
   });
 });

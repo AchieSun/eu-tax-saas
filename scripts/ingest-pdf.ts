@@ -8,8 +8,8 @@
  * Requires env vars: CF_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
  */
 
-import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -41,11 +41,11 @@ export function extractPageCount(pdfBuf: Buffer): number {
 
   // Try the standard /Type /Pages ... /Count N pattern first
   // This matches the Pages dictionary which contains the total page count
-  const m = txt.match(/\/Type\s*\/Pages[^]*?\/Count\s+(\d+)/);
-  if (m) return parseInt(m[1], 10);
+  const m = txt.match(/\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/);
+  if (m) return Number.parseInt(m[1], 10);
 
   // Fallback: take the max of all /Count values found in the file
-  const allCounts = [...txt.matchAll(/\/Count\s+(\d+)/g)].map((x) => parseInt(x[1], 10));
+  const allCounts = [...txt.matchAll(/\/Count\s+(\d+)/g)].map((x) => Number.parseInt(x[1], 10));
   return allCounts.length > 0 ? Math.max(...allCounts) : 1;
 }
 
@@ -126,13 +126,13 @@ export function generateRegisterSql(args: IngestArgs, meta: PdfMetadata): string
   const esc = (s: string) => s.replace(/'/g, "''");
 
   return [
-    `INSERT INTO form_field_mappings (id, country, form_type, tax_year, field_name, pdf_r2_key, pdf_sha256, page_count, created_at)`,
+    'INSERT INTO form_field_mappings (id, country, form_type, tax_year, field_name, pdf_r2_key, pdf_sha256, page_count, created_at)',
     `VALUES ('${esc(id)}', '${esc(args.country)}', '${esc(args.form)}', ${args.year}, '__pdf__', '${esc(meta.r2Key)}', '${esc(meta.sha256)}', ${meta.pageCount}, ${createdAt})`,
-    `ON CONFLICT (country, form_type, tax_year, field_name) DO UPDATE SET`,
-    `  pdf_r2_key = excluded.pdf_r2_key,`,
-    `  pdf_sha256 = excluded.pdf_sha256,`,
-    `  page_count = excluded.page_count,`,
-    `  deleted_at = NULL;`,
+    'ON CONFLICT (country, form_type, tax_year, field_name) DO UPDATE SET',
+    '  pdf_r2_key = excluded.pdf_r2_key,',
+    '  pdf_sha256 = excluded.pdf_sha256,',
+    '  page_count = excluded.page_count,',
+    '  deleted_at = NULL;',
   ].join('\n');
 }
 
@@ -185,7 +185,7 @@ export function parseCliArgs(args: string[]): CliArgs {
   };
 
   const country = get('country');
-  const year = parseInt(get('year', '0')!, 10);
+  const year = Number.parseInt(get('year', '0')!, 10);
   const form = get('form');
   const pdfPath = get('pdf');
   const dryRun = args.includes('--dry-run');

@@ -26,12 +26,12 @@
  * in depth is cheap.
  */
 
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { parseFormMapping } from '../src/forms/load';
 import { canonicalJSONHash } from '../src/forms/hash';
+import { parseFormMapping } from '../src/forms/load';
 import type { FormMapping } from '../src/forms/types';
 
 // ─── SQL value helpers ──────────────────────────────────────────────────────
@@ -125,24 +125,7 @@ export function mappingToSql(mapping: FormMapping): string[] {
     const id = `${mapping.country}-${mapping.year}-${mapping.form}-${fieldName}`;
 
     lines.push(
-      `INSERT INTO form_field_mappings ` +
-        `(id, country, form_type, tax_year, field_name, data_path, field_type, ` +
-        `page_number, x_coord, y_coord, font_size, field_kind, transform, deleted_at) ` +
-        `VALUES (` +
-        `${sqlEscape(id)}, ${sqlEscape(mapping.country)}, ${sqlEscape(mapping.form)}, ` +
-        `${mapping.year}, ${sqlEscape(fieldName)}, ${sqlEscape(dataPath)}, ${sqlEscape(fieldType)}, ` +
-        `${pageNumber}, ${xCoord}, ${yCoord}, ${fontSize}, ${sqlEscape(field.kind)}, ${transform}, NULL` +
-        `) ` +
-        `ON CONFLICT(country, form_type, tax_year, field_name) DO UPDATE SET ` +
-        `data_path = excluded.data_path, ` +
-        `field_type = excluded.field_type, ` +
-        `page_number = excluded.page_number, ` +
-        `x_coord = excluded.x_coord, ` +
-        `y_coord = excluded.y_coord, ` +
-        `font_size = excluded.font_size, ` +
-        `field_kind = excluded.field_kind, ` +
-        `transform = excluded.transform, ` +
-        `deleted_at = NULL;`,
+      `INSERT INTO form_field_mappings (id, country, form_type, tax_year, field_name, data_path, field_type, page_number, x_coord, y_coord, font_size, field_kind, transform, deleted_at) VALUES (${sqlEscape(id)}, ${sqlEscape(mapping.country)}, ${sqlEscape(mapping.form)}, ${mapping.year}, ${sqlEscape(fieldName)}, ${sqlEscape(dataPath)}, ${sqlEscape(fieldType)}, ${pageNumber}, ${xCoord}, ${yCoord}, ${fontSize}, ${sqlEscape(field.kind)}, ${transform}, NULL) ON CONFLICT(country, form_type, tax_year, field_name) DO UPDATE SET data_path = excluded.data_path, field_type = excluded.field_type, page_number = excluded.page_number, x_coord = excluded.x_coord, y_coord = excluded.y_coord, font_size = excluded.font_size, field_kind = excluded.field_kind, transform = excluded.transform, deleted_at = NULL;`,
     );
   }
   return lines;
@@ -214,21 +197,7 @@ export function emitVersionInsert(
   // SQLite trick: INSERT ... SELECT ... WHERE NOT EXISTS lets us bake the
   // "skip if latest hash matches" guard into a single statement, so the
   // emitted script stays connection-free.
-  return (
-    `INSERT INTO form_mapping_versions ` +
-    `(country, form_type, tax_year, version, content_hash, created_at) ` +
-    `SELECT ${country}, ${formType}, ${taxYear}, ` +
-    `COALESCE((SELECT MAX(version) FROM form_mapping_versions ` +
-    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear}), 0) + 1, ` +
-    `${hash}, ${nowMs} ` +
-    `WHERE NOT EXISTS (` +
-    `SELECT 1 FROM form_mapping_versions ` +
-    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
-    `AND content_hash = ${hash} ` +
-    `AND version = (SELECT MAX(version) FROM form_mapping_versions ` +
-    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear})` +
-    `);`
-  );
+  return `INSERT INTO form_mapping_versions (country, form_type, tax_year, version, content_hash, created_at) SELECT ${country}, ${formType}, ${taxYear}, COALESCE((SELECT MAX(version) FROM form_mapping_versions WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear}), 0) + 1, ${hash}, ${nowMs} WHERE NOT EXISTS (SELECT 1 FROM form_mapping_versions WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} AND content_hash = ${hash} AND version = (SELECT MAX(version) FROM form_mapping_versions WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear}));`;
 }
 
 /**
@@ -248,15 +217,7 @@ export function emitVersionIdUpdate(mapping: FormMapping): string {
   const country = sqlEscape(mapping.country);
   const formType = sqlEscape(mapping.form);
   const taxYear = mapping.year;
-  return (
-    `UPDATE form_field_mappings SET version_id = (` +
-    `SELECT id FROM form_mapping_versions ` +
-    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
-    `ORDER BY version DESC LIMIT 1` +
-    `) ` +
-    `WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ` +
-    `AND deleted_at IS NULL;`
-  );
+  return `UPDATE form_field_mappings SET version_id = (SELECT id FROM form_mapping_versions WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} ORDER BY version DESC LIMIT 1) WHERE country = ${country} AND form_type = ${formType} AND tax_year = ${taxYear} AND deleted_at IS NULL;`;
 }
 
 /**

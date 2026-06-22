@@ -5,8 +5,8 @@
  * Does NOT test against real government PDFs (those are integration tests).
  */
 
-import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
+import { describe, expect, it } from 'vitest';
 import { extractAcroFormFields, fieldsToYaml } from './extract-acroform-fields';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────

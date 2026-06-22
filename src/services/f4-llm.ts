@@ -71,8 +71,8 @@ function resolveTokenPricing(env: Bindings): {
   inputUsdPerMillion: number;
   outputUsdPerMillion: number;
 } {
-  const input = parseFloat(env.DEEPSEEK_COST_INPUT_USD_PER_M ?? '');
-  const output = parseFloat(env.DEEPSEEK_COST_OUTPUT_USD_PER_M ?? '');
+  const input = Number.parseFloat(env.DEEPSEEK_COST_INPUT_USD_PER_M ?? '');
+  const output = Number.parseFloat(env.DEEPSEEK_COST_OUTPUT_USD_PER_M ?? '');
   return {
     inputUsdPerMillion: Number.isFinite(input) && input >= 0 ? input : 0.27,
     outputUsdPerMillion: Number.isFinite(output) && output >= 0 ? output : 1.1,
@@ -528,8 +528,7 @@ export async function applyH6SelfCheck(
     selfCheckModel === primaryModelEcho
   ) {
     warnings.push(
-      `H6 model-identity warning: self-check resolved to "${selfCheckModel}" (same as primary chat). ` +
-        `Independent-reviewer assumption weakened; treat audit verdicts as soft signal.`,
+      `H6 model-identity warning: self-check resolved to "${selfCheckModel}" (same as primary chat). Independent-reviewer assumption weakened; treat audit verdicts as soft signal.`,
     );
   }
 
@@ -771,7 +770,10 @@ export async function recommendStrategies(
       usage: {
         promptTokens,
         completionTokens,
-        cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }, pricing),
+        cost: computeCost(
+          { prompt_tokens: promptTokens, completion_tokens: completionTokens },
+          pricing,
+        ),
       },
     };
   }
@@ -794,7 +796,10 @@ export async function recommendStrategies(
         usage: {
           promptTokens,
           completionTokens,
-          cost: computeCost({ prompt_tokens: promptTokens, completion_tokens: completionTokens }, pricing),
+          cost: computeCost(
+            { prompt_tokens: promptTokens, completion_tokens: completionTokens },
+            pricing,
+          ),
         },
       };
     }

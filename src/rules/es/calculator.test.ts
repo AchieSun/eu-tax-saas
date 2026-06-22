@@ -3,9 +3,9 @@
  * Verifies estatal + autonómico (MAD/CAT/VAL/AND) and Beckham regime.
  */
 
-import { describe, it, expect } from 'vitest';
-import { calculateEs } from './calculator';
+import { describe, expect, it } from 'vitest';
 import type { CalculatorInput } from '../common/types';
+import { calculateEs } from './calculator';
 
 describe('ES IRPF 2025', () => {
   const base = (overrides: Partial<CalculatorInput> = {}): CalculatorInput => ({

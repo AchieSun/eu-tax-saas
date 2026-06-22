@@ -6,16 +6,16 @@
  * Does NOT test real R2/D1 uploads.
  */
 
-import { describe, it, expect, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
 
 // Import functions under test
 import {
-  extractPageCount,
   extractMetadata,
+  extractPageCount,
   generateRegisterSql,
-  parseCliArgs,
   ingest,
+  parseCliArgs,
 } from './ingest-pdf';
 import type { IngestArgs, PdfMetadata } from './ingest-pdf';
 
@@ -156,7 +156,13 @@ describe('dry-run mode', () => {
 
 describe('generateRegisterSql', () => {
   it('generates valid SQL with correct values', () => {
-    const args: IngestArgs = { country: 'PT', year: 2024, form: 'modelo3', pdfPath: '/x.pdf', dryRun: false };
+    const args: IngestArgs = {
+      country: 'PT',
+      year: 2024,
+      form: 'modelo3',
+      pdfPath: '/x.pdf',
+      dryRun: false,
+    };
     const meta: PdfMetadata = {
       sha256: 'abc123',
       r2Key: 'tax-forms/PT/2024/modelo3.pdf',
@@ -178,7 +184,13 @@ describe('generateRegisterSql', () => {
   });
 
   it('includes deleted_at = NULL to undelete on re-ingest', () => {
-    const args: IngestArgs = { country: 'DE', year: 2024, form: 'mantelbogen', pdfPath: '/x.pdf', dryRun: false };
+    const args: IngestArgs = {
+      country: 'DE',
+      year: 2024,
+      form: 'mantelbogen',
+      pdfPath: '/x.pdf',
+      dryRun: false,
+    };
     const meta: PdfMetadata = {
       sha256: 'abc',
       r2Key: 'tax-forms/DE/2024/mantelbogen.pdf',
@@ -192,7 +204,13 @@ describe('generateRegisterSql', () => {
   });
 
   it('escapes single quotes in values', () => {
-    const args: IngestArgs = { country: "D'E", year: 2024, form: "mantel'bogen", pdfPath: '/x.pdf', dryRun: false };
+    const args: IngestArgs = {
+      country: "D'E",
+      year: 2024,
+      form: "mantel'bogen",
+      pdfPath: '/x.pdf',
+      dryRun: false,
+    };
     const meta: PdfMetadata = {
       sha256: "sha'256",
       r2Key: "tax-forms/D'E/2024/mantel'bogen.pdf",
@@ -212,10 +230,14 @@ describe('generateRegisterSql', () => {
 describe('parseCliArgs', () => {
   it('parses valid arguments correctly', () => {
     const result = parseCliArgs([
-      '--country', 'DE',
-      '--year', '2024',
-      '--form', 'mantelbogen',
-      '--pdf', './samples/de.pdf',
+      '--country',
+      'DE',
+      '--year',
+      '2024',
+      '--form',
+      'mantelbogen',
+      '--pdf',
+      './samples/de.pdf',
       '--dry-run',
     ]);
 
@@ -228,10 +250,14 @@ describe('parseCliArgs', () => {
 
   it('sets dryRun to false when flag is absent', () => {
     const result = parseCliArgs([
-      '--country', 'NL',
-      '--year', '2024',
-      '--form', 'aangifte',
-      '--pdf', './samples/nl.pdf',
+      '--country',
+      'NL',
+      '--year',
+      '2024',
+      '--form',
+      'aangifte',
+      '--pdf',
+      './samples/nl.pdf',
     ]);
 
     expect(result.dryRun).toBe(false);

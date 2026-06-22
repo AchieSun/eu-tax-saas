@@ -11,12 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  loadAllMappings,
-  loadFixtureMappings,
-  loadFormMapping,
-  parseFormMapping,
-} from './load';
+import { loadAllMappings, loadFixtureMappings, loadFormMapping, parseFormMapping } from './load';
 import { FormMappingSchema } from './types';
 
 describe('FormMapping YAML loader (W4 T1.1)', () => {
@@ -34,9 +29,7 @@ describe('FormMapping YAML loader (W4 T1.1)', () => {
   it('rejects a YAML where a field is missing the required citation', () => {
     const fixtures = loadFixtureMappings();
     expect(fixtures['test-form-missing-citation']).toBeTruthy();
-    expect(() => parseFormMapping(fixtures['test-form-missing-citation']!)).toThrow(
-      /citation/i,
-    );
+    expect(() => parseFormMapping(fixtures['test-form-missing-citation']!)).toThrow(/citation/i);
   });
 
   it('discriminates acroform vs coordinate fields via Zod union', () => {

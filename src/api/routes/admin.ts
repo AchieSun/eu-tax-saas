@@ -5,11 +5,11 @@
  * All endpoints are GET-only — no writes.
  */
 
+import { and, desc, eq, lt } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { lt, desc, and, eq } from 'drizzle-orm';
-import type { Bindings, Variables } from '../index';
 import { createDb } from '../../db';
 import { auditLog } from '../../db/schema';
+import type { Bindings, Variables } from '../index';
 import { requireAdmin } from '../middleware/require-admin';
 
 const admin = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -30,8 +30,8 @@ admin.use('*', requireAdmin());
  *   { items: AuditLog[], nextCursor: number | null }
  */
 admin.get('/audit', async (c) => {
-  const cursor = parseInt(c.req.query('cursor') ?? `${Date.now()}`, 10);
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200);
+  const cursor = Number.parseInt(c.req.query('cursor') ?? `${Date.now()}`, 10);
+  const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10), 200);
   const route = c.req.query('route');
   const userId = c.req.query('userId');
 

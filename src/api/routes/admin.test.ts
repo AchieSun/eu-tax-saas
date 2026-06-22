@@ -4,11 +4,11 @@
  * Tests requireAdmin middleware + GET /audit endpoint with mocked DB.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
-import adminRoutes from './admin';
-import { auditMiddleware } from '../middleware/audit';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bindings, Variables } from '../index';
+import { auditMiddleware } from '../middleware/audit';
+import adminRoutes from './admin';
 
 // ── Mock DB ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp(null);
     const res = await app.request('/audit', {}, testEnv);
     expect(res.status).toBe(401);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBe('unauthorized');
   });
 
@@ -66,7 +66,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await app.request('/audit', {}, testEnv);
     expect(res.status).toBe(403);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBe('forbidden');
   });
 
@@ -77,15 +77,35 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp({ user: { id: 'admin-1' } });
     const res = await app.request('/audit', {}, testEnv);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: unknown[]; nextCursor: unknown };
+    const body = (await res.json()) as { items: unknown[]; nextCursor: unknown };
     expect(body.items).toEqual([]);
     expect(body.nextCursor).toBeNull();
   });
 
   it('returns audit logs in descending order with correct nextCursor', async () => {
     const logs = [
-      { id: '1', timestamp: 300, route: '/api/calculate', method: 'POST', userIdOrNull: 'u1', inputHash: 'aaa', resultHash: 'bbb', statusCode: 200, source: 'api' },
-      { id: '2', timestamp: 200, route: '/api/residency', method: 'POST', userIdOrNull: 'u1', inputHash: 'ccc', resultHash: 'ddd', statusCode: 200, source: 'api' },
+      {
+        id: '1',
+        timestamp: 300,
+        route: '/api/calculate',
+        method: 'POST',
+        userIdOrNull: 'u1',
+        inputHash: 'aaa',
+        resultHash: 'bbb',
+        statusCode: 200,
+        source: 'api',
+      },
+      {
+        id: '2',
+        timestamp: 200,
+        route: '/api/residency',
+        method: 'POST',
+        userIdOrNull: 'u1',
+        inputHash: 'ccc',
+        resultHash: 'ddd',
+        statusCode: 200,
+        source: 'api',
+      },
     ];
     mockSelect
       .mockReturnValueOnce(makeQueryChain([{ role: 'admin' }]))
@@ -93,7 +113,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp({ user: { id: 'admin-1' } });
     const res = await app.request('/audit', {}, testEnv);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: Array<{ timestamp: number }>; nextCursor: unknown };
+    const body = (await res.json()) as { items: Array<{ timestamp: number }>; nextCursor: unknown };
     expect(body.items).toHaveLength(2);
     expect(body.items[0].timestamp).toBe(300);
     expect(body.items[1].timestamp).toBe(200);
@@ -112,14 +132,27 @@ describe('GET /audit — requireAdmin middleware', () => {
       statusCode: 200,
       source: 'api',
     }));
-    const extra = { id: '50', timestamp: 949, route: '/api/calculate', method: 'POST', userIdOrNull: 'u1', inputHash: 'x', resultHash: 'y', statusCode: 200, source: 'api' };
+    const extra = {
+      id: '50',
+      timestamp: 949,
+      route: '/api/calculate',
+      method: 'POST',
+      userIdOrNull: 'u1',
+      inputHash: 'x',
+      resultHash: 'y',
+      statusCode: 200,
+      source: 'api',
+    };
     mockSelect
       .mockReturnValueOnce(makeQueryChain([{ role: 'admin' }]))
       .mockReturnValueOnce(makeQueryChain([...page1, extra]));
     const app = createTestApp({ user: { id: 'admin-1' } });
     const res = await app.request('/audit?limit=50', {}, testEnv);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: Array<{ timestamp: number }>; nextCursor: number | null };
+    const body = (await res.json()) as {
+      items: Array<{ timestamp: number }>;
+      nextCursor: number | null;
+    };
     expect(body.items).toHaveLength(50);
     expect(body.nextCursor).toBe(951); // page1[49].timestamp = 1000 - 49
   });
@@ -131,7 +164,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp({ user: { id: 'admin-1' } });
     const res = await app.request('/audit?route=/api/calculate', {}, testEnv);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: unknown[]; nextCursor: unknown };
+    const body = (await res.json()) as { items: unknown[]; nextCursor: unknown };
     expect(body.items).toEqual([]);
     expect(body.nextCursor).toBeNull();
   });
@@ -143,7 +176,7 @@ describe('GET /audit — requireAdmin middleware', () => {
     const app = createTestApp({ user: { id: 'admin-1' } });
     const res = await app.request('/audit?userId=user-123', {}, testEnv);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: unknown[] };
+    const body = (await res.json()) as { items: unknown[] };
     expect(body.items).toEqual([]);
   });
 

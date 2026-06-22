@@ -177,7 +177,6 @@ app.route('/api/strategies', strategiesRoutes);
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 app.onError((err, c) => {
-  // biome-ignore lint/suspicious/noConsoleLog: server-side error logging
   console.error('Unhandled error', err);
   return c.json({ error: err.message ?? 'Internal Server Error' }, 500);
 });

@@ -57,10 +57,7 @@ const STRATEGY: Strategy = {
     // expected case for an average PT taxpayer with ~€1,500 annual spend).
     return {
       applicable: true,
-      reason:
-        '葡萄牙医疗费用 15% 抵免 (上限 €1,000/年)。需提供年度医疗支出 (medicalExpensesEur) 才能给出实际节税估算 — ' +
-        `15% × 支出, 支出 ≥ €${Math.round(PT_HEALTH_CAP_SPEND_EUR).toLocaleString()} 时达到上限。` +
-        '当前未估算金额。',
+      reason: `葡萄牙医疗费用 15% 抵免 (上限 €1,000/年)。需提供年度医疗支出 (medicalExpensesEur) 才能给出实际节税估算 — 15% × 支出, 支出 ≥ €${Math.round(PT_HEALTH_CAP_SPEND_EUR).toLocaleString()} 时达到上限。当前未估算金额。`,
       estimatedSavingsEur: null,
       confidence: 0.5,
       assumptions: [
@@ -69,8 +66,8 @@ const STRATEGY: Strategy = {
           defaultValue: 0,
           rationale:
             'True savings depend on actual medical spend (15% × spend, capped at €1,000/yr). ' +
-            `We default to €0 because median PT household medical spend ≈ €1,500/yr ` +
-            `(→ €225 saving), making the €1,000 statutory ceiling misleading as a default.`,
+            'We default to €0 because median PT household medical spend ≈ €1,500/yr ' +
+            '(→ €225 saving), making the €1,000 statutory ceiling misleading as a default.',
         },
       ],
     };

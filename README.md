@@ -2,23 +2,27 @@
 
 > Standard MVP target: **F1 + F2 + F3 + F4 + F6** in 9-10 weeks.
 > Stack: SolidStart + Hono + Cloudflare Workers + D1 + Better Auth.
+> **Current status: W4–W5 in progress** (code ahead of README; see table below).
 
-## What ships in this W1 commit
+## What's shipped so far
 
-| Layer | Status | Path |
-|-------|--------|------|
-| Project scaffolding (pnpm, biome, tsconfig, wrangler.toml) | ✅ | `package.json`, `wrangler.toml`, `biome.json`, `tsconfig.json` |
-| Drizzle schema + initial migration | ✅ | `src/db/schema.ts`, `drizzle/migrations/0000_init.sql` |
-| Better Auth (v1.6+ with 4 verified workarounds) | ✅ | `src/auth/auth.ts` |
-| Hono API + per-request auth middleware | ✅ | `src/api/index.ts`, `src/api/routes/*` |
-| **F1 tax calculator — DE / NL / PT** with citations | ✅ | `src/rules/{de,nl,pt}/calculator.ts` |
-| Vitest unit tests (33 passing) | ✅ | `src/rules/**/*.test.ts` |
-| F4 6-layer Harness prompts (runtime) | ✅ | `src/prompts/f4-harness/` |
-| Frontend skeleton (SolidStart placeholder) | ✅ | `src/frontend/App.tsx` |
+| Layer | Status | Path | Notes |
+|-------|--------|------|-------|
+| Project scaffolding (pnpm, biome, tsconfig, wrangler.toml) | ✅ | `package.json`, `wrangler.toml`, `biome.json`, `tsconfig.json` | — |
+| Drizzle schema + 6 migrations | ✅ | `src/db/schema.ts`, `drizzle/migrations/` | Includes W3/W4 migrations |
+| Better Auth (v1.6+) | ✅ | `src/auth/auth.ts` | Per-request instance + KV session store |
+| Hono API + middleware | ✅ | `src/api/index.ts`, `src/api/routes/*`, `src/api/middleware/*` | CORS allowlist, audit, rate-limit, admin guards |
+| **F1 tax calculator — DE / NL / PT / ES / UK** | ✅ | `src/rules/{de,nl,pt,es,uk}/calculator.ts` | 5 countries, all with legal citations |
+| **F2 residency assessment** | ✅ | `src/rules/residency/`, `src/rules/uk/srt-ties.ts` | Decision tree + UK Statutory Residence Test |
+| **F3 filing assistant — PDF render** | ✅ | `src/forms/`, `src/api/routes/forms.ts` | Overlay + AcroForm fill, watermark, transforms |
+| **F4 strategy library — A/B/C tiers** | 🔄 | `src/strategies/` | 22 strategies registered; C-tier seeds pending |
+| **F4 LLM harness prompts** | ✅ | `src/prompts/f4-harness/`, `src/services/f4-llm.ts` | 6-layer prompt runtime + adversarial tests |
+| **F5 RAG crawler (Wave 1)** | 🔄 | `src/services/rag/`, `scripts/ingest-tax-law.ts` | HTML crawl + chunk + JSONL emit; embeddings pending |
+| **F6 days tracker + calendar UI** | ✅ | `src/frontend/calendar/`, `src/api/routes/days.ts` | Drag-to-paint, bulk POST, colour legend |
+| Admin routes + audit log | ✅ | `src/api/routes/admin.ts`, `src/db/schema.ts` | SHA-256 hash-only audit (GDPR-safe) |
+| Vitest unit tests | ✅ | `**/*.test.ts` | **61 files / 669 tests passing** |
 
-**ES / UK calculators, F2 residency, F3 field guide, F4 strategy library, F6 calendar UI** all
-arrive in W2-W6 per `docs/14-mvp-task-breakdown.md` and the matching AI Prompt library at
-`docs/15-ai-prompts/`.
+**Legend:** ✅ shipped & tested 🔄 partial / WIP ⏳ not started
 
 ## Cloudflare setup
 
@@ -80,13 +84,13 @@ tariff. Gross→zvE conversion will be added in W4 (deduction module).
 
 ## Next steps
 
-| Week | Tasks | AI Prompt directory |
+| Week | Tasks | Status |
 |---|---|---|
-| W2 | F1 ES (4 autonomous communities) + UK SRT, F2 residency decision tree | `docs/15-ai-prompts/w2-f1-esuk-f2/` |
-| W3 | F6 calendar UI, R2 PDF template ingestion | `docs/15-ai-prompts/w3-f6-f3templates/` |
-| W4 | F3 field guide engine + overlay PDF preview | `docs/15-ai-prompts/w4-f3-fieldguide/` |
-| W5 | F4 strategy library — A/B tier (22 strategies) | `docs/15-ai-prompts/w5-f4-strategy/` |
-| W6 | F4 C tier + 6 harness layers wired end-to-end | `docs/15-ai-prompts/w6-f4-harness/` |
-| W7 | Integration, dashboard, mobile responsive | `docs/15-ai-prompts/w7-integration/` |
-| W8 | E2E tests (Playwright), bug bash | `docs/15-ai-prompts/w8-testing/` |
-| W9 | Paddle production + Reddit/PH launch | `docs/15-ai-prompts/w9-launch/` |
+| W2 | F1 ES (4 autonomous communities) + UK SRT, F2 residency decision tree | ✅ Done |
+| W3 | F6 calendar UI, R2 PDF template ingestion | ✅ Done |
+| W4 | F3 field guide engine + overlay PDF preview | ✅ Done |
+| W5 | F4 strategy library — A/B tier (22 strategies) | 🔄 A/B done; C-tier seeds pending |
+| W6 | F4 C tier + 6 harness layers wired end-to-end | 🔄 Harness prompts done; wiring TBD |
+| W7 | Integration, dashboard, mobile responsive | ⏳ Not started |
+| W8 | E2E tests (Playwright), bug bash | ⏳ Not started |
+| W9 | Paddle production + Reddit/PH launch | ⏳ Not started |

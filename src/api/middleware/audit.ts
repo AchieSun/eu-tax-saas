@@ -119,7 +119,7 @@ export function auditMiddleware() {
       }
 
       if (hasWaitUntil) {
-        c.executionCtx!.waitUntil(promise);
+        c.executionCtx?.waitUntil(promise);
       } else {
         // Fallback for test environments without Workers runtime
         await promise;

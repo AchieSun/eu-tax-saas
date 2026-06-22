@@ -50,7 +50,9 @@ describe('PT IRS 2025 — Continente (post Lei 55-A/2025)', () => {
     // total ≈ 37560
     expect(r.taxOwed).toBeGreaterThan(37_400);
     expect(r.taxOwed).toBeLessThan(37_700);
-    expect(r.breakdown.some((b: { label: string }) => b.label.includes('solidariedade'))).toBe(true);
+    expect(r.breakdown.some((b: { label: string }) => b.label.includes('solidariedade'))).toBe(
+      true,
+    );
   });
 });
 

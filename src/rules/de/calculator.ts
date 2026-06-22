@@ -118,8 +118,10 @@ export function tariff(zvE: number, year: number): number {
 function marginalRate(zvE: number, year: number): number {
   const p = getParams(year);
   if (zvE <= p.grundfreibetrag) return 0;
-  if (zvE <= p.zone2_upper) return 0.14 + (zvE - p.grundfreibetrag) * ((0.24 - 0.14) / (p.zone2_upper - p.grundfreibetrag));
-  if (zvE <= p.zone3_upper) return 0.24 + (zvE - p.zone2_upper) * ((0.42 - 0.24) / (p.zone3_upper - p.zone2_upper));
+  if (zvE <= p.zone2_upper)
+    return 0.14 + (zvE - p.grundfreibetrag) * ((0.24 - 0.14) / (p.zone2_upper - p.grundfreibetrag));
+  if (zvE <= p.zone3_upper)
+    return 0.24 + (zvE - p.zone2_upper) * ((0.42 - 0.24) / (p.zone3_upper - p.zone2_upper));
   if (zvE <= p.zone4_upper) return 0.42;
   return 0.45;
 }

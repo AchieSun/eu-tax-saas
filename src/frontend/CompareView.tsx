@@ -10,13 +10,13 @@
 
 import {
   type Component,
+  For,
+  Show,
   createEffect,
   createMemo,
   createResource,
   createSignal,
-  For,
   onCleanup,
-  Show,
 } from 'solid-js';
 import type { Country } from '../rules/common/types';
 
@@ -151,7 +151,7 @@ const CompareView: Component = () => {
 
   const cheapestCountry = createMemo<Country | null>(() => {
     const arr = sortedResults();
-    return arr.length > 0 ? arr[0]!.country : null;
+    return arr.length > 0 ? arr[0]?.country : null;
   });
 
   const selectedRow = createMemo<CompareResultRow | null>(() => {
@@ -176,13 +176,13 @@ const CompareView: Component = () => {
       <header class="cv-hero">
         <h1 class="cv-h1">Compare your tax across 5 European countries</h1>
         <p class="cv-sub">
-          Side-by-side IRPF / IRS / EStG / Box 1 / Income Tax using official 2025 rates from
-          AEAT, AT, BMF, Belastingdienst and HMRC. Salary, single filer, no special regime.
+          Side-by-side IRPF / IRS / EStG / Box 1 / Income Tax using official 2025 rates from AEAT,
+          AT, BMF, Belastingdienst and HMRC. Salary, single filer, no special regime.
         </p>
         <p class="cv-disclaimer" role="note">
-          ⚖️ <strong>Estimate only — not tax advice.</strong> Figures are informational and
-          may be inaccurate for your situation. Always confirm with a qualified tax advisor
-          before filing. We don't store this calculation.
+          ⚖️ <strong>Estimate only — not tax advice.</strong> Figures are informational and may be
+          inaccurate for your situation. Always confirm with a qualified tax advisor before filing.
+          We don't store this calculation.
         </p>
       </header>
 
@@ -295,9 +295,7 @@ const CompareView: Component = () => {
                   <div class="cv-total" title="Total tax owed">
                     {eur.format(tax)}
                   </div>
-                  <div class="cv-net">
-                    Net: {eur.format(income() - tax)}
-                  </div>
+                  <div class="cv-net">Net: {eur.format(income() - tax)}</div>
                   <dl class="cv-stats">
                     <div>
                       <dt>Effective</dt>
@@ -335,11 +333,7 @@ const CompareView: Component = () => {
           const meta = COUNTRY_META[row().country];
           return (
             <>
-              <div
-                class="cv-backdrop"
-                onClick={closePanel}
-                aria-hidden="true"
-              />
+              <div class="cv-backdrop" onClick={closePanel} aria-hidden="true" />
               <aside
                 class="cv-panel"
                 role="dialog"
@@ -379,7 +373,7 @@ const CompareView: Component = () => {
                   <h3 class="cv-panel-h3">Source</h3>
                   <p class="cv-source">{row().source}</p>
 
-                  <Show when={row().warnings && row().warnings!.length > 0}>
+                  <Show when={row().warnings && row().warnings?.length > 0}>
                     <h3 class="cv-panel-h3">Warnings</h3>
                     <ul class="cv-warnings">
                       <For each={row().warnings}>{(w) => <li>{w}</li>}</For>
@@ -387,9 +381,7 @@ const CompareView: Component = () => {
                   </Show>
 
                   <h3 class="cv-panel-h3">Breakdown</h3>
-                  <pre class="cv-breakdown">
-                    {JSON.stringify(row().breakdown, null, 2)}
-                  </pre>
+                  <pre class="cv-breakdown">{JSON.stringify(row().breakdown, null, 2)}</pre>
                 </div>
               </aside>
             </>

@@ -43,9 +43,7 @@ async function ping(model: string, timeoutMs: number): Promise<void> {
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'user', content: 'Reply with exactly one word: hello' },
-        ],
+        messages: [{ role: 'user', content: 'Reply with exactly one word: hello' }],
         max_tokens: 16,
         temperature: 0,
       }),

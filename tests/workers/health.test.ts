@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import { SELF } from 'cloudflare:test';
-import { setupTestEnv, seedUser } from '../helpers/workers-env';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { seedUser, setupTestEnv } from '../helpers/workers-env';
 
 /**
  * Smoke test for the @cloudflare/vitest-pool-workers harness.
@@ -61,7 +61,7 @@ describe('Workers harness — smoke test', () => {
     await env.R2.put(key, payload);
     const obj = await env.R2.get(key);
     expect(obj).not.toBeNull();
-    const buf = new Uint8Array(await obj!.arrayBuffer());
+    const buf = new Uint8Array(await obj?.arrayBuffer());
     expect(Array.from(buf)).toEqual(Array.from(payload));
   });
 });

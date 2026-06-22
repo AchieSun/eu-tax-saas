@@ -225,7 +225,11 @@ export function calculateBox3({
       effectiveRate: 0,
       marginalRate: 0,
       breakdown: [
-        { label: `Heffingsvrij vermogen (${partners} partner)`, amount: 0, citation: 'Wet IB 2001 art. 5.5' },
+        {
+          label: `Heffingsvrij vermogen (${partners} partner)`,
+          amount: 0,
+          citation: 'Wet IB 2001 art. 5.5',
+        },
       ],
       source: 'Belastingdienst — Box 3 overbruggingswet',
       provisional: p.provisional,
@@ -248,8 +252,16 @@ export function calculateBox3({
     effectiveRate: totalAssets > 0 ? round(tax / totalAssets, 4) : 0,
     marginalRate: p.rate,
     breakdown: [
-      { label: 'Bankbalansen forfaitair', amount: bankBalances * p.rateBankBalances, rate: p.rateBankBalances },
-      { label: 'Overige bezittingen forfaitair', amount: otherAssets * p.rateOtherAssets, rate: p.rateOtherAssets },
+      {
+        label: 'Bankbalansen forfaitair',
+        amount: bankBalances * p.rateBankBalances,
+        rate: p.rateBankBalances,
+      },
+      {
+        label: 'Overige bezittingen forfaitair',
+        amount: otherAssets * p.rateOtherAssets,
+        rate: p.rateOtherAssets,
+      },
       { label: 'Schulden forfaitair (aftrek)', amount: -(debts * p.rateDebts), rate: p.rateDebts },
     ],
     source: 'Belastingdienst — Box 3 overbruggingswet',

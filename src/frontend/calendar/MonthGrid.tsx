@@ -21,14 +21,8 @@
  * the whole 42-cell grid each tick.
  */
 
-import { type Component, createMemo, For, onCleanup, onMount } from 'solid-js';
-import {
-  type Country,
-  COUNTRY_META,
-  ERASE,
-  type Erase,
-  type PaintTool,
-} from './types';
+import { type Component, For, createMemo, onCleanup, onMount } from 'solid-js';
+import { COUNTRY_META, type Country, ERASE, type Erase, type PaintTool } from './types';
 
 /** Map from YYYY-MM-DD → paint value (Country or ERASE sentinel). */
 export type PaintMap = Map<string, Country | Erase>;

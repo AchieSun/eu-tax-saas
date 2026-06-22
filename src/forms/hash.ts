@@ -58,7 +58,5 @@ export async function canonicalJSONHash(input: unknown): Promise<string> {
   const json = canonicalJSON(input);
   const bytes = new TextEncoder().encode(json);
   const buf = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(buf)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

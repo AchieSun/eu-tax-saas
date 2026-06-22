@@ -7,9 +7,9 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Bindings, Variables } from '../index';
-import { assessResidency, assessAllCountries } from '../../rules/residency';
+import { assessAllCountries, assessResidency } from '../../rules/residency';
 import { computeSrtTies, determineUkResidence } from '../../rules/uk/srt-ties';
+import type { Bindings, Variables } from '../index';
 
 export const residencyRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

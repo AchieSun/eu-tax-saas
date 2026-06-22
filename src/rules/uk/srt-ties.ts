@@ -126,9 +126,13 @@ export function computeSrtTies(answers: SrtTiesAnswers): SrtTiesResult {
   const rationale: string[] = [];
 
   if (family) {
-    rationale.push('Family tie: spouse/civil partner or child under 18 is UK-resident (RDR3 §2.3).');
+    rationale.push(
+      'Family tie: spouse/civil partner or child under 18 is UK-resident (RDR3 §2.3).',
+    );
   } else {
-    rationale.push('No family tie: no UK-resident spouse/civil partner or child under 18 (RDR3 §2.3).');
+    rationale.push(
+      'No family tie: no UK-resident spouse/civil partner or child under 18 (RDR3 §2.3).',
+    );
   }
 
   if (accommodation) {
@@ -160,7 +164,9 @@ export function computeSrtTies(answers: SrtTiesAnswers): SrtTiesResult {
   }
 
   if (country === true) {
-    rationale.push('Country tie: UK is the country with most days spent this tax year (RDR3 §2.11).');
+    rationale.push(
+      'Country tie: UK is the country with most days spent this tax year (RDR3 §2.11).',
+    );
   } else if (country === false) {
     rationale.push(
       `No country tie: most days spent in ${answers.countryWithMostDays ?? 'another country'} (RDR3 §2.11).`,

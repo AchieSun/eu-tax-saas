@@ -1,9 +1,9 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
-import { env } from 'cloudflare:test';
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { D1Database, R2Bucket, KVNamespace, Queue } from '@cloudflare/workers-types';
+/// <reference types="@cloudflare/vitest-pool-workers" />
+import { env } from 'cloudflare:test';
+import type { D1Database, KVNamespace, Queue, R2Bucket } from '@cloudflare/workers-types';
 
 /**
  * Test-only shared environment helpers for the @cloudflare/vitest-pool-workers

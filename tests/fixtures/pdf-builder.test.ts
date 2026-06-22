@@ -5,11 +5,11 @@
  * valid, small PDFs that round-trip through pdf-lib's AcroForm reader.
  */
 
-import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
+import { describe, expect, it } from 'vitest';
 import {
-  buildSynthPdfWithAcroForm,
   buildSynthPdfCoordOnly,
+  buildSynthPdfWithAcroForm,
   defaultMantelStyleFields,
 } from './pdf-builder';
 

@@ -4,8 +4,8 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { calculateTax, calculatorInputSchema, compareCountries } from '../../rules';
 import type { Bindings, Variables } from '../index';
-import { calculateTax, compareCountries, calculatorInputSchema } from '../../rules';
 
 export const calculateRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

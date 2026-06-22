@@ -3,12 +3,12 @@
  * Uses Hono's built-in requestWithEnv(app, ) with in-memory D1 mock via drizzle sqlite-proxy.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
+import { Hono } from 'hono';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as schema from '../../db/schema';
 import type { Bindings, Variables } from '../index';
 import { daysRoutes } from './days';
-import * as schema from '../../db/schema';
 
 // ── In-memory store ──────────────────────────────────────────────────────────
 
@@ -42,7 +42,12 @@ async function batchExecutor(
     // Extract selected columns
     const selectMatch = normalized.match(/SELECT\s+(.*?)\s+FROM/i);
     const selectCols = selectMatch
-      ? selectMatch[1].split(',').map((c) => c.trim().replace(/"/g, '').replace(/^user_days\./, ''))
+      ? selectMatch[1].split(',').map((c) =>
+          c
+            .trim()
+            .replace(/"/g, '')
+            .replace(/^user_days\./, ''),
+        )
       : [];
 
     const filtered = store.filter((row) => {
@@ -80,9 +85,7 @@ async function batchExecutor(
   if (normalized.toUpperCase().startsWith('INSERT')) {
     // Extract column names
     const colMatch = normalized.match(/\(([^)]+)\)\s*VALUES/i);
-    const cols = colMatch
-      ? colMatch[1].split(',').map((c) => c.trim().replace(/"/g, ''))
-      : [];
+    const cols = colMatch ? colMatch[1].split(',').map((c) => c.trim().replace(/"/g, '')) : [];
 
     // Check for ON CONFLICT DO UPDATE
     const isUpsert = normalized.toUpperCase().includes('ON CONFLICT');
@@ -101,9 +104,7 @@ async function batchExecutor(
 
     let changes = 0;
     for (const row of inserted) {
-      const existingIdx = store.findIndex(
-        (r) => r.user_id === row.user_id && r.date === row.date,
-      );
+      const existingIdx = store.findIndex((r) => r.user_id === row.user_id && r.date === row.date);
       if (existingIdx >= 0) {
         if (isUpsert) {
           // UPSERT: update existing
@@ -144,9 +145,18 @@ async function batchExecutor(
           const op = match[2];
           const param = params[paramIdx++];
           const val = (row as any)[col];
-          if (op === '=' && val !== param) { matches = false; break; }
-          if (op === '>=' && val < param) { matches = false; break; }
-          if (op === '<=' && val > param) { matches = false; break; }
+          if (op === '=' && val !== param) {
+            matches = false;
+            break;
+          }
+          if (op === '>=' && val < param) {
+            matches = false;
+            break;
+          }
+          if (op === '<=' && val > param) {
+            matches = false;
+            break;
+          }
         }
         if (matches) toDelete.push(row);
       }
@@ -180,11 +190,7 @@ function createTestApp(session: { user: { id: string } } | null) {
   return app;
 }
 
-function requestWithEnv(
-  app: ReturnType<typeof createTestApp>,
-  path: string,
-  init?: RequestInit,
-) {
+function requestWithEnv(app: ReturnType<typeof createTestApp>, path: string, init?: RequestInit) {
   return app.request(path, init, { DB: {} } as Bindings);
 }
 
@@ -199,7 +205,7 @@ describe('GET /api/days', () => {
     const app = createTestApp(null);
     const res = await requestWithEnv(app, '/');
     expect(res.status).toBe(401);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('unauthorized');
   });
 
@@ -207,20 +213,44 @@ describe('GET /api/days', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/');
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.days).toEqual([]);
   });
 
   it('returns filtered days within from/to range', async () => {
     store.push(
-      { id: '1', user_id: 'user-1', country: 'ES', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
-      { id: '2', user_id: 'user-1', country: 'PT', date: '2025-06-15', source: 'manual', note: null, created_at: Date.now() },
-      { id: '3', user_id: 'user-1', country: 'DE', date: '2025-07-01', source: 'manual', note: null, created_at: Date.now() },
+      {
+        id: '1',
+        user_id: 'user-1',
+        country: 'ES',
+        date: '2025-06-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
+      {
+        id: '2',
+        user_id: 'user-1',
+        country: 'PT',
+        date: '2025-06-15',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
+      {
+        id: '3',
+        user_id: 'user-1',
+        country: 'DE',
+        date: '2025-07-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
     );
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/?from=2025-06-01&to=2025-06-30');
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.days).toHaveLength(2);
     expect(body.days[0].date).toBe('2025-06-01');
     expect(body.days[1].date).toBe('2025-06-15');
@@ -230,7 +260,7 @@ describe('GET /api/days', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/?from=2025-06-15&to=2025-06-01');
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toContain('from must be before');
   });
 
@@ -238,7 +268,7 @@ describe('GET /api/days', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/?from=2025-01-01&to=2026-02-01');
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toContain('366');
   });
 
@@ -246,19 +276,35 @@ describe('GET /api/days', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/?from=01-01-2025&to=2025-06-01');
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toContain('Invalid date format');
   });
 
   it('scopes results to the authenticated user only', async () => {
     store.push(
-      { id: '1', user_id: 'user-1', country: 'ES', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
-      { id: '2', user_id: 'user-2', country: 'PT', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
+      {
+        id: '1',
+        user_id: 'user-1',
+        country: 'ES',
+        date: '2025-06-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
+      {
+        id: '2',
+        user_id: 'user-2',
+        country: 'PT',
+        date: '2025-06-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
     );
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/?from=2025-01-01&to=2025-12-31');
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.days).toHaveLength(1);
     expect(body.days[0].country).toBe('ES');
   });
@@ -277,7 +323,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days: [{ date: '2025-06-01', country: 'ES' }] }),
     });
     expect(res.status).toBe(401);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('unauthorized');
   });
 
@@ -289,7 +335,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days: [{ date: '2025-06-01', country: 'ES' }] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.written).toBe(1);
     expect(store).toHaveLength(1);
     expect(store[0].country).toBe('ES');
@@ -297,9 +343,15 @@ describe('POST /api/days', () => {
   });
 
   it('UPSERT: same date with different country updates existing row', async () => {
-    store.push(
-      { id: 'existing', user_id: 'user-1', country: 'ES', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
-    );
+    store.push({
+      id: 'existing',
+      user_id: 'user-1',
+      country: 'ES',
+      date: '2025-06-01',
+      source: 'manual',
+      note: null,
+      created_at: Date.now(),
+    });
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/', {
       method: 'POST',
@@ -307,7 +359,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days: [{ date: '2025-06-01', country: 'PT' }] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.written).toBe(1);
     expect(store).toHaveLength(1);
     expect(store[0].country).toBe('PT');
@@ -326,7 +378,7 @@ describe('POST /api/days', () => {
       }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Duplicate dates in request');
   });
 
@@ -338,7 +390,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days: [] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('validation');
   });
 
@@ -354,7 +406,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('validation');
   });
 
@@ -366,7 +418,7 @@ describe('POST /api/days', () => {
       body: JSON.stringify({ days: [{ date: '2025-06-01', country: 'XX' }] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('validation');
   });
 
@@ -380,7 +432,7 @@ describe('POST /api/days', () => {
       }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('validation');
   });
 
@@ -420,18 +472,24 @@ describe('DELETE /api/days/:date', () => {
     const app = createTestApp(null);
     const res = await requestWithEnv(app, '/2025-06-01', { method: 'DELETE' });
     expect(res.status).toBe(401);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('unauthorized');
   });
 
   it('deletes an existing day entry and returns deleted:1', async () => {
-    store.push(
-      { id: '1', user_id: 'user-1', country: 'ES', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
-    );
+    store.push({
+      id: '1',
+      user_id: 'user-1',
+      country: 'ES',
+      date: '2025-06-01',
+      source: 'manual',
+      note: null,
+      created_at: Date.now(),
+    });
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/2025-06-01', { method: 'DELETE' });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.deleted).toBe(1);
     expect(store).toHaveLength(0);
   });
@@ -440,7 +498,7 @@ describe('DELETE /api/days/:date', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/2025-06-01', { method: 'DELETE' });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.deleted).toBe(0);
   });
 
@@ -448,19 +506,35 @@ describe('DELETE /api/days/:date', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/01-06-2025', { method: 'DELETE' });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toContain('Invalid date format');
   });
 
   it('only deletes the authenticated user entry', async () => {
     store.push(
-      { id: '1', user_id: 'user-1', country: 'ES', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
-      { id: '2', user_id: 'user-2', country: 'PT', date: '2025-06-01', source: 'manual', note: null, created_at: Date.now() },
+      {
+        id: '1',
+        user_id: 'user-1',
+        country: 'ES',
+        date: '2025-06-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
+      {
+        id: '2',
+        user_id: 'user-2',
+        country: 'PT',
+        date: '2025-06-01',
+        source: 'manual',
+        note: null,
+        created_at: Date.now(),
+      },
     );
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/2025-06-01', { method: 'DELETE' });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.deleted).toBe(1);
     expect(store).toHaveLength(1);
     expect(store[0].user_id).toBe('user-2');

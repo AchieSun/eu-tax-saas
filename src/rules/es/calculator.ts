@@ -196,7 +196,9 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
   }
 
   if (!isCcaa(region)) {
-    throw new Error(`Spain MVP supports CCAA: MAD, CAT, VAL, AND. Received: ${region ?? 'undefined'}`);
+    throw new Error(
+      `Spain MVP supports CCAA: MAD, CAT, VAL, AND. Received: ${region ?? 'undefined'}`,
+    );
   }
 
   const minEstatal = ES_MINIMO_PERSONAL_2025.ESTATAL;

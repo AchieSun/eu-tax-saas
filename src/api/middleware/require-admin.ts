@@ -8,10 +8,10 @@
  *   admin.use('*', requireAdmin());
  */
 
-import { createMiddleware } from 'hono/factory';
 import { eq } from 'drizzle-orm';
-import { users } from '../../db/schema';
+import { createMiddleware } from 'hono/factory';
 import { createDb } from '../../db';
+import { users } from '../../db/schema';
 import type { Bindings, Variables } from '../index';
 
 export function requireAdmin() {

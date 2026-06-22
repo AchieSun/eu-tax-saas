@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { calculateUk, srtTest } from './calculator';
 
 describe('UK Income Tax 2025-26', () => {

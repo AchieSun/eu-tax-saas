@@ -10,7 +10,7 @@
  * (e.g. `role`) MUST have `input: false` to prevent client privilege escalation.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createAuth } from './auth';
 
 describe('Better Auth additionalFields contract (Oracle P1#9)', () => {

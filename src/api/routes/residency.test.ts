@@ -3,14 +3,14 @@
  * Uses Hono's built-in app.request() for in-process HTTP testing.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { residencyRoutes } from './residency';
 
 describe('GET /status', () => {
   it('reports F2 implemented with 5 countries', async () => {
     const res = await residencyRoutes.request('/status');
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('implemented');
     expect(body.countries).toEqual(['DE', 'NL', 'PT', 'ES', 'UK']);
     expect(body.tiebreaker).toBe('OECD Model Tax Convention art. 4');
@@ -34,7 +34,7 @@ describe('POST /assess', () => {
       body: JSON.stringify({ country: 'ES', taxYear: 2025, ...validBase }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.result.isResident).toBe(true);
     expect(body.result.country).toBe('ES');
@@ -48,7 +48,7 @@ describe('POST /assess', () => {
       body: JSON.stringify({ country: 'XX', taxYear: 2025, ...validBase }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(false);
     expect(body.error).toBe('validation');
   });
@@ -60,7 +60,7 @@ describe('POST /assess', () => {
       body: JSON.stringify({ country: 'ES' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe('POST /assess', () => {
       body: JSON.stringify({ country: 'UK', taxYear: 2025, ...validBase, srt: {} }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.result.isResident).toBe(true);
     expect(body.result.appliedRules[0]).toMatch(/^UK\.SRT\./);
@@ -118,7 +118,7 @@ describe('POST /assess-multi', () => {
       }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.result.effectiveResidence.tiebreakerApplied).toBe(true);
     // DE has permanent home → wins tiebreaker step 1
@@ -132,7 +132,7 @@ describe('POST /assess-multi', () => {
       body: JSON.stringify({ inputs: [] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(false);
   });
 
@@ -153,7 +153,7 @@ describe('POST /assess-multi', () => {
       body: JSON.stringify({ inputs: Array.from({ length: 6 }, () => input) }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(false);
   });
 });
@@ -178,7 +178,7 @@ describe('POST /uk-srt-ties', () => {
       body: JSON.stringify(validBody),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     // All false → 0 ties
     expect(body.ties.count).toBe(0);
     expect(body.ties.ties.family).toBe(false);
@@ -197,7 +197,7 @@ describe('POST /uk-srt-ties', () => {
       body: JSON.stringify({ ...validBody, ukDays: 367 }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(false);
     expect(body.error).toBe('validation');
   });
@@ -209,9 +209,11 @@ describe('POST /uk-srt-ties', () => {
       body: JSON.stringify({ ...validBody, countryWithMostDays: 'UK' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ties.ties.country).toBe(null);
-    expect(body.ties.rationale.some((r: string) => r.includes('not applicable (arriver'))).toBe(true);
+    expect(body.ties.rationale.some((r: string) => r.includes('not applicable (arriver'))).toBe(
+      true,
+    );
   });
 
   it('leaver with all ties + 16 UK days → resident', async () => {
@@ -231,7 +233,7 @@ describe('POST /uk-srt-ties', () => {
       }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.ties.count).toBe(5);
     expect(body.resident).toBe(true);
     expect(body.reason).toContain('meet the required');

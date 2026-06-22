@@ -38,10 +38,10 @@ export interface CountryMeta {
 }
 
 export const COUNTRY_META: Record<Country, CountryMeta> = {
-  DE: { label: '德国 DE', bg: '#f59e0b', fg: '#ffffff' },     // amber-500 — German flag yellow
-  NL: { label: '荷兰 NL', bg: '#f97316', fg: '#ffffff' },     // orange-500 — Dutch orange
-  PT: { label: '葡萄牙 PT', bg: '#e11d48', fg: '#ffffff' },   // rose-600 — Portuguese red
-  ES: { label: '西班牙 ES', bg: '#b91c1c', fg: '#ffffff' },   // red-700 — Spanish flag red
-  UK: { label: '英国 UK', bg: '#1d4ed8', fg: '#ffffff' },     // blue-700 — Union Jack blue
+  DE: { label: '德国 DE', bg: '#f59e0b', fg: '#ffffff' }, // amber-500 — German flag yellow
+  NL: { label: '荷兰 NL', bg: '#f97316', fg: '#ffffff' }, // orange-500 — Dutch orange
+  PT: { label: '葡萄牙 PT', bg: '#e11d48', fg: '#ffffff' }, // rose-600 — Portuguese red
+  ES: { label: '西班牙 ES', bg: '#b91c1c', fg: '#ffffff' }, // red-700 — Spanish flag red
+  UK: { label: '英国 UK', bg: '#1d4ed8', fg: '#ffffff' }, // blue-700 — Union Jack blue
   OTHER: { label: '其它 OTHER', bg: '#94a3b8', fg: '#ffffff' }, // slate-400 — neutral
 };
