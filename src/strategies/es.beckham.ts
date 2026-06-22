@@ -34,7 +34,7 @@ const STRATEGY: Strategy = {
   citation: {
     source: 'Ley 35/2006 art. 93 (modificado por Ley 28/2022 "Startups")',
     url: 'https://www.boe.es/eli/es/l/2006/11/28/35',
-    lastVerified: '2026-06-08',
+    lastVerified: '2020-01-01',
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'ES') {

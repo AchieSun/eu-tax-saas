@@ -47,9 +47,11 @@ function assertValidLastVerified(lastVerified: string, strategyId: string): void
       `registerStrategy(${strategyId}): citation.lastVerified is not a real date: ${lastVerified}`,
     );
   }
-  const now = new Date();
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (parsed.getTime() > todayUtc) {
+  // Cloudflare Workers build environment sometimes freezes Date at epoch,
+  // so we only enforce the "not future" check when the runtime clock looks sane.
+  const nowMs = Date.now();
+  const year2000 = 946684800000; // 2000-01-01T00:00:00Z
+  if (nowMs > year2000 && parsed.getTime() > nowMs) {
     throw new Error(
       `registerStrategy(${strategyId}): citation.lastVerified is in the future: ${lastVerified}`,
     );

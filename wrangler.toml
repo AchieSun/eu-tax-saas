@@ -36,10 +36,11 @@ binding = "AI"
 binding = "QUEUE"
 queue = "eu-tax-saas-jobs"
 
-[[queues.consumers]]
-queue = "eu-tax-saas-jobs"
-max_batch_size = 10
-max_batch_timeout = 30
+# [[queues.consumers]]
+# queue = "eu-tax-saas-jobs"
+# max_batch_size = 10
+# max_batch_timeout = 30
+# NOTE: consumer handler not yet implemented in src/index.ts
 
 # Vars (non-secret config)
 [vars]
@@ -50,9 +51,9 @@ APP_URL = "http://localhost:8787"
 [observability]
 enabled = true
 
-# Limits
-[limits]
-cpu_ms = 50
+# Limits (paid plan only; commented for free plan)
+# [limits]
+# cpu_ms = 50
 
 # === Staging environment ===
 [env.staging]
