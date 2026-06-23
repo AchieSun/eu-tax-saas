@@ -71,10 +71,11 @@ describe('de.kirchensteuer_austritt', () => {
     // Sanity: at €18k single, SolZ is zero → taxOwed == Einkommensteuer.
     const eLine = baseline.breakdown.find((b) => b.label.startsWith('Einkommensteuer'));
     expect(eLine).toBeDefined();
-    expect(baseline.taxOwed).toBe(eLine?.amount);
+    if (!eLine) throw new Error('Einkommensteuer breakdown line not found');
+    expect(baseline.taxOwed).toBe(eLine.amount);
     const result = STRATEGY.evaluate(lowInput, baseline);
     expect(result.applicable).toBe(true);
-    const expected = Math.round(eLine?.amount * 0.09);
+    const expected = Math.round(eLine.amount * 0.09);
     expect(result.estimatedSavingsEur).toBe(expected);
     // The old buggy estimate would have been Math.round((taxOwed/1.055)*0.09)
     // which differs from `expected` whenever SolZ == 0 (taxOwed/1.055 < taxOwed).
@@ -87,8 +88,9 @@ describe('de.kirchensteuer_austritt', () => {
     const baseline = calculateTax(highInput) as CalculatorResult;
     const eLine = baseline.breakdown.find((b) => b.label.startsWith('Einkommensteuer'));
     expect(eLine).toBeDefined();
+    if (!eLine) throw new Error('Einkommensteuer breakdown line not found');
     const result = STRATEGY.evaluate(highInput, baseline);
     expect(result.applicable).toBe(true);
-    expect(result.estimatedSavingsEur).toBe(Math.round(eLine?.amount * 0.09));
+    expect(result.estimatedSavingsEur).toBe(Math.round(eLine.amount * 0.09));
   });
 });

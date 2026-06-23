@@ -373,7 +373,7 @@ const CompareView: Component = () => {
                   <h3 class="cv-panel-h3">Source</h3>
                   <p class="cv-source">{row().source}</p>
 
-                  <Show when={row().warnings && row().warnings?.length > 0}>
+                  <Show when={(row().warnings?.length ?? 0) > 0}>
                     <h3 class="cv-panel-h3">Warnings</h3>
                     <ul class="cv-warnings">
                       <For each={row().warnings}>{(w) => <li>{w}</li>}</For>
