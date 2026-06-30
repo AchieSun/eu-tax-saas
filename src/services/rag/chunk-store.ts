@@ -2,7 +2,7 @@ import type { KVNamespace } from '@cloudflare/workers-types';
 import type { TaxLawEmbeddedChunk } from './types';
 
 const KEY_PREFIX = 'rag:chunk:';
-export const KV_PUT_CONCURRENCY = 8;
+export const KV_CHUNK_CONCURRENCY = 8;
 
 export function chunkKey(id: string): string {
   return `${KEY_PREFIX}${id}`;
@@ -31,7 +31,7 @@ export async function putChunks(
   kv: KVNamespace,
   chunks: readonly TaxLawEmbeddedChunk[],
 ): Promise<{ written: number }> {
-  await runWithConcurrency(chunks, KV_PUT_CONCURRENCY, async (chunk) => {
+  await runWithConcurrency(chunks, KV_CHUNK_CONCURRENCY, async (chunk) => {
     await kv.put(chunkKey(chunk.id), chunk.text);
   });
 
@@ -43,11 +43,23 @@ export async function getChunkTexts(
   ids: readonly string[],
 ): Promise<Map<string, string>> {
   const texts = new Map<string, string>();
-  await runWithConcurrency(ids, KV_PUT_CONCURRENCY, async (id) => {
+  await runWithConcurrency(ids, KV_CHUNK_CONCURRENCY, async (id) => {
     const text = await kv.get(chunkKey(id));
     if (text !== null) {
       texts.set(id, text);
     }
   });
   return texts;
+}
+
+export async function deleteChunks(
+  kv: KVNamespace,
+  ids: readonly string[],
+): Promise<{ deleted: number }> {
+  let deleted = 0;
+  await runWithConcurrency(ids, KV_CHUNK_CONCURRENCY, async (id) => {
+    await kv.delete(chunkKey(id));
+    deleted += 1;
+  });
+  return { deleted };
 }

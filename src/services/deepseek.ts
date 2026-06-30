@@ -125,6 +125,7 @@ export interface ChatOptions {
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   timeoutMs?: number;
   signal?: AbortSignal;
+  responseFormat?: { type: 'json_object' } | { type: 'json_schema'; json_schema: Record<string, unknown> };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -221,6 +222,7 @@ export class DeepSeekClient {
       temperature: opts.temperature ?? 0.2,
     };
     if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
+    if (opts.responseFormat !== undefined) body.response_format = opts.responseFormat;
     if (opts.tools && opts.tools.length > 0) {
       body.tools = opts.tools;
       body.tool_choice = opts.toolChoice ?? 'auto';

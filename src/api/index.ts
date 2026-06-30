@@ -177,6 +177,12 @@ app.use('/api/admin/rag/*', auditMiddleware());
 app.use('/api/rag', auditMiddleware());
 app.use('/api/rag/*', auditMiddleware());
 app.use('/api/rag/qa', rateLimitD1({ keyPrefix: 'rag-qa', windowSeconds: 60, max: 5 }));
+// F5 RAG admin upsert: computationally expensive (embedding batch + Vectorize write).
+// Limit to 10 upserts/min per admin to prevent quota exhaustion / accidental floods.
+app.use(
+  '/api/admin/rag/upsert',
+  rateLimitD1({ keyPrefix: 'rag-admin-upsert', windowSeconds: 60, max: 10 }),
+);
 
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);
@@ -193,7 +199,9 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 app.onError((err, c) => {
   console.error('Unhandled error', err);
-  return c.json({ error: err.message ?? 'Internal Server Error' }, 500);
+  const isDev = c.env.ENVIRONMENT === 'development';
+  const message = isDev ? (err.message ?? 'Internal Server Error') : 'Internal Server Error';
+  return c.json({ error: message }, 500);
 });
 
 export default app;

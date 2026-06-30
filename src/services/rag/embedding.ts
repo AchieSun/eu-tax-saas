@@ -63,6 +63,10 @@ export function createEmbeddingClient(ai: Ai, opts: EmbeddingClientOptions = {})
         return parsed.data.data;
       } catch (e) {
         lastError = e;
+        // Validation errors are deterministic; retrying will not help.
+        if (e instanceof EmbeddingValidationError) {
+          throw e;
+        }
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, delays[attempt] ?? 1000));
         }

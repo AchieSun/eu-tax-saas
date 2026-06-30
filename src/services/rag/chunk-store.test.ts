@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { KV_PUT_CONCURRENCY, chunkKey, getChunkTexts, putChunks } from './chunk-store';
+import {
+  KV_CHUNK_CONCURRENCY,
+  chunkKey,
+  deleteChunks,
+  getChunkTexts,
+  putChunks,
+} from './chunk-store';
 import type { TaxLawEmbeddedChunk } from './types';
 
 function makeVector(): number[] {
@@ -33,6 +39,9 @@ function makeFakeKV(initial: Record<string, string> = {}) {
       store.set(key, value);
     }),
     get: vi.fn(async (key: string) => store.get(key) ?? null),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
   };
   return { kv, store };
 }
@@ -63,7 +72,7 @@ describe('putChunks', () => {
 
   it('limits put concurrency', async () => {
     const { kv } = makeFakeKV();
-    const chunks = Array.from({ length: KV_PUT_CONCURRENCY * 2 }, (_, i) =>
+    const chunks = Array.from({ length: KV_CHUNK_CONCURRENCY * 2 }, (_, i) =>
       makeChunk(i, `chunk-${i}`),
     );
     let inFlight = 0;
@@ -78,7 +87,7 @@ describe('putChunks', () => {
       }),
     };
     await putChunks(kvWithTracker as unknown as Parameters<typeof putChunks>[0], chunks);
-    expect(maxInFlight).toBeLessThanOrEqual(KV_PUT_CONCURRENCY);
+    expect(maxInFlight).toBeLessThanOrEqual(KV_CHUNK_CONCURRENCY);
   });
 });
 
@@ -99,5 +108,25 @@ describe('getChunkTexts', () => {
     ]);
     expect(map.has('missing')).toBe(false);
     expect(map.size).toBe(0);
+  });
+});
+
+describe('deleteChunks', () => {
+  it('removes stored chunk texts', async () => {
+    const chunk = makeChunk(1, 'hello');
+    const { kv, store } = makeFakeKV({ [chunkKey(chunk.id)]: chunk.text });
+    const result = await deleteChunks(kv as unknown as Parameters<typeof deleteChunks>[0], [
+      chunk.id,
+    ]);
+    expect(result.deleted).toBe(1);
+    expect(store.has(chunkKey(chunk.id))).toBe(false);
+  });
+
+  it('is safe when keys are missing', async () => {
+    const { kv } = makeFakeKV();
+    const result = await deleteChunks(kv as unknown as Parameters<typeof deleteChunks>[0], [
+      'missing',
+    ]);
+    expect(result.deleted).toBe(1);
   });
 });

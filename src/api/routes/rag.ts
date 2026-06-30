@@ -12,8 +12,22 @@ const QaSchema = z.object({
   topK: z.number().int().min(1).max(8).optional(),
 });
 
-const SYSTEM_PROMPT =
-  'You are a European tax-law assistant. Answer ONLY from the provided context. If the context does not contain the answer, say you do not know. Cite each fact by [n] referring to the numbered context items. Keep answers concise and factual.';
+const QaAnswerSchema = z.object({
+  answer: z.string().min(1),
+  confidence: z.enum(['high', 'medium', 'low']),
+  reasoning: z.string().optional(),
+});
+
+const SYSTEM_PROMPT = `You are a European tax-law assistant. Answer ONLY from the provided context. If the context does not contain the answer, respond with: {"answer":"I do not have enough context to answer this question.","confidence":"low"}.
+
+Cite each fact by [n] referring to the numbered context items. Keep answers concise and factual.
+
+Output ONLY valid JSON matching this schema:
+{
+  "answer": string,
+  "confidence": "high" | "medium" | "low",
+  "reasoning": string (optional)
+}`;
 
 const MAX_CONTEXT_CHARS = 16_000;
 
@@ -57,19 +71,36 @@ ragRoutes.post('/qa', async (c) => {
   }
 
   const client = new DeepSeekClient(c.env);
-  const response = await client.chat([
-    { role: 'system', content: SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: `Context:\n${buildContextBlock(matches)}\n\nQuestion: ${parsed.data.question}`,
-    },
-  ]);
+  const response = await client.chat(
+    [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Context:\n${buildContextBlock(matches)}\n\n<user_question>\n${parsed.data.question}\n</user_question>\n\nAnswer using only the context above. Output JSON.`,
+      },
+    ],
+    { responseFormat: { type: 'json_object' }, temperature: 0.2 },
+  );
 
-  const answer = response.choices[0]?.message?.content ?? '';
+  const rawContent = response.choices[0]?.message?.content ?? '{}';
+  let qaAnswer: z.infer<typeof QaAnswerSchema>;
+  try {
+    const parsedAnswer = QaAnswerSchema.safeParse(JSON.parse(rawContent));
+    if (!parsedAnswer.success) {
+      console.error('RAG QA answer failed schema validation', parsedAnswer.error.issues, rawContent);
+      return c.json({ ok: false, error: 'answer-generation' }, 500);
+    }
+    qaAnswer = parsedAnswer.data;
+  } catch {
+    console.error('RAG QA answer is not valid JSON', rawContent);
+    return c.json({ ok: false, error: 'answer-generation' }, 500);
+  }
 
   return c.json({
     ok: true,
-    answer,
+    answer: qaAnswer.answer,
+    confidence: qaAnswer.confidence,
+    reasoning: qaAnswer.reasoning ?? null,
     citations: matches.map((match) => ({
       id: match.id,
       sourceUrl: match.metadata.sourceUrl,

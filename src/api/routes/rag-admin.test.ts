@@ -52,6 +52,7 @@ function makeFakeBindings(): Bindings {
     KV: {
       put: vi.fn(() => Promise.resolve()),
       get: vi.fn(() => Promise.resolve(null)),
+      delete: vi.fn(() => Promise.resolve()),
     } as unknown as Bindings['KV'],
     R2: {} as Bindings['R2'],
     AI: {
@@ -79,6 +80,12 @@ function createTestApp(mockSession: unknown) {
   app.use('/api/admin/rag', auditMiddleware());
   app.use('/api/admin/rag/*', auditMiddleware());
   app.route('/api/admin/rag', ragAdminRoutes);
+  app.onError((err, c) => {
+    console.error('Unhandled error', err);
+    const isDev = c.env.ENVIRONMENT === 'development';
+    const message = isDev ? (err.message ?? 'Internal Server Error') : 'Internal Server Error';
+    return c.json({ error: message }, 500);
+  });
   return app;
 }
 
@@ -150,5 +157,22 @@ describe('POST /api/admin/rag/upsert', () => {
       makeFakeBindings(),
     );
     expect(res.status).toBe(400);
+  });
+
+  it('rolls back KV writes when Vectorize upsert fails', async () => {
+    mockSelect.mockReturnValueOnce(makeQueryChain([{ role: 'admin' }]));
+    const env = makeFakeBindings();
+    env.VECTORIZE.upsert = vi.fn(() => Promise.reject(new Error('Vectorize down')));
+    const app = createTestApp({ user: { id: 'admin-1' } });
+    const chunks = [makeChunk(1), makeChunk(2)];
+    const res = await app.request(
+      '/api/admin/rag/upsert',
+      { method: 'POST', body: JSON.stringify({ chunks }) },
+      env,
+    );
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('Internal Server Error');
+    expect(env.KV.delete).toHaveBeenCalledTimes(2);
   });
 });

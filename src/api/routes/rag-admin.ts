@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { putChunks } from '../../services/rag/chunk-store';
+import { deleteChunks, putChunks } from '../../services/rag/chunk-store';
 import { createEmbeddingClient } from '../../services/rag/embedding';
 import {
   TaxLawChunkSchema,
@@ -42,7 +42,8 @@ ragAdminRoutes.post('/upsert', requireAdmin(), async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = ChunkBatchSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: 'validation', issues: parsed.error.issues }, 400);
+    console.error('RAG upsert validation failed', parsed.error.issues);
+    return c.json({ error: 'validation' }, 400);
   }
 
   const embedder = createEmbeddingClient(c.env.AI);
@@ -54,11 +55,23 @@ ragAdminRoutes.post('/upsert', requireAdmin(), async (c) => {
   }));
 
   await putChunks(c.env.KV, embedded);
-  const upsertResult = await upsertChunks(c.env.VECTORIZE, embedded.map(toUpsertItem));
 
-  return c.json({
-    ok: true,
-    upserted: upsertResult.count,
-    kvWritten: embedded.length,
-  });
+  try {
+    const upsertResult = await upsertChunks(c.env.VECTORIZE, embedded.map(toUpsertItem));
+    return c.json({
+      ok: true,
+      upserted: upsertResult.count,
+      kvWritten: embedded.length,
+    });
+  } catch (err) {
+    // Best-effort rollback: Vectorize upsert failed, so KV entries are orphaned.
+    console.error('RAG upsert Vectorize failed; rolling back KV writes', err);
+    await deleteChunks(
+      c.env.KV,
+      embedded.map((chunk) => chunk.id),
+    ).catch((rollbackErr) => {
+      console.error('RAG upsert KV rollback failed', rollbackErr);
+    });
+    throw err;
+  }
 });

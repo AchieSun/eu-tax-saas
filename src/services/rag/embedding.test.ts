@@ -154,4 +154,16 @@ describe('createEmbeddingClient', () => {
     );
     await expect(client.embedQuery('x')).rejects.toBeInstanceOf(EmbeddingValidationError);
   });
+
+  it('does not retry deterministic validation errors', async () => {
+    const { ai, calls } = makeFakeAi({ responses: [[makeVector(1)]] });
+    const client = createEmbeddingClient(
+      ai as unknown as Parameters<typeof createEmbeddingClient>[0],
+      {
+        maxRetries: 2,
+      },
+    );
+    await expect(client.embedTexts(['a', 'b'])).rejects.toBeInstanceOf(EmbeddingValidationError);
+    expect(calls).toHaveLength(1);
+  });
 });
