@@ -55,6 +55,10 @@ enabled = true
 # [limits]
 # cpu_ms = 50
 
+# F9 — Daily deadline reminder cron (09:00 UTC)
+[[triggers.crons]]
+schedule = "0 9 * * *"
+
 # === Staging environment ===
 [env.staging]
 name = "eu-tax-saas-staging"
