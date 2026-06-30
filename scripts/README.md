@@ -206,12 +206,15 @@ The row `id` is deterministic: `<country>-<year>-<form>-<fieldName>`.
 
 ---
 
-# ingest-tax-law — F5 RAG seed crawler (W5-F5 Wave 1)
+# ingest-tax-law — F5 RAG seed crawler (W5-F5 Wave 1 + Wave 2)
 
 Curated official tax-law crawler for the W5-F5 RAG knowledge base. It reads
 `data/tax-law-sources.yml`, fetches only allowlisted official sources, normalises
-HTML into plain text, chunks it deterministically, and emits JSONL files ready
-for the future Vectorize upsert wave.
+HTML into plain text, chunks it deterministically, and emits JSONL files.
+
+Wave 2 adds `--upsert` mode: chunks are pushed to `POST /api/admin/rag/upsert`,
+which embeds them with Workers AI BGE-M3, stores full text in KV, and writes
+vectors + metadata to Vectorize.
 
 Wave 1 is **HTML-first**. PDF entries are intentionally skipped until the PDF
 parser/upsert wave lands.
@@ -244,6 +247,10 @@ pnpm ingest:tax-law -- --dry-run --jurisdiction EU --limit 1 --out -
 
 # Real crawl of one source into data/tax-law-chunks/ES.jsonl
 pnpm ingest:tax-law -- --jurisdiction ES --limit 1 --out data/tax-law-chunks
+
+# Wave 2: crawl + upsert into Vectorize/KV via the running worker
+pnpm ingest:tax-law -- --jurisdiction ES --limit 1 --out data/tax-law-chunks \
+  --upsert --worker-url http://localhost:8787 --admin-cookie-file ./.tmp/admin.cookie
 ```
 
 ## Flags
@@ -255,6 +262,10 @@ pnpm ingest:tax-law -- --jurisdiction ES --limit 1 --out data/tax-law-chunks
 | `--manifest <path>` | `data/tax-law-sources.yml` | Override source manifest |
 | `--dry-run` | `false` | No network; writes one schema-valid stub chunk per source |
 | `--limit N` | unlimited | Limit number of selected sources |
+| `--upsert` | `false` | Push chunks to `POST /api/admin/rag/upsert` |
+| `--worker-url URL` | (required with `--upsert`) | Base URL of the running worker |
+| `--admin-cookie-file PATH` | (required with `--upsert`) | File containing admin session cookie |
+| `--batch-size N` | `64` | Max chunks per upsert request (1–64) |
 
 ## Output schema
 
@@ -280,8 +291,9 @@ Each JSONL line validates against `src/services/rag/types.ts` →
 }
 ```
 
-`vector: null` is intentional in Wave 1. Wave 2 will compute Workers AI BGE-M3
-embeddings and call `VECTORIZE.upsert()`.
+`vector: null` in the JSONL output is the Wave 1 stub shape. When using `--upsert`,
+the worker computes Workers AI BGE-M3 embeddings and writes vectors to Vectorize
+via `src/services/rag/vectorize-store.ts`.
 
 ## Safety
 

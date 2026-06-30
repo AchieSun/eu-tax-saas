@@ -31,18 +31,21 @@ function installFetchMock(): FetchMock {
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-const DIRECT_ENV: Pick<Bindings, 'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME'> =
-  {
-    DEEPSEEK_API_KEY: 'sk-test-direct',
-  };
+const DIRECT_ENV: Pick<
+  Bindings,
+  'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+> = {
+  DEEPSEEK_API_KEY: 'sk-test-direct',
+};
 
 const GATEWAY_ENV: Pick<
   Bindings,
-  'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME'
+  'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
 > = {
   DEEPSEEK_API_KEY: 'sk-test-gw',
   AI_GATEWAY_ACCOUNT_ID: 'acct-abc',
   AI_GATEWAY_NAME: 'tax-saas-gw',
+  AI_GATEWAY_API_TOKEN: 'cf-token-gw',
 };
 
 function makeOkResponse(
@@ -127,7 +130,7 @@ describe('DeepSeekClient — headers & auth', () => {
     fetchMock._restore();
   });
 
-  it('chat() includes Authorization Bearer header', async () => {
+  it('chat() includes Authorization Bearer header for direct API', async () => {
     fetchMock.mockResolvedValueOnce(makeOkResponse());
     const client = new DeepSeekClient(DIRECT_ENV);
     await client.chat([{ role: 'user', content: 'hi' }]);
@@ -135,6 +138,15 @@ describe('DeepSeekClient — headers & auth', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer sk-test-direct');
     expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('chat() sends AI_GATEWAY_API_TOKEN when using AI Gateway', async () => {
+    fetchMock.mockResolvedValueOnce(makeOkResponse());
+    const client = new DeepSeekClient(GATEWAY_ENV);
+    await client.chat([{ role: 'user', content: 'hi' }]);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer cf-token-gw');
   });
 });
 
@@ -314,8 +326,25 @@ describe('DeepSeekClient — config errors', () => {
     expect(
       () =>
         new DeepSeekClient(
-          {} as Pick<Bindings, 'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME'>,
+          {} as Pick<
+            Bindings,
+            'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+          >,
         ),
+    ).toThrow(DeepSeekError);
+  });
+
+  it('constructor throws when AI Gateway is configured without AI_GATEWAY_API_TOKEN', () => {
+    expect(
+      () =>
+        new DeepSeekClient({
+          DEEPSEEK_API_KEY: 'sk-test',
+          AI_GATEWAY_ACCOUNT_ID: 'acct-abc',
+          AI_GATEWAY_NAME: 'tax-saas-gw',
+        } as Pick<
+          Bindings,
+          'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+        >),
     ).toThrow(DeepSeekError);
   });
 });

@@ -19,6 +19,7 @@ import type {
   KVNamespace,
   Queue,
   R2Bucket,
+  VectorizeIndex,
 } from '@cloudflare/workers-types';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -28,10 +29,13 @@ import { type Auth, createAuth } from '../auth/auth';
 import { createDb } from '../db';
 import { users } from '../db/schema';
 import { auditMiddleware } from './middleware/audit';
+import { rateLimitD1 } from './middleware/rate-limit-d1';
 import adminRoutes from './routes/admin';
 import { calculateRoutes } from './routes/calculate';
 import { daysRoutes } from './routes/days';
 import { formsRoutes } from './routes/forms';
+import { ragRoutes } from './routes/rag';
+import { ragAdminRoutes } from './routes/rag-admin';
 import { residencyRoutes } from './routes/residency';
 import { strategiesRoutes } from './routes/strategies';
 
@@ -40,16 +44,20 @@ export interface Bindings {
   KV: KVNamespace;
   R2: R2Bucket;
   AI: Ai;
+  VECTORIZE: VectorizeIndex;
   QUEUE: Queue;
   ENVIRONMENT: string;
   APP_URL: string;
   BETTER_AUTH_SECRET: string;
+  EU_TAX_SAAS_BOT_CONTACT?: string;
   PADDLE_API_KEY?: string;
   PADDLE_WEBHOOK_SECRET?: string;
   CREEM_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
+  /** Cloudflare API token used to authenticate with AI Gateway when authenticated gateway is enabled. */
+  AI_GATEWAY_API_TOKEN?: string;
   /** DeepSeek per-1M-token input cost (USD). Override list price. Default 0.27. */
   DEEPSEEK_COST_INPUT_USD_PER_M?: string;
   /** DeepSeek per-1M-token output cost (USD). Override list price. Default 1.1. */
@@ -164,6 +172,11 @@ app.use('/api/forms/*', auditMiddleware());
 // list/evaluate are pure but hashing them is still useful for analytics.
 app.use('/api/strategies', auditMiddleware());
 app.use('/api/strategies/*', auditMiddleware());
+app.use('/api/admin/rag', auditMiddleware());
+app.use('/api/admin/rag/*', auditMiddleware());
+app.use('/api/rag', auditMiddleware());
+app.use('/api/rag/*', auditMiddleware());
+app.use('/api/rag/qa', rateLimitD1({ keyPrefix: 'rag-qa', windowSeconds: 60, max: 5 }));
 
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);
@@ -171,6 +184,8 @@ app.route('/api/days', daysRoutes);
 app.route('/api/residency', residencyRoutes);
 app.route('/api/forms', formsRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/admin/rag', ragAdminRoutes);
+app.route('/api/rag', ragRoutes);
 app.route('/api/strategies', strategiesRoutes);
 
 // ── 404 fallback ────────────────────────────────────────────────────────────

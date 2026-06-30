@@ -17,7 +17,7 @@
 | **F3 filing assistant — PDF render** | ✅ | `src/forms/`, `src/api/routes/forms.ts` | Overlay + AcroForm fill, watermark, transforms |
 | **F4 strategy library — A/B/C tiers** | 🔄 | `src/strategies/` | 22 strategies registered; C-tier seeds pending |
 | **F4 LLM harness prompts** | ✅ | `src/prompts/f4-harness/`, `src/services/f4-llm.ts` | 6-layer prompt runtime + adversarial tests |
-| **F5 RAG crawler (Wave 1)** | 🔄 | `src/services/rag/`, `scripts/ingest-tax-law.ts` | HTML crawl + chunk + JSONL emit; embeddings pending |
+| **F5 RAG — crawler + Vectorize + Q&A (Wave 2)** | ✅ | `src/services/rag/`, `scripts/ingest-tax-law.ts`, `src/api/routes/rag.ts` | BGE-M3 embedding, Vectorize upsert/query, KV chunk store, `/api/rag/qa` |
 | **F6 days tracker + calendar UI** | ✅ | `src/frontend/calendar/`, `src/api/routes/days.ts` | Drag-to-paint, bulk POST, colour legend |
 | Admin routes + audit log | ✅ | `src/api/routes/admin.ts`, `src/db/schema.ts` | SHA-256 hash-only audit (GDPR-safe) |
 | Vitest unit tests | ✅ | `**/*.test.ts` | **61 files / 669 tests passing** |

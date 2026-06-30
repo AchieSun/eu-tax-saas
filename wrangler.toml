@@ -21,11 +21,9 @@ id = "1e407b97d4214ec38d93906f4643964f"
 binding = "R2"
 bucket_name = "eu-tax-saas-pdfs"
 
-# Vectorize - RAG index (F5). Uncomment after running docs/F5-VECTORIZE-SETUP.md.
-# See docs/F5-AI-GATEWAY-SETUP.md for DeepSeek AI Gateway provisioning.
-# [[vectorize]]
-# binding = "VECTORIZE"
-# index_name = "tax-law"
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "tax-law"
 
 # Workers AI - For toMarkdown PDF parsing and BGE-M3 embeddings (future)
 [ai]

@@ -37,6 +37,12 @@ bucket_name = "test-pdfs"
 # `c.env.AI` will fail at runtime in the harness; W4 PDF rendering does NOT
 # touch AI so this is safe for the targeted use case.
 
+# Vectorize — declared for type-checking only. Miniflare's Vectorize support
+# is limited; tests that exercise retrieval/upsert must inject a stub via DI.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "tax-law-test"
+
 # Queues — producer only (no consumer needed in tests; consumer requires a
 # matching producer and would otherwise spin up a worker).
 [[queues.producers]]

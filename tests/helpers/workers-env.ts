@@ -3,7 +3,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 /// <reference types="@cloudflare/vitest-pool-workers" />
 import { env } from 'cloudflare:test';
-import type { D1Database, KVNamespace, Queue, R2Bucket } from '@cloudflare/workers-types';
+import type {
+  D1Database,
+  KVNamespace,
+  Queue,
+  R2Bucket,
+  VectorizeIndex,
+} from '@cloudflare/workers-types';
 
 /**
  * Test-only shared environment helpers for the @cloudflare/vitest-pool-workers
@@ -22,6 +28,7 @@ declare module 'cloudflare:test' {
     DB: D1Database;
     R2: R2Bucket;
     KV: KVNamespace;
+    VECTORIZE: VectorizeIndex;
     QUEUE: Queue;
     ENVIRONMENT: string;
     APP_URL: string;

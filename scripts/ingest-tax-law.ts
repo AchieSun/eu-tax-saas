@@ -24,16 +24,30 @@ export interface IngestTaxLawArgs {
   manifest: string;
   dryRun: boolean;
   limit?: number;
+  upsert: boolean;
+  workerUrl?: string;
+  adminCookieFile?: string;
+  batchSize: number;
+}
+
+interface UpsertHttpClient {
+  postChunks(
+    url: string,
+    cookie: string,
+    chunks: TaxLawChunk[],
+  ): Promise<{ ok: boolean; error?: string }>;
 }
 
 interface CliResult {
   chunks: TaxLawChunk[];
   plannedSources: TaxLawSource[];
   warnings: string[];
+  upserted?: number;
 }
 
 const DEFAULT_MANIFEST = resolve(process.cwd(), 'data/tax-law-sources.yml');
 const DEFAULT_OUT = resolve(process.cwd(), 'data/tax-law-chunks');
+const DEFAULT_BATCH_SIZE = 64;
 const VALID_JURISDICTIONS = new Set(['ES', 'PT', 'UK', 'NL', 'DE', 'EU', 'ALL']);
 
 export function parseArgs(argv: string[]): IngestTaxLawArgs {
@@ -42,6 +56,8 @@ export function parseArgs(argv: string[]): IngestTaxLawArgs {
     out: DEFAULT_OUT,
     manifest: DEFAULT_MANIFEST,
     dryRun: false,
+    upsert: false,
+    batchSize: DEFAULT_BATCH_SIZE,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -76,12 +92,40 @@ export function parseArgs(argv: string[]): IngestTaxLawArgs {
         args.limit = value;
         break;
       }
+      case '--upsert':
+        args.upsert = true;
+        break;
+      case '--worker-url': {
+        const value = argv[++i];
+        if (!value) throw new Error('--worker-url requires a URL');
+        args.workerUrl = value;
+        break;
+      }
+      case '--admin-cookie-file': {
+        const value = argv[++i];
+        if (!value) throw new Error('--admin-cookie-file requires a path');
+        args.adminCookieFile = value;
+        break;
+      }
+      case '--batch-size': {
+        const value = Number(argv[++i]);
+        if (!Number.isInteger(value) || value <= 0 || value > 64) {
+          throw new Error('--batch-size must be an integer between 1 and 64');
+        }
+        args.batchSize = value;
+        break;
+      }
       case '--help':
       case '-h':
         throw new Error(helpText());
       default:
         throw new Error(`Unknown argument: ${arg}\n${helpText()}`);
     }
+  }
+
+  if (args.upsert) {
+    if (!args.workerUrl) throw new Error('--upsert requires --worker-url');
+    if (!args.adminCookieFile) throw new Error('--upsert requires --admin-cookie-file');
   }
 
   return args;
@@ -93,7 +137,13 @@ export async function loadManifest(path: string): Promise<TaxLawSource[]> {
   return manifest.sources;
 }
 
-export async function runIngest(args: IngestTaxLawArgs): Promise<CliResult> {
+export async function runIngest(
+  args: IngestTaxLawArgs,
+  deps: {
+    httpClient?: UpsertHttpClient;
+    readFileImpl?: (path: string, encoding: 'utf8') => Promise<string>;
+  } = {},
+): Promise<CliResult> {
   const allSources = await loadManifest(args.manifest);
   let sources =
     args.jurisdiction === 'ALL'
@@ -145,7 +195,73 @@ export async function runIngest(args: IngestTaxLawArgs): Promise<CliResult> {
     await writeChunks(args.out, chunks);
   }
 
-  return { chunks, plannedSources: sources, warnings };
+  let upserted: number | undefined;
+  if (args.upsert) {
+    upserted = await upsertChunksToWorker(args, chunks, deps);
+  }
+
+  return { chunks, plannedSources: sources, warnings, upserted };
+}
+
+async function upsertChunksToWorker(
+  args: IngestTaxLawArgs,
+  chunks: TaxLawChunk[],
+  deps: {
+    httpClient?: UpsertHttpClient;
+    readFileImpl?: (path: string, encoding: 'utf8') => Promise<string>;
+  } = {},
+): Promise<number> {
+  if (!args.workerUrl || !args.adminCookieFile) {
+    throw new Error('--worker-url and --admin-cookie-file are required for upsert');
+  }
+
+  const readFileImpl = deps.readFileImpl ?? readFile;
+  const cookie = (await readFileImpl(args.adminCookieFile, 'utf8')).trim();
+  const httpClient =
+    deps.httpClient ??
+    createDefaultHttpClient({
+      fetchImpl: globalThis.fetch,
+      workerUrl: args.workerUrl,
+      batchSize: args.batchSize,
+    });
+
+  let upserted = 0;
+  for (let i = 0; i < chunks.length; i += args.batchSize) {
+    const batch = chunks.slice(i, i + args.batchSize);
+    const result = await httpClient.postChunks(args.workerUrl, cookie, batch);
+    if (!result.ok) {
+      throw new Error(`Upsert failed: ${result.error ?? 'unknown error'}`);
+    }
+    upserted += batch.length;
+  }
+
+  return upserted;
+}
+
+function createDefaultHttpClient(deps: {
+  fetchImpl: typeof fetch;
+  workerUrl: string;
+  batchSize: number;
+}): UpsertHttpClient {
+  return {
+    async postChunks(url: string, cookie: string, chunks: TaxLawChunk[]) {
+      const res = await deps.fetchImpl(`${url}/api/admin/rag/upsert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: cookie,
+        },
+        body: JSON.stringify({ chunks }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'unknown error');
+        return { ok: false, error: `${res.status} ${res.statusText}: ${text}` };
+      }
+
+      return { ok: true };
+    },
+  };
 }
 
 export async function writeChunks(outDir: string, chunks: TaxLawChunk[]): Promise<void> {
@@ -168,14 +284,17 @@ export async function writeChunks(outDir: string, chunks: TaxLawChunk[]): Promis
 }
 
 function helpText(): string {
-  return 'Usage: pnpm ingest:tax-law -- [--jurisdiction ES|PT|UK|NL|DE|EU|ALL] [--out dir|-] [--manifest path] [--dry-run] [--limit N]';
+  return 'Usage: pnpm ingest:tax-law -- [--jurisdiction ES|PT|UK|NL|DE|EU|ALL] [--out dir|-] [--manifest path] [--dry-run] [--limit N] [--upsert --worker-url URL --admin-cookie-file PATH [--batch-size N]]';
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   runIngest(parseArgs(process.argv.slice(2)))
     .then((result) => {
       for (const warning of result.warnings) console.error(`warning: ${warning}`);
-      console.error(`sources=${result.plannedSources.length} chunks=${result.chunks.length}`);
+      const upsertPart = result.upserted !== undefined ? ` upserted=${result.upserted}` : '';
+      console.error(
+        `sources=${result.plannedSources.length} chunks=${result.chunks.length}${upsertPart}`,
+      );
     })
     .catch((err: unknown) => {
       console.error(err instanceof Error ? err.message : String(err));

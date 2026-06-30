@@ -147,18 +147,24 @@ export class DeepSeekClient {
   private readonly baseUrl: string;
 
   constructor(
-    env: Pick<Bindings, 'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME'>,
+    env: Pick<Bindings, 'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'>,
   ) {
     const key = env.DEEPSEEK_API_KEY;
     if (!key) {
       throw new DeepSeekError('DEEPSEEK_API_KEY is not configured');
     }
-    this.apiKey = key;
 
     if (env.AI_GATEWAY_ACCOUNT_ID && env.AI_GATEWAY_NAME) {
+      if (!env.AI_GATEWAY_API_TOKEN) {
+        throw new DeepSeekError(
+          'AI_GATEWAY_API_TOKEN is required when AI_GATEWAY_ACCOUNT_ID and AI_GATEWAY_NAME are set',
+        );
+      }
       this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/deepseek`;
+      this.apiKey = env.AI_GATEWAY_API_TOKEN;
     } else {
       this.baseUrl = DIRECT_BASE_URL;
+      this.apiKey = key;
     }
   }
 

@@ -41,3 +41,4 @@ data/tax-law-chunks/
 
 # Husky
 .husky/_
+.tmp/

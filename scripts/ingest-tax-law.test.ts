@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   TAX_LAW_ALLOWED_HOSTS,
   TaxLawChunkSchema,
@@ -81,6 +81,34 @@ describe('parseArgs', () => {
   it('rejects invalid jurisdiction', () => {
     expect(() => parseArgs(['--jurisdiction', 'FR'])).toThrow(/jurisdiction/);
   });
+
+  it('parses upsert flags', () => {
+    const args = parseArgs([
+      '--upsert',
+      '--worker-url',
+      'http://localhost:8787',
+      '--admin-cookie-file',
+      '/tmp/cookie',
+      '--batch-size',
+      '32',
+    ]);
+    expect(args.upsert).toBe(true);
+    expect(args.workerUrl).toBe('http://localhost:8787');
+    expect(args.adminCookieFile).toBe('/tmp/cookie');
+    expect(args.batchSize).toBe(32);
+  });
+
+  it('requires worker-url and admin-cookie-file when upsert is set', () => {
+    expect(() => parseArgs(['--upsert'])).toThrow(/worker-url/);
+    expect(() => parseArgs(['--upsert', '--worker-url', 'http://localhost:8787'])).toThrow(
+      /admin-cookie-file/,
+    );
+  });
+
+  it('rejects invalid batch-size', () => {
+    expect(() => parseArgs(['--batch-size', '0'])).toThrow(/batch-size/);
+    expect(() => parseArgs(['--batch-size', '65'])).toThrow(/batch-size/);
+  });
 });
 
 describe('runIngest dry-run', () => {
@@ -92,6 +120,8 @@ describe('runIngest dry-run', () => {
       manifest: 'data/tax-law-sources.yml',
       dryRun: true,
       limit: 2,
+      upsert: false,
+      batchSize: 64,
     });
     expect(result.plannedSources).toHaveLength(2);
     expect(result.chunks).toHaveLength(2);
@@ -113,6 +143,8 @@ describe('runIngest dry-run', () => {
         manifest: 'data/tax-law-sources.yml',
         dryRun: false,
         limit: 1,
+        upsert: false,
+        batchSize: 64,
       }),
     ).rejects.toThrow(/EU_TAX_SAAS_BOT_CONTACT/);
     process.env.EU_TAX_SAAS_BOT_CONTACT = previous ?? '';
@@ -133,8 +165,67 @@ describe('runIngest dry-run', () => {
       manifest: manifestPath,
       dryRun: true,
       limit: 1,
+      upsert: false,
+      batchSize: 64,
     });
     expect(result.chunks).toHaveLength(1);
     expect(result.chunks[0].jurisdiction).toBe('EU');
+  });
+
+  it('upserts generated chunks in batches', async () => {
+    const out = await makeTempDir();
+    const cookiePath = join(out, 'cookie.txt');
+    await writeFile(cookiePath, 'session=abc', 'utf8');
+    const postChunks = vi.fn(async () => ({ ok: true as const }));
+    const httpClient = { postChunks };
+    const readFileImpl = async (path: string, encoding: 'utf8') => readFile(path, encoding);
+    const result = await runIngest(
+      {
+        jurisdiction: 'ES',
+        out,
+        manifest: 'data/tax-law-sources.yml',
+        dryRun: true,
+        limit: 2,
+        upsert: true,
+        workerUrl: 'http://localhost:8787',
+        adminCookieFile: cookiePath,
+        batchSize: 64,
+      },
+      { httpClient, readFileImpl },
+    );
+    expect(result.chunks).toHaveLength(2);
+    expect(result.upserted).toBe(2);
+    expect(postChunks).toHaveBeenCalledTimes(1);
+    expect(postChunks).toHaveBeenCalledWith(
+      'http://localhost:8787',
+      'session=abc',
+      expect.arrayContaining([expect.objectContaining({ jurisdiction: 'ES' })]),
+    );
+  });
+
+  it('throws when upsert HTTP call fails', async () => {
+    const out = await makeTempDir();
+    const cookiePath = join(out, 'cookie.txt');
+    await writeFile(cookiePath, 'session=abc', 'utf8');
+    const httpClient = {
+      postChunks: vi.fn(async () => ({ ok: false, error: '401 Unauthorized' })),
+    };
+    const readFileImpl = async (path: string, encoding: 'utf8') => readFile(path, encoding);
+    await expect(
+      runIngest(
+        {
+          jurisdiction: 'ES',
+          out,
+          manifest: 'data/tax-law-sources.yml',
+          dryRun: true,
+          limit: 1,
+          upsert: true,
+          workerUrl: 'http://localhost:8787',
+          adminCookieFile: cookiePath,
+          batchSize: 64,
+        },
+        { httpClient, readFileImpl },
+      ),
+    ).rejects.toThrow(/Upsert failed/);
   });
 });

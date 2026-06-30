@@ -35,8 +35,18 @@ https://api.deepseek.com/v1
 4. 名称建议使用 `eu-tax-saas`。
 5. 复制 Dashboard 里显示的 gateway slug/name。
 6. 复制你的 Cloudflare Account ID。
+7. 进入 Gateway 详情页 → **提供程序密钥** → 找到 **DeepSeek** → 点击 `+` → 选择 **自带密钥 (BYOK)** → 填入你的 DeepSeek API Key。
 
 如果你只想先用 Cloudflare 自动创建的默认 gateway，也可以在后续代码里用 `default`。但本项目文档和 env 命名按自定义 gateway `eu-tax-saas` 记录，方便日志和生产排查。
+
+### 关于"已验证的网关"
+
+创建 Gateway 时有一个 **"已验证的网关" / "Authenticated Gateway"** 开关：
+
+- **关闭**：任何请求都可以访问 Gateway，DeepSeekClient 用 DeepSeek API Key 作为 `Authorization` 透传即可。
+- **开启**：Cloudflare 要求请求头 `Authorization: Bearer {Cloudflare API Token}`，DeepSeek 的 provider key 只在 Dashboard 的 provider 配置里使用。
+
+本项目的代码已支持开启验证：只要配置了 `AI_GATEWAY_API_TOKEN`，DeepSeekClient 就会把 Cloudflare API Token 发给 Gateway。
 
 ## 需要设置的 secrets / vars
 
@@ -48,12 +58,27 @@ npx wrangler secret put AI_GATEWAY_ACCOUNT_ID
 npx wrangler secret put AI_GATEWAY_NAME
 ```
 
+如果你在 Gateway 设置里开启了 **"已验证的网关"**，还需要设置：
+
+```bash
+npx wrangler secret put AI_GATEWAY_API_TOKEN
+```
+
+创建 `AI_GATEWAY_API_TOKEN` 的方式：
+
+1. Cloudflare Dashboard → **我的个人资料** → **API 令牌**
+2. 点击 **创建令牌** → **自定义令牌**
+3. 权限选择：**AI Gateway → 读取** 或 **AI Gateway → 编辑**（根据实际最小权限原则）
+4. 账户范围选择你的账号
+5. 创建并复制 token
+
 如果是 staging 或 production 环境，按需加上对应的 `--env`：
 
 ```bash
 npx wrangler secret put DEEPSEEK_API_KEY --env production
 npx wrangler secret put AI_GATEWAY_ACCOUNT_ID --env production
 npx wrangler secret put AI_GATEWAY_NAME --env production
+npx wrangler secret put AI_GATEWAY_API_TOKEN --env production
 ```
 
 ## 每个字段是什么意思
@@ -63,6 +88,7 @@ npx wrangler secret put AI_GATEWAY_NAME --env production
 | `DEEPSEEK_API_KEY` | 你的 DeepSeek provider key。不要粘贴到代码、文档或聊天里。 | `sk-...` |
 | `AI_GATEWAY_ACCOUNT_ID` | 你的 Cloudflare account ID，不是 API key。 | `0123456789abcdef...` |
 | `AI_GATEWAY_NAME` | 你创建的 gateway slug/name。 | `eu-tax-saas` |
+| `AI_GATEWAY_API_TOKEN` | 当 Gateway 开启"已验证的网关"时使用。Cloudflare API Token，不是 DeepSeek key。 | `eyJ...` 或长串随机字符 |
 
 ## 你设置完后需要发给我的信息
 
@@ -89,6 +115,35 @@ npx wrangler dev --remote
 ```
 
 然后触发一个 AI 路由。Cloudflare Dashboard 里应该能在 **AI Gateway → eu-tax-saas** 下看到请求记录。
+
+## 用户问答端点 `POST /api/rag/qa`
+
+Wave 2 新增的 `/api/rag/qa` 会：
+
+1. 用 BGE-M3 把用户问题 embedding。
+2. 从 Vectorize 检索相关税法 chunk（按 jurisdiction/taxYear 过滤）。
+3. 从 KV 读取完整文本。
+4. 把上下文塞进 system prompt，通过 AI Gateway 调用 DeepSeek。
+5. 返回 `{ ok, answer, citations[], usage }`。
+
+请求示例：
+
+```bash
+curl -X POST http://localhost:8787/api/rag/qa \
+  -H 'Content-Type: application/json' \
+  -H "Cookie: <your-session-cookie>" \
+  -d '{
+    "question": "What is the Spanish IRPF general tax base?",
+    "jurisdiction": "ES",
+    "taxYear": 2025
+  }'
+```
+
+约束：
+
+- 必须登录（`session` cookie）。
+- 每用户 60 秒最多 5 次请求（D1 限流）。
+- 如果检索不到相关上下文，返回 `422 { ok: false, error: "no-context" }`，避免无根据回答。
 
 ## 和 Vectorize 的关系
 
