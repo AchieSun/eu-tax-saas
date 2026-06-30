@@ -9,6 +9,10 @@
 import { type Component, Show, Suspense, createResource, createSignal, lazy } from 'solid-js';
 import CalendarView from './CalendarView';
 import CompareView from './CompareView';
+import DeadlinesPage from './pages/DeadlinesPage';
+import RagPage from './pages/RagPage';
+import ResidencyPage from './pages/ResidencyPage';
+import StrategiesPage from './pages/StrategiesPage';
 
 // Lazy-loaded — the PDF preview tab pulls in pdf-lib via the render path
 // so we keep it out of the initial bundle until the user opts in.
@@ -26,7 +30,7 @@ async function fetchHealth(): Promise<HealthResponse> {
   return r.json() as Promise<HealthResponse>;
 }
 
-type Tab = 'compare' | 'calendar' | 'filing';
+type Tab = 'compare' | 'calendar' | 'filing' | 'residency' | 'strategies' | 'rag' | 'deadlines';
 
 const App: Component = () => {
   const [health] = createResource(fetchHealth);
@@ -105,6 +109,10 @@ const App: Component = () => {
         {tabBtn('compare', '5 国对比')}
         {tabBtn('calendar', '居留日历')}
         {tabBtn('filing', '税务草稿')}
+        {tabBtn('residency', '居留判定')}
+        {tabBtn('strategies', '节税策略')}
+        {tabBtn('rag', '税法问答')}
+        {tabBtn('deadlines', '截止日')}
       </nav>
 
       {/* Active view */}
@@ -122,6 +130,18 @@ const App: Component = () => {
         >
           <FilingDraftView />
         </Suspense>
+      </Show>
+      <Show when={tab() === 'residency'}>
+        <ResidencyPage />
+      </Show>
+      <Show when={tab() === 'strategies'}>
+        <StrategiesPage />
+      </Show>
+      <Show when={tab() === 'rag'}>
+        <RagPage />
+      </Show>
+      <Show when={tab() === 'deadlines'}>
+        <DeadlinesPage />
       </Show>
 
       {/* Implementation status — collapsed by default */}
