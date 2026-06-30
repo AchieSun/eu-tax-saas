@@ -39,6 +39,9 @@ data/tax-law-chunks/
 # TypeScript
 *.tsbuildinfo
 
+# Local planning artifacts
+.omo/
+
 # Husky
 .husky/_
 .tmp/
