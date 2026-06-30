@@ -15,11 +15,13 @@ migrations_dir = "drizzle/migrations"
 [[kv_namespaces]]
 binding = "KV"
 id = "1e407b97d4214ec38d93906f4643964f"
+preview_id = "961c6acd44c34f938a435a13fddd48a5"
 
 # R2 - PDF storage (tax form templates + generated PDFs)
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "eu-tax-saas-pdfs"
+preview_bucket_name = "eu-tax-saas-pdfs-preview"
 
 [[vectorize]]
 binding = "VECTORIZE"
