@@ -155,13 +155,11 @@ export class DeepSeekClient {
     }
 
     if (env.AI_GATEWAY_ACCOUNT_ID && env.AI_GATEWAY_NAME) {
-      if (!env.AI_GATEWAY_API_TOKEN) {
-        throw new DeepSeekError(
-          'AI_GATEWAY_API_TOKEN is required when AI_GATEWAY_ACCOUNT_ID and AI_GATEWAY_NAME are set',
-        );
-      }
       this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/deepseek`;
-      this.apiKey = env.AI_GATEWAY_API_TOKEN;
+      // When AI Gateway has authenticated gateway enabled, use the Cloudflare
+      // API token. Otherwise fall back to the DeepSeek provider key, which the
+      // gateway forwards to DeepSeek (or uses as the BYOK provider key).
+      this.apiKey = env.AI_GATEWAY_API_TOKEN || key;
     } else {
       this.baseUrl = DIRECT_BASE_URL;
       this.apiKey = key;

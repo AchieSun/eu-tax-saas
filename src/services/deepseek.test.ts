@@ -334,17 +334,15 @@ describe('DeepSeekClient — config errors', () => {
     ).toThrow(DeepSeekError);
   });
 
-  it('constructor throws when AI Gateway is configured without AI_GATEWAY_API_TOKEN', () => {
-    expect(
-      () =>
-        new DeepSeekClient({
-          DEEPSEEK_API_KEY: 'sk-test',
-          AI_GATEWAY_ACCOUNT_ID: 'acct-abc',
-          AI_GATEWAY_NAME: 'tax-saas-gw',
-        } as Pick<
-          Bindings,
-          'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
-        >),
-    ).toThrow(DeepSeekError);
+  it('constructor falls back to DEEPSEEK_API_KEY for unauthenticated gateway', () => {
+    const client = new DeepSeekClient({
+      DEEPSEEK_API_KEY: 'sk-test',
+      AI_GATEWAY_ACCOUNT_ID: 'acct-abc',
+      AI_GATEWAY_NAME: 'tax-saas-gw',
+    } as Pick<
+      Bindings,
+      'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+    >);
+    expect(client).toBeDefined();
   });
 });

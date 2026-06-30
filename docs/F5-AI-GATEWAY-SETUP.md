@@ -58,19 +58,24 @@ npx wrangler secret put AI_GATEWAY_ACCOUNT_ID
 npx wrangler secret put AI_GATEWAY_NAME
 ```
 
-如果你在 Gateway 设置里开启了 **"已验证的网关"**，还需要设置：
+`AI_GATEWAY_API_TOKEN` 是**可选的**，只有你在 Gateway 设置里开启了 **"已验证的网关"** 时才需要设置：
 
 ```bash
 npx wrangler secret put AI_GATEWAY_API_TOKEN
 ```
 
+- 如果开启验证：请求头使用 Cloudflare API Token，DeepSeek provider key 只在 Dashboard 的 provider 配置里使用。
+- 如果关闭验证：请求头使用 DeepSeek API Key，Gateway 会把它透传给 DeepSeek（或作为 BYOK provider key 使用）。
+
 创建 `AI_GATEWAY_API_TOKEN` 的方式：
 
 1. Cloudflare Dashboard → **我的个人资料** → **API 令牌**
 2. 点击 **创建令牌** → **自定义令牌**
-3. 权限选择：**AI Gateway → 读取** 或 **AI Gateway → 编辑**（根据实际最小权限原则）
+3. 权限选择：**AI Gateway → 编辑**
 4. 账户范围选择你的账号
 5. 创建并复制 token
+
+> 注意：Cloudflare AI Gateway 的"已验证的网关"在某些账号上可能出现 token 被拒绝的情况（`Authentication Fails (governor)`）。如果反复配置 token 仍无法通过，可以直接关闭该选项，代码会自动回退到用 DeepSeek key 访问 Gateway。
 
 如果是 staging 或 production 环境，按需加上对应的 `--env`：
 
@@ -78,6 +83,7 @@ npx wrangler secret put AI_GATEWAY_API_TOKEN
 npx wrangler secret put DEEPSEEK_API_KEY --env production
 npx wrangler secret put AI_GATEWAY_ACCOUNT_ID --env production
 npx wrangler secret put AI_GATEWAY_NAME --env production
+# 仅在开启验证时设置
 npx wrangler secret put AI_GATEWAY_API_TOKEN --env production
 ```
 
