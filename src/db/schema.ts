@@ -370,6 +370,37 @@ export const rateLimitCounters = sqliteTable(
   }),
 );
 
+// ────────────────────────────────────────────────────────────────────────────
+// F9 — Deadline calendar
+// ────────────────────────────────────────────────────────────────────────────
+
+export const deadlines = sqliteTable(
+  'deadlines',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    taxYear: integer('tax_year').notNull(),
+    jurisdiction: text('jurisdiction').notNull(), // ISO 3166-1 alpha-2
+    title: text('title').notNull(),
+    description: text('description'),
+    dueDate: text('due_date').notNull(), // YYYY-MM-DD
+    status: text('status').notNull().default('pending'), // pending|completed|snoozed|dismissed
+    category: text('category').notNull(), // tax_filing|payment|document|milestone|other
+    source: text('source').notNull().default('user'), // system|user|advisor
+    reminderDays: integer('reminder_days').notNull().default(7),
+    snoozedUntil: text('snoozed_until'), // YYYY-MM-DD, only meaningful when status=snoozed
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    userStatusIdx: index('idx_deadlines_user_status').on(t.userId, t.status),
+    userDueDateIdx: index('idx_deadlines_user_due_date').on(t.userId, t.dueDate),
+    userYearIdx: index('idx_deadlines_user_year').on(t.userId, t.taxYear),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type UserDays = typeof userDays.$inferSelect;
@@ -380,3 +411,5 @@ export type NewAuditLog = typeof auditLog.$inferInsert;
 export type FormFieldMapping = typeof formFieldMappings.$inferSelect;
 export type FormMappingVersion = typeof formMappingVersions.$inferSelect;
 export type NewFormMappingVersion = typeof formMappingVersions.$inferInsert;
+export type Deadline = typeof deadlines.$inferSelect;
+export type NewDeadline = typeof deadlines.$inferInsert;
