@@ -33,6 +33,7 @@ import { rateLimitD1 } from './middleware/rate-limit-d1';
 import adminRoutes from './routes/admin';
 import { calculateRoutes } from './routes/calculate';
 import { daysRoutes } from './routes/days';
+import { deadlinesRoutes } from './routes/deadlines';
 import { formsRoutes } from './routes/forms';
 import { ragRoutes } from './routes/rag';
 import { ragAdminRoutes } from './routes/rag-admin';
@@ -159,6 +160,8 @@ app.use('/api/residency', auditMiddleware());
 app.use('/api/residency/*', auditMiddleware());
 app.use('/api/days', auditMiddleware());
 app.use('/api/days/*', auditMiddleware());
+app.use('/api/deadlines', auditMiddleware());
+app.use('/api/deadlines/*', auditMiddleware());
 app.use('/api/admin', auditMiddleware());
 app.use('/api/admin/*', auditMiddleware());
 // Oracle P1-2 (W4 review): /api/forms is legally consequential — every
@@ -187,11 +190,12 @@ app.use(
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);
 app.route('/api/days', daysRoutes);
-app.route('/api/residency', residencyRoutes);
+app.route('/api/deadlines', deadlinesRoutes);
 app.route('/api/forms', formsRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/admin/rag', ragAdminRoutes);
 app.route('/api/rag', ragRoutes);
+app.route('/api/residency', residencyRoutes);
 app.route('/api/strategies', strategiesRoutes);
 
 // ── 404 fallback ────────────────────────────────────────────────────────────
