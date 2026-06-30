@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const TAX_LAW_JURISDICTIONS = ['ES', 'PT', 'UK', 'NL', 'DE', 'EU'] as const;
 export const TAX_LAW_SOURCE_TYPES = ['html', 'pdf'] as const;
+export const TAX_LAW_REGIME_STATUSES = ['active', 'transitional', 'deprecated'] as const;
 export const TAX_LAW_AUTHORITIES = [
   'BOE',
   'Agencia Tributaria',
@@ -40,6 +41,7 @@ export const TAX_LAW_ALLOWED_HOSTS = [
 
 export const TaxLawJurisdictionSchema = z.enum(TAX_LAW_JURISDICTIONS);
 export const TaxLawSourceTypeSchema = z.enum(TAX_LAW_SOURCE_TYPES);
+export const TaxLawRegimeStatusSchema = z.enum(TAX_LAW_REGIME_STATUSES);
 export const TaxLawAuthoritySchema = z.enum(TAX_LAW_AUTHORITIES);
 
 export const TaxLawSourceSchema = z.object({
@@ -51,6 +53,7 @@ export const TaxLawSourceSchema = z.object({
   authority: TaxLawAuthoritySchema,
   taxYear: z.number().int().min(2024).max(2030),
   topic: z.string().min(1),
+  regimeStatus: TaxLawRegimeStatusSchema.default('active'),
   licenseNote: z.string().min(1),
   lastVerifiedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
@@ -71,6 +74,7 @@ export const TaxLawChunkSchema = z.object({
   authority: TaxLawAuthoritySchema,
   taxYear: z.number().int().min(2024).max(2030),
   topic: z.string().min(1),
+  regimeStatus: TaxLawRegimeStatusSchema.default('active'),
   lang: z.string().min(2).max(8),
   chunkIndex: z.number().int().nonnegative(),
   charCount: z.number().int().nonnegative(),
@@ -92,6 +96,7 @@ export const VectorizeChunkMetadataSchema = z
     authority: TaxLawAuthoritySchema,
     taxYear: z.number().int().min(2024).max(2030),
     topic: z.string().min(1),
+    regimeStatus: TaxLawRegimeStatusSchema.default('active'),
     lang: z.string().min(2).max(8),
     chunkIndex: z.number().int().nonnegative(),
     charCount: z.number().int().nonnegative(),
@@ -106,6 +111,7 @@ export const VectorizeUpsertItemSchema = z.object({
 });
 
 export type TaxLawJurisdiction = z.infer<typeof TaxLawJurisdictionSchema>;
+export type TaxLawRegimeStatus = z.infer<typeof TaxLawRegimeStatusSchema>;
 export type TaxLawSource = z.infer<typeof TaxLawSourceSchema>;
 export type TaxLawSourceManifest = z.infer<typeof TaxLawSourceManifestSchema>;
 export type TaxLawChunk = z.infer<typeof TaxLawChunkSchema>;

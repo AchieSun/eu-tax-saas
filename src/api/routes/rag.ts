@@ -18,9 +18,13 @@ const QaAnswerSchema = z.object({
   reasoning: z.string().optional(),
 });
 
-const SYSTEM_PROMPT = `You are a European tax-law assistant. Answer ONLY from the provided context. If the context does not contain the answer, respond with: {"answer":"I do not have enough context to answer this question.","confidence":"low"}.
+function buildSystemPrompt(warnings: string[]): string {
+  const warningBlock = warnings.length
+    ? `\n\nIMPORTANT WARNINGS:\n${warnings.map((w) => `- ${w}`).join('\n')}\nIf any warning applies, set confidence to "low" and explain the limitation in reasoning.`
+    : '';
+  return `You are a European tax-law assistant. Answer ONLY from the provided context. If the context does not contain the answer, respond with: {"answer":"I do not have enough context to answer this question.","confidence":"low"}.
 
-Cite each fact by [n] referring to the numbered context items. Keep answers concise and factual.
+Cite each fact by [n] referring to the numbered context items. Keep answers concise and factual.${warningBlock}
 
 Output ONLY valid JSON matching this schema:
 {
@@ -28,6 +32,7 @@ Output ONLY valid JSON matching this schema:
   "confidence": "high" | "medium" | "low",
   "reasoning": string (optional)
 }`;
+}
 
 const MAX_CONTEXT_CHARS = 16_000;
 
@@ -60,23 +65,35 @@ ragRoutes.post('/qa', async (c) => {
   }
 
   const retrieval = createRetrievalService(c.env);
-  const matches = await retrieval.retrieve({
+  const summary = await retrieval.retrieve({
     query: parsed.data.question,
     jurisdiction: parsed.data.jurisdiction,
     taxYear: parsed.data.taxYear,
     topK: parsed.data.topK,
   });
-  if (matches.length === 0) {
+  if (summary.results.length === 0) {
     return c.json({ ok: false, error: 'no-context' }, 422);
+  }
+
+  const warnings: string[] = [];
+  if (summary.blacklistHit) {
+    warnings.push(
+      'The question references a transitional or abolished tax regime. Only answer based on the current-year context provided and clearly state any limitations.',
+    );
+  }
+  if (summary.transitionalPresent) {
+    warnings.push(
+      'Some retrieved sources cover a transitional regime. Do not present transitional rules as permanent or universally applicable.',
+    );
   }
 
   const client = new DeepSeekClient(c.env);
   const response = await client.chat(
     [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt(warnings) },
       {
         role: 'user',
-        content: `Context:\n${buildContextBlock(matches)}\n\n<user_question>\n${parsed.data.question}\n</user_question>\n\nAnswer using only the context above. Output JSON.`,
+        content: `Context (tax year ${summary.taxYear}):\n${buildContextBlock(summary.results)}\n\n<user_question>\n${parsed.data.question}\n</user_question>\n\nAnswer using only the context above. Output JSON.`,
       },
     ],
     { responseFormat: { type: 'json_object' }, temperature: 0.2 },
@@ -96,12 +113,18 @@ ragRoutes.post('/qa', async (c) => {
     return c.json({ ok: false, error: 'answer-generation' }, 500);
   }
 
+  // Override LLM confidence when safety flags are present.
+  const effectiveConfidence =
+    summary.blacklistHit || summary.transitionalPresent ? 'low' : qaAnswer.confidence;
+
   return c.json({
     ok: true,
     answer: qaAnswer.answer,
-    confidence: qaAnswer.confidence,
+    confidence: effectiveConfidence,
     reasoning: qaAnswer.reasoning ?? null,
-    citations: matches.map((match) => ({
+    taxYear: summary.taxYear,
+    warnings: warnings.length > 0 ? warnings : null,
+    citations: summary.results.map((match) => ({
       id: match.id,
       sourceUrl: match.metadata.sourceUrl,
       sourceTitle: match.metadata.sourceTitle,

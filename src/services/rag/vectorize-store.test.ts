@@ -18,6 +18,7 @@ function makeItem(idSeed: number): VectorizeUpsertItem {
       authority: 'BOE',
       taxYear: 2025,
       topic: 'irpf',
+      regimeStatus: 'active',
       lang: 'es',
       chunkIndex: idSeed,
       charCount: 100,

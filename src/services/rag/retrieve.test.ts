@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_TOP_K, MIN_RELEVANCE_SCORE, createRetrievalService } from './retrieve';
+import {
+  CURRENT_TAX_YEAR,
+  DEFAULT_TOP_K,
+  MIN_RELEVANCE_SCORE,
+  createRetrievalService,
+} from './retrieve';
 import type { Vectorize1024 } from './types';
 
 function makeVector(seed = 0): Vectorize1024 {
@@ -8,7 +13,7 @@ function makeVector(seed = 0): Vectorize1024 {
 
 function makeFakeEnv(
   opts: {
-    matches?: { id: string; score: number; text: string }[];
+    matches?: { id: string; score: number; text: string; regimeStatus?: 'active' | 'transitional' | 'deprecated' }[];
   } = {},
 ) {
   const matches = opts.matches ?? [
@@ -41,6 +46,7 @@ function makeFakeEnv(
             authority: 'BOE',
             taxYear: 2025,
             topic: 'irpf',
+            regimeStatus: match.regimeStatus ?? 'active',
             lang: 'es',
             chunkIndex: 0,
             charCount: 10,
@@ -62,10 +68,11 @@ describe('createRetrievalService', () => {
     const service = createRetrievalService(
       env as unknown as Parameters<typeof createRetrievalService>[0],
     );
-    const results = await service.retrieve({ query: 'IRPF' });
-    expect(results).toHaveLength(2);
-    expect(results[0].score).toBeGreaterThanOrEqual(results[1].score);
-    expect(results.every((r) => r.score >= MIN_RELEVANCE_SCORE)).toBe(true);
+    const summary = await service.retrieve({ query: 'IRPF' });
+    expect(summary.results).toHaveLength(2);
+    expect(summary.results[0].score).toBeGreaterThanOrEqual(summary.results[1].score);
+    expect(summary.results.every((r) => r.score >= MIN_RELEVANCE_SCORE)).toBe(true);
+    expect(summary.taxYear).toBe(CURRENT_TAX_YEAR);
   });
 
   it('passes jurisdiction and taxYear filters to vectorize', async () => {
@@ -78,7 +85,21 @@ describe('createRetrievalService', () => {
       expect.any(Array),
       expect.objectContaining({
         filter: { jurisdiction: 'ES', taxYear: 2025 },
-        topK: DEFAULT_TOP_K,
+        topK: DEFAULT_TOP_K * 2,
+      }),
+    );
+  });
+
+  it('defaults taxYear to current tax year', async () => {
+    const env = makeFakeEnv();
+    const service = createRetrievalService(
+      env as unknown as Parameters<typeof createRetrievalService>[0],
+    );
+    await service.retrieve({ query: 'IRPF' });
+    expect(env.VECTORIZE.query).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        filter: { taxYear: CURRENT_TAX_YEAR },
       }),
     );
   });
@@ -91,17 +112,17 @@ describe('createRetrievalService', () => {
     const service = createRetrievalService(
       env as unknown as Parameters<typeof createRetrievalService>[0],
     );
-    const results = await service.retrieve({ query: 'IRPF' });
-    expect(results).toHaveLength(0);
+    const summary = await service.retrieve({ query: 'IRPF' });
+    expect(summary.results).toHaveLength(0);
   });
 
-  it('returns an empty array when vectorize has no matches', async () => {
+  it('returns an empty summary when vectorize has no matches', async () => {
     const env = makeFakeEnv({ matches: [] });
     const service = createRetrievalService(
       env as unknown as Parameters<typeof createRetrievalService>[0],
     );
-    const results = await service.retrieve({ query: 'IRPF' });
-    expect(results).toEqual([]);
+    const summary = await service.retrieve({ query: 'IRPF' });
+    expect(summary.results).toEqual([]);
   });
 
   it('respects custom topK', async () => {
@@ -112,11 +133,52 @@ describe('createRetrievalService', () => {
     await service.retrieve({ query: 'IRPF', topK: 8 });
     expect(env.VECTORIZE.query).toHaveBeenCalledWith(
       expect.any(Array),
-      expect.objectContaining({ topK: 8 }),
+      expect.objectContaining({ topK: 16 }),
     );
+  });
+
+  it('excludes deprecated regimes from results', async () => {
+    const env = makeFakeEnv({
+      matches: [
+        { id: 'a'.repeat(64), score: 0.92, text: 'active chunk', regimeStatus: 'active' },
+        { id: 'b'.repeat(64), score: 0.88, text: 'deprecated chunk', regimeStatus: 'deprecated' },
+      ],
+    });
+    const service = createRetrievalService(
+      env as unknown as Parameters<typeof createRetrievalService>[0],
+    );
+    const summary = await service.retrieve({ query: 'IRPF' });
+    expect(summary.results).toHaveLength(1);
+    expect(summary.results[0].text).toBe('active chunk');
+    expect(summary.deprecatedExcluded).toBe(true);
+  });
+
+  it('flags transitional regimes and keeps them with warning', async () => {
+    const env = makeFakeEnv({
+      matches: [{ id: 'a'.repeat(64), score: 0.92, text: 'transitional chunk', regimeStatus: 'transitional' }],
+    });
+    const service = createRetrievalService(
+      env as unknown as Parameters<typeof createRetrievalService>[0],
+    );
+    const summary = await service.retrieve({ query: 'IRPF' });
+    expect(summary.results).toHaveLength(1);
+    expect(summary.transitionalPresent).toBe(true);
+  });
+
+  it('flags blacklist queries about transitional/abolished regimes', async () => {
+    const env = makeFakeEnv();
+    const service = createRetrievalService(
+      env as unknown as Parameters<typeof createRetrievalService>[0],
+    );
+    const summary = await service.retrieve({ query: 'How do I apply for NHR?' });
+    expect(summary.blacklistHit).toBe(true);
   });
 
   it('exposes MIN_RELEVANCE_SCORE boundary', () => {
     expect(MIN_RELEVANCE_SCORE).toBe(0.35);
+  });
+
+  it('defaults DEFAULT_TOP_K to 5', () => {
+    expect(DEFAULT_TOP_K).toBe(5);
   });
 });

@@ -187,6 +187,7 @@ export function buildTaxLawChunks(
     authority: source.authority,
     taxYear: source.taxYear,
     topic: source.topic,
+    regimeStatus: source.regimeStatus,
     lang: source.lang,
     chunkIndex: chunk.chunkIndex,
     charCount: chunk.charCount,

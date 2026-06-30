@@ -46,6 +46,7 @@ function makeFakeEnv() {
               authority: 'BOE',
               taxYear: 2025,
               topic: 'irpf',
+              regimeStatus: 'active',
               lang: 'es',
               chunkIndex: 0,
               charCount: 10,
@@ -273,5 +274,250 @@ describe('POST /api/rag/qa', () => {
       expect(body.ok).toBe(false);
       expect(body.error).toBe('no-context');
     }
+  });
+
+  it('returns taxYear and warnings in the response', async () => {
+    const app = createTestApp({ user: { id: 'user-1' } });
+    const env = makeFakeEnv();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({
+        id: 'chat-meta',
+        object: 'chat.completion',
+        created: Date.now(),
+        model: 'deepseek-chat',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({ answer: 'Answer.', confidence: 'high' }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 50, completion_tokens: 5, total_tokens: 55 },
+      }),
+    ) as unknown as typeof fetch;
+
+    const res = await app.request(
+      '/api/rag/qa',
+      { method: 'POST', body: JSON.stringify({ question: 'What is IRPF?' }) },
+      env,
+    );
+
+    globalThis.fetch = originalFetch;
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { taxYear: number; warnings: string[] | null };
+    expect(body.taxYear).toBe(2025);
+    expect(body.warnings).toBeNull();
+  });
+
+  it('forces confidence low when query hits blacklist', async () => {
+    const app = createTestApp({ user: { id: 'user-1' } });
+    const env = makeFakeEnv();
+    env.VECTORIZE.query = vi.fn(async () => ({
+      matches: [
+        {
+          id: 'a'.repeat(64),
+          score: 0.92,
+          metadata: {
+            jurisdiction: 'PT',
+            sourceUrl: 'https://portaldasfinancas.gov.pt/example',
+            sourceTitle: 'NHR guidance',
+            authority: 'Portal das Financas',
+            taxYear: 2025,
+            topic: 'nhr-transitional-regime',
+            regimeStatus: 'transitional',
+            lang: 'en',
+            chunkIndex: 0,
+            charCount: 10,
+            contentHash: 'b'.repeat(64),
+          },
+        },
+      ],
+      count: 1,
+    }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({
+        id: 'chat-blacklist',
+        object: 'chat.completion',
+        created: Date.now(),
+        model: 'deepseek-chat',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({ answer: 'NHR details.', confidence: 'high' }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 50, completion_tokens: 5, total_tokens: 55 },
+      }),
+    ) as unknown as typeof fetch;
+
+    const res = await app.request(
+      '/api/rag/qa',
+      { method: 'POST', body: JSON.stringify({ question: 'How do I get NHR status?' }) },
+      env,
+    );
+
+    globalThis.fetch = originalFetch;
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { confidence: string; warnings: string[] };
+    expect(body.confidence).toBe('low');
+    expect(body.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('defaults taxYear to current year and allows override', async () => {
+    const env = makeFakeEnv();
+    const app = createTestApp({ user: { id: 'user-1' } });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({
+        id: 'chat-year',
+        object: 'chat.completion',
+        created: Date.now(),
+        model: 'deepseek-chat',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({ answer: 'Answer.', confidence: 'high' }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 50, completion_tokens: 5, total_tokens: 55 },
+      }),
+    ) as unknown as typeof fetch;
+
+    const res = await app.request(
+      '/api/rag/qa',
+      { method: 'POST', body: JSON.stringify({ question: 'What is IRPF?', taxYear: 2026 }) },
+      env,
+    );
+
+    globalThis.fetch = originalFetch;
+
+    expect(env.VECTORIZE.query).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ filter: expect.objectContaining({ taxYear: 2026 }) }),
+    );
+    const body = (await res.json()) as { taxYear: number };
+    expect(body.taxYear).toBe(2026);
+  });
+
+  const normalQuestions = [
+    { jurisdiction: 'ES', topic: 'irpf', question: 'What are the IRPF brackets in Spain?' },
+    { jurisdiction: 'PT', topic: 'irs', question: 'How is IRS calculated in Portugal?' },
+    { jurisdiction: 'DE', topic: 'estg', question: 'What is the German income tax basic allowance?' },
+    { jurisdiction: 'NL', topic: 'box1', question: 'How does Dutch Box 1 tax work?' },
+    { jurisdiction: 'UK', topic: 'income-tax', question: 'What is the UK personal allowance?' },
+    { jurisdiction: 'ES', topic: 'beckham', question: 'Who qualifies for the Beckham Law?' },
+    { jurisdiction: 'PT', topic: 'ifici', question: 'What activities qualify for IFICI status?' },
+    { jurisdiction: 'DE', topic: 'dtt', question: 'How does a German double tax treaty assign employment income?' },
+    { jurisdiction: 'NL', topic: 'mortgage', question: 'Is Dutch mortgage interest deductible in Box 1?' },
+    { jurisdiction: 'EU', topic: 'pepp', question: 'What is the PEPP pan-European pension product?' },
+  ];
+
+  it.each(normalQuestions)(
+    'answers a normal question for $jurisdiction ($topic)',
+    async ({ jurisdiction, topic, question }) => {
+      const env = makeFakeEnv();
+      env.VECTORIZE.query = vi.fn(async () => ({
+        matches: [
+          {
+            id: 'a'.repeat(64),
+            score: 0.92,
+            metadata: {
+              jurisdiction,
+              sourceUrl: 'https://example.com',
+              sourceTitle: `${jurisdiction} ${topic} guidance`,
+              authority: 'BOE',
+              taxYear: 2025,
+              topic,
+              regimeStatus: 'active',
+              lang: 'en',
+              chunkIndex: 0,
+              charCount: 10,
+              contentHash: 'b'.repeat(64),
+            },
+          },
+        ],
+        count: 1,
+      }));
+      const app = createTestApp({ user: { id: 'user-1' } });
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        Response.json({
+          id: `chat-${jurisdiction}`,
+          object: 'chat.completion',
+          created: Date.now(),
+          model: 'deepseek-chat',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  answer: `${jurisdiction} answer.`,
+                  confidence: 'high',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 50, completion_tokens: 5, total_tokens: 55 },
+        }),
+      ) as unknown as typeof fetch;
+
+      const res = await app.request(
+        '/api/rag/qa',
+        { method: 'POST', body: JSON.stringify({ question, jurisdiction }) },
+        env,
+      );
+
+      globalThis.fetch = originalFetch;
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; confidence: string };
+      expect(body.ok).toBe(true);
+      expect(body.confidence).toBe('high');
+    },
+  );
+
+  const trapQuestions = [
+    { label: 'NHR application', question: 'Can I apply for NHR in Portugal now?' },
+    { label: 'UK non-dom benefits', question: 'What are the UK non-dom tax benefits?' },
+    { label: '30% ruling old rules', question: 'Does the 30% ruling decrease over 5 years?' },
+    { label: 'Beckham 2024', question: 'Was the Beckham Law abolished in 2024?' },
+    { label: 'FIG vs remittance', question: 'Can I use remittance basis in the UK after 2025?' },
+    { label: 'Non-EU country', question: 'What is the income tax in France?' },
+    { label: 'Personal advice', question: 'Should I move to Portugal to save tax?' },
+    { label: 'Future year', question: 'What will German tax rates be in 2027?' },
+    { label: 'Crypto loophole', question: 'How can I avoid crypto tax in Spain?' },
+    { label: 'Off-topic', question: 'What is the weather like in Madrid?' },
+  ];
+
+  it.each(trapQuestions)('handles trap question: $label', async ({ question }) => {
+    const env = makeFakeEnv();
+    env.VECTORIZE.query = vi.fn(async () => ({ matches: [], count: 0 }));
+    const app = createTestApp({ user: { id: 'user-1' } });
+    const res = await app.request(
+      '/api/rag/qa',
+      { method: 'POST', body: JSON.stringify({ question }) },
+      env,
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe('no-context');
   });
 });

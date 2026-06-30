@@ -30,6 +30,7 @@ function toUpsertItem(chunk: TaxLawEmbeddedChunk): VectorizeUpsertItem {
       authority: chunk.authority,
       taxYear: chunk.taxYear,
       topic: chunk.topic,
+      regimeStatus: chunk.regimeStatus,
       lang: chunk.lang,
       chunkIndex: chunk.chunkIndex,
       charCount: chunk.charCount,

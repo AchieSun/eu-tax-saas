@@ -60,6 +60,7 @@ sources:
     authority: Portal das Financas
     taxYear: 2025
     topic: nhr-transitional-regime
+    regimeStatus: deprecated
     licenseNote: Autoridade Tributaria public guidance; reuse subject to portal legal notice.
     lastVerifiedAt: 2026-06-11
   - jurisdiction: PT
@@ -142,6 +143,7 @@ sources:
     authority: Belastingdienst
     taxYear: 2025
     topic: thirty-percent-ruling
+    regimeStatus: transitional
     licenseNote: Belastingdienst public guidance; reuse subject to rijksoverheid copyright rules.
     lastVerifiedAt: 2026-06-11
   - jurisdiction: NL

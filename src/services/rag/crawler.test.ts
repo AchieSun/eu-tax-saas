@@ -20,6 +20,7 @@ const SAMPLE_SOURCE: TaxLawSource = {
   authority: 'BOE',
   taxYear: 2025,
   topic: 'irpf-personal-income-tax',
+  regimeStatus: 'active',
   licenseNote: 'BOE public-sector legal text',
   lastVerifiedAt: '2026-06-11',
 };

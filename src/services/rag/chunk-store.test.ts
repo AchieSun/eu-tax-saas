@@ -22,6 +22,7 @@ function makeChunk(idSeed: number, text: string): TaxLawEmbeddedChunk {
     authority: 'BOE',
     taxYear: 2025,
     topic: 'irpf',
+    regimeStatus: 'active',
     lang: 'es',
     chunkIndex: idSeed,
     charCount: text.length,
