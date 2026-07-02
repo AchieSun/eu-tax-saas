@@ -36,9 +36,10 @@ export const users = sqliteTable('users', {
   // App-specific extensions (default Better Auth schema is extended via `additionalFields`)
   role: text('role').notNull().default('user'), // 'user' | 'admin' — manually promoted via SQL
   locale: text('locale').notNull().default('en'),
-  subscriptionStatus: text('subscription_status').notNull().default('free'),
-  paddleSubscriptionId: text('paddle_subscription_id'),
-  paddleCustomerId: text('paddle_customer_id'),
+  subscriptionStatus: text('subscription_status').notNull().default('free'), // 'free' | 'active' | 'cancelled' | 'past_due'
+  paymentProvider: text('payment_provider'), // 'oceanpayment' | null — provider-agnostic so we can swap PSP without another migration
+  paymentSubscriptionId: text('payment_subscription_id'),
+  paymentCustomerId: text('payment_customer_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });

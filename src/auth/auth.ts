@@ -93,12 +93,17 @@ export function createAuth(env?: AuthEnv, _cf?: IncomingRequestCfProperties, bas
           defaultValue: 'free',
           input: false,
         },
-        paddleSubscriptionId: {
+        paymentProvider: {
           type: 'string',
           required: false,
           input: false,
         },
-        paddleCustomerId: {
+        paymentSubscriptionId: {
+          type: 'string',
+          required: false,
+          input: false,
+        },
+        paymentCustomerId: {
           type: 'string',
           required: false,
           input: false,

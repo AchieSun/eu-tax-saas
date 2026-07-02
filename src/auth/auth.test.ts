@@ -20,14 +20,15 @@ describe('Better Auth additionalFields contract (Oracle P1#9)', () => {
     const declared = Object.keys(fields);
 
     // Schema extension columns (non-standard Better Auth):
-    // role, locale, subscriptionStatus, paddleSubscriptionId, paddleCustomerId
+    // role, locale, subscriptionStatus, paymentProvider, paymentSubscriptionId, paymentCustomerId
     expect(declared).toEqual(
       expect.arrayContaining([
         'role',
         'locale',
         'subscriptionStatus',
-        'paddleSubscriptionId',
-        'paddleCustomerId',
+        'paymentProvider',
+        'paymentSubscriptionId',
+        'paymentCustomerId',
       ]),
     );
   });
@@ -46,8 +47,9 @@ describe('Better Auth additionalFields contract (Oracle P1#9)', () => {
       'role',
       'locale',
       'subscriptionStatus',
-      'paddleSubscriptionId',
-      'paddleCustomerId',
+      'paymentProvider',
+      'paymentSubscriptionId',
+      'paymentCustomerId',
     ];
 
     const auth = createAuth();
