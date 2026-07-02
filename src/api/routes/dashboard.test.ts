@@ -12,10 +12,18 @@ interface UserRow {
   subscription_status: string;
 }
 
+interface OnboardingRow {
+  user_id: string;
+  current_step: number;
+  completed_at: number | null;
+}
+
 let usersStore: UserRow[] = [];
+let onboardingStore: OnboardingRow[] = [];
 
 function resetStore() {
   usersStore = [];
+  onboardingStore = [];
 }
 
 async function batchExecutor(
@@ -32,7 +40,13 @@ async function batchExecutor(
     };
   }
 
-  // All other dashboard tables return empty for the smoke test.
+  if (normalized.startsWith('SELECT') && normalized.includes('FROM "USER_ONBOARDING"')) {
+    const filtered = onboardingStore.filter((row) => row.user_id === params[0]);
+    return {
+      rows: filtered.map((row) => [row.current_step, row.completed_at]),
+    };
+  }
+
   return { rows: [] };
 }
 
@@ -62,6 +76,7 @@ interface DashboardBody {
   strategies: unknown[];
   days: Array<{ country: string; flag: string; days: number }>;
   deadlines: unknown[];
+  onboarding: { currentStep: number; complete: boolean };
   filing: { completeness: number };
 }
 
@@ -104,6 +119,25 @@ describe('GET /api/dashboard', () => {
       { country: 'UK', flag: '🇬🇧', days: 0 },
     ]);
     expect(body.deadlines).toEqual([]);
+    expect(body.onboarding).toEqual({ currentStep: 0, complete: false });
     expect(body.filing.completeness).toBe(0);
+  });
+
+  it('derives filing completeness from onboarding progress', async () => {
+    usersStore.push({
+      id: 'u-2',
+      name: 'Bob Example',
+      email: 'bob@example.com',
+      subscription_status: 'free',
+    });
+    onboardingStore.push({ user_id: 'u-2', current_step: 3, completed_at: null });
+
+    const app = createTestApp({ user: { id: 'u-2' } });
+    const res = await requestWithEnv(app, '/api/dashboard?taxYear=2025');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as DashboardBody;
+
+    expect(body.onboarding).toEqual({ currentStep: 3, complete: false });
+    expect(body.filing.completeness).toBe(60);
   });
 });

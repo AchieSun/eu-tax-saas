@@ -18,6 +18,7 @@ import {
   residencyAssessments,
   strategyRecommendations,
   userDays,
+  userOnboarding,
   users,
 } from '../../db/schema';
 import { getStrategyById } from '../../strategies';
@@ -64,10 +65,8 @@ dashboardRoutes.get('/', async (c) => {
   const yearStart = `${taxYear}-01-01`;
   const yearEnd = `${taxYear}-12-31`;
 
-  // Parallel D1 reads — one per card.
-  const [userRows, latestResidency, persistedStrategies, dayRows, deadlineRows] = await Promise.all(
-    [
-      // User profile (first name + subscription status for the header).
+  const [userRows, latestResidency, persistedStrategies, dayRows, deadlineRows, onboardingRows] =
+    await Promise.all([
       db
         .select({ name: users.name, subscriptionStatus: users.subscriptionStatus })
         .from(users)
@@ -148,8 +147,16 @@ dashboardRoutes.get('/', async (c) => {
         )
         .orderBy(deadlines.dueDate)
         .limit(5),
-    ],
-  );
+
+      db
+        .select({
+          currentStep: userOnboarding.currentStep,
+          completedAt: userOnboarding.completedAt,
+        })
+        .from(userOnboarding)
+        .where(eq(userOnboarding.userId, userId))
+        .limit(1),
+    ]);
 
   const user = userRows[0] ?? { name: null, subscriptionStatus: 'free' };
   const firstName = (user.name ?? '').split(' ')[0] || 'there';
@@ -201,6 +208,15 @@ dashboardRoutes.get('/', async (c) => {
     daysRemaining: daysBetween(today, d.dueDate),
   }));
 
+  const onboardingRow = onboardingRows[0];
+  const onboarding = {
+    currentStep: onboardingRow?.currentStep ?? 0,
+    complete: onboardingRow?.completedAt !== null && onboardingRow?.completedAt !== undefined,
+  };
+  const filingCompleteness = onboarding.complete
+    ? 100
+    : Math.round((onboarding.currentStep / 5) * 100);
+
   return c.json({
     ok: true,
     taxYear,
@@ -215,9 +231,10 @@ dashboardRoutes.get('/', async (c) => {
     strategies,
     days,
     deadlines: upcomingDeadlines,
+    onboarding,
     filing: {
-      completeness: 0,
-      nextStep: '选择国家并填写收入以生成税务草稿',
+      completeness: filingCompleteness,
+      nextStep: onboarding.complete ? '查看税务草稿并确认申报材料' : '完成入门信息以生成税务草稿',
     },
   });
 });

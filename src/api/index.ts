@@ -36,6 +36,7 @@ import { dashboardRoutes } from './routes/dashboard';
 import { daysRoutes } from './routes/days';
 import { deadlinesRoutes } from './routes/deadlines';
 import { formsRoutes } from './routes/forms';
+import { onboardingRoutes } from './routes/onboarding';
 import { ragRoutes } from './routes/rag';
 import { ragAdminRoutes } from './routes/rag-admin';
 import { residencyRoutes } from './routes/residency';
@@ -165,6 +166,8 @@ app.use('/api/deadlines', auditMiddleware());
 app.use('/api/deadlines/*', auditMiddleware());
 app.use('/api/dashboard', auditMiddleware());
 app.use('/api/dashboard/*', auditMiddleware());
+app.use('/api/onboarding', auditMiddleware());
+app.use('/api/onboarding/*', auditMiddleware());
 app.use('/api/admin', auditMiddleware());
 app.use('/api/admin/*', auditMiddleware());
 // Oracle P1-2 (W4 review): /api/forms is legally consequential — every
@@ -193,6 +196,7 @@ app.use(
 // ── App routes ──────────────────────────────────────────────────────────────
 app.route('/api/calculate', calculateRoutes);
 app.route('/api/dashboard', dashboardRoutes);
+app.route('/api/onboarding', onboardingRoutes);
 app.route('/api/days', daysRoutes);
 app.route('/api/deadlines', deadlinesRoutes);
 app.route('/api/forms', formsRoutes);
