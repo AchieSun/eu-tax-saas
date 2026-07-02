@@ -9,6 +9,7 @@
 import { type Component, Show, Suspense, createResource, createSignal, lazy } from 'solid-js';
 import CalendarView from './CalendarView';
 import CompareView from './CompareView';
+import DashboardPage from './pages/DashboardPage';
 import DeadlinesPage from './pages/DeadlinesPage';
 import RagPage from './pages/RagPage';
 import ResidencyPage from './pages/ResidencyPage';
@@ -30,11 +31,19 @@ async function fetchHealth(): Promise<HealthResponse> {
   return r.json() as Promise<HealthResponse>;
 }
 
-type Tab = 'compare' | 'calendar' | 'filing' | 'residency' | 'strategies' | 'rag' | 'deadlines';
+type Tab =
+  | 'dashboard'
+  | 'compare'
+  | 'calendar'
+  | 'filing'
+  | 'residency'
+  | 'strategies'
+  | 'rag'
+  | 'deadlines';
 
 const App: Component = () => {
   const [health] = createResource(fetchHealth);
-  const [tab, setTab] = createSignal<Tab>('compare');
+  const [tab, setTab] = createSignal<Tab>('dashboard');
 
   const tabBtn = (id: Tab, label: string) => (
     <button
@@ -106,6 +115,7 @@ const App: Component = () => {
 
       {/* Top-level tab bar */}
       <nav class="app-tabs" aria-label="主导航">
+        {tabBtn('dashboard', '仪表盘')}
         {tabBtn('compare', '5 国对比')}
         {tabBtn('calendar', '居留日历')}
         {tabBtn('filing', '税务草稿')}
@@ -116,6 +126,9 @@ const App: Component = () => {
       </nav>
 
       {/* Active view */}
+      <Show when={tab() === 'dashboard'}>
+        <DashboardPage />
+      </Show>
       <Show when={tab() === 'compare'}>
         <CompareView />
       </Show>
@@ -212,7 +225,7 @@ const App: Component = () => {
             </tr>
             <tr>
               <td style={{ padding: '0.375rem 0' }}>F2 residency</td>
-              <td>⏳ W2</td>
+              <td>✅ Ready</td>
               <td>—</td>
             </tr>
             <tr>
@@ -232,7 +245,27 @@ const App: Component = () => {
             </tr>
             <tr>
               <td style={{ padding: '0.375rem 0' }}>F4 strategy + harness</td>
-              <td>⏳ W5-W6 (prompts ready)</td>
+              <td>✅ Ready (Tiers A/B/C)</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.375rem 0' }}>RAG tax Q&A</td>
+              <td>✅ Ready</td>
+              <td>DeepSeek + chunks</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.375rem 0' }}>F9 deadline calendar</td>
+              <td>✅ Ready</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.375rem 0' }}>F7 dashboard</td>
+              <td>✅ Ready</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.375rem 0' }}>F7 onboarding</td>
+              <td>⏳ W7</td>
               <td>—</td>
             </tr>
           </tbody>
