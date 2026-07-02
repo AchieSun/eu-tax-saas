@@ -58,6 +58,10 @@ interface DashboardResponse {
   strategies: DashboardStrategy[];
   days: DashboardDayCount[];
   deadlines: DashboardDeadline[];
+  onboarding: {
+    currentStep: number;
+    complete: boolean;
+  };
   filing: {
     completeness: number;
     nextStep: string;
@@ -194,6 +198,35 @@ const DashboardPage: Component = () => {
       <Show when={data()}>
         {(d) => (
           <div class="dashboard-grid">
+            <Show when={!d().onboarding.complete}>
+              <div style={cardStyle}>
+                <div style={cardTitleStyle}>📋 完成入门信息</div>
+                <div style={valueStyle}>
+                  {Math.round((d().onboarding.currentStep / 5) * 100)}% 完成
+                </div>
+                <div
+                  style={{
+                    'margin-top': '0.5rem',
+                    height: '6px',
+                    background: '#e5e7eb',
+                    'border-radius': '3px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.round((d().onboarding.currentStep / 5) * 100)}%`,
+                      height: '100%',
+                      background: '#2563eb',
+                    }}
+                  />
+                </div>
+                <a href="#onboarding" style={ctaStyle}>
+                  继续入门 →
+                </a>
+              </div>
+            </Show>
+
             {/* Residency */}
             <div style={cardStyle}>
               <div style={cardTitleStyle}>📍 你的税务居民身份</div>
@@ -357,7 +390,7 @@ const DashboardPage: Component = () => {
                 fallback={
                   <div style={emptyStyle}>
                     {d().filing.nextStep}
-                    <a href="#filing" style={ctaStyle}>
+                    <a href={d().onboarding.complete ? '#filing' : '#onboarding'} style={ctaStyle}>
                       开始填写 →
                     </a>
                   </div>

@@ -6,11 +6,21 @@
  * router is necessary for two top-level views.
  */
 
-import { type Component, Show, Suspense, createResource, createSignal, lazy } from 'solid-js';
+import {
+  type Component,
+  Show,
+  Suspense,
+  createResource,
+  createSignal,
+  lazy,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import CalendarView from './CalendarView';
 import CompareView from './CompareView';
 import DashboardPage from './pages/DashboardPage';
 import DeadlinesPage from './pages/DeadlinesPage';
+import OnboardingPage from './pages/OnboardingPage';
 import RagPage from './pages/RagPage';
 import ResidencyPage from './pages/ResidencyPage';
 import StrategiesPage from './pages/StrategiesPage';
@@ -32,6 +42,7 @@ async function fetchHealth(): Promise<HealthResponse> {
 }
 
 type Tab =
+  | 'onboarding'
   | 'dashboard'
   | 'compare'
   | 'calendar'
@@ -41,16 +52,47 @@ type Tab =
   | 'rag'
   | 'deadlines';
 
+const TABS = [
+  'onboarding',
+  'dashboard',
+  'compare',
+  'calendar',
+  'filing',
+  'residency',
+  'strategies',
+  'rag',
+  'deadlines',
+] as const;
+
+function isTab(value: string): value is Tab {
+  return TABS.includes(value as Tab);
+}
+
 const App: Component = () => {
   const [health] = createResource(fetchHealth);
   const [tab, setTab] = createSignal<Tab>('dashboard');
+
+  onMount(() => {
+    const syncFromHash = () => {
+      const next = window.location.hash.slice(1);
+      if (isTab(next)) setTab(next);
+    };
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    onCleanup(() => window.removeEventListener('hashchange', syncFromHash));
+  });
+
+  const selectTab = (id: Tab) => {
+    setTab(id);
+    window.location.hash = id;
+  };
 
   const tabBtn = (id: Tab, label: string) => (
     <button
       type="button"
       class="app-tab"
       classList={{ 'app-tab-active': tab() === id }}
-      onClick={() => setTab(id)}
+      onClick={() => selectTab(id)}
       aria-pressed={tab() === id}
     >
       {label}
@@ -115,6 +157,7 @@ const App: Component = () => {
 
       {/* Top-level tab bar */}
       <nav class="app-tabs" aria-label="主导航">
+        {tabBtn('onboarding', '开始使用')}
         {tabBtn('dashboard', '仪表盘')}
         {tabBtn('compare', '5 国对比')}
         {tabBtn('calendar', '居留日历')}
@@ -126,6 +169,9 @@ const App: Component = () => {
       </nav>
 
       {/* Active view */}
+      <Show when={tab() === 'onboarding'}>
+        <OnboardingPage />
+      </Show>
       <Show when={tab() === 'dashboard'}>
         <DashboardPage />
       </Show>
@@ -265,7 +311,7 @@ const App: Component = () => {
             </tr>
             <tr>
               <td style={{ padding: '0.375rem 0' }}>F7 onboarding</td>
-              <td>⏳ W7</td>
+              <td>✅ W7</td>
               <td>—</td>
             </tr>
           </tbody>
