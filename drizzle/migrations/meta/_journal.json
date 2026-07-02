@@ -57,6 +57,13 @@
       "when": 1780550000001,
       "tag": "0007_rename_payment_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1780550000002,
+      "tag": "0008_onboarding",
+      "breakpoints": true
     }
   ]
 }

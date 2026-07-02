@@ -84,6 +84,17 @@ export const verifications = sqliteTable('verifications', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const userOnboarding = sqliteTable('user_onboarding', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  currentStep: integer('current_step').notNull().default(0),
+  privacyAcceptedAt: integer('privacy_accepted_at', { mode: 'timestamp' }),
+  completedAt: integer('completed_at', { mode: 'timestamp' }),
+  draft: text('draft', { mode: 'json' }).notNull().default(sql`'{}'`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // F2 — Residency
 // ────────────────────────────────────────────────────────────────────────────
@@ -404,6 +415,7 @@ export const deadlines = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type UserOnboarding = typeof userOnboarding.$inferSelect;
 export type UserDays = typeof userDays.$inferSelect;
 export type TaxCalculation = typeof taxCalculations.$inferSelect;
 export type ResidencyAssessment = typeof residencyAssessments.$inferSelect;
