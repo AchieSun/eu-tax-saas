@@ -127,7 +127,7 @@ export function OnboardingStepPanel(props: StepPanelProps) {
                 <input
                   id={`ob-status-${country}`}
                   class="ob-input"
-                  placeholder="如 NHR、Beckham Law、30% ruling"
+                  placeholder="如 NHR、30% ruling"
                   value={props.specialStatus[country] ?? ''}
                   onInput={(e) =>
                     props.setSpecialStatus((prev) => ({
