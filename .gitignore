@@ -22,6 +22,10 @@ wrangler.toml.local
 coverage/
 *.log
 
+# Playwright MCP artifacts
+.playwright-mcp/
+visual-qa-*.png
+
 # Generated RAG chunks (recreate with pnpm ingest:tax-law)
 data/tax-law-chunks/
 
