@@ -207,32 +207,34 @@ const OnboardingPage: Component = () => {
         />
       </section>
 
-      <footer class="ob-footer">
-        <button
-          type="button"
-          class="ob-btn ob-btn-ghost"
-          disabled={saving() || step() <= 1}
-          onClick={() => setStep((s) => Math.max(1, s - 1))}
-        >
-          Back
-        </button>
-        <button
-          type="button"
-          class="ob-btn ob-btn-outline"
-          disabled={saving() || step() >= STEP_COUNT}
-          onClick={() => void skipCurrent()}
-        >
-          Skip
-        </button>
-        <button
-          type="button"
-          class="ob-btn ob-btn-primary"
-          disabled={saving() || (step() === 1 && !privacy())}
-          onClick={() => void saveCurrent()}
-        >
-          {saving() ? 'Saving…' : step() === STEP_COUNT ? 'Save & Complete' : 'Save'}
-        </button>
-      </footer>
+      <Show when={!done()}>
+        <footer class="ob-footer">
+          <button
+            type="button"
+            class="ob-btn ob-btn-ghost"
+            disabled={saving() || step() <= 1}
+            onClick={() => setStep((s) => Math.max(1, s - 1))}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            class="ob-btn ob-btn-outline"
+            disabled={saving() || step() >= STEP_COUNT}
+            onClick={() => void skipCurrent()}
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            class="ob-btn ob-btn-primary"
+            disabled={saving() || (step() === 1 && !privacy())}
+            onClick={() => void saveCurrent()}
+          >
+            {saving() ? 'Saving…' : step() === STEP_COUNT ? 'Save & Complete' : 'Save'}
+          </button>
+        </footer>
+      </Show>
     </div>
   );
 };
