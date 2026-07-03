@@ -19,6 +19,10 @@ export const onboardingStyles = `
 .ob-check { display: flex; align-items: center; gap: 0.5rem; color: #374151; font-size: 0.9rem; line-height: 1.5; }
 .ob-income-row { border-bottom: 1px solid #f3f4f6; padding-bottom: 1rem; margin-bottom: 1rem; }
 .ob-footer { display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+@media (max-width: 480px) {
+  .ob-footer { flex-direction: column; align-items: stretch; }
+  .ob-footer .ob-btn { width: 100%; justify-content: center; }
+}
 .ob-btn { font-family: inherit; font-size: 0.9rem; font-weight: 600; border-radius: 8px; cursor: pointer; min-height: 40px; padding: 0 1rem; border: 1.5px solid transparent; transition: background-color 150ms, color 150ms, border-color 150ms, transform 150ms; }
 .ob-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 .ob-btn-primary { background: #2563eb; color: #ffffff; }
