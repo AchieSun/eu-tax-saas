@@ -18,6 +18,7 @@ import {
 } from 'solid-js';
 import CalendarView from './CalendarView';
 import CompareView from './CompareView';
+import AccountPage from './pages/AccountPage';
 import DashboardPage from './pages/DashboardPage';
 import DeadlinesPage from './pages/DeadlinesPage';
 import OnboardingPage from './pages/OnboardingPage';
@@ -50,7 +51,8 @@ type Tab =
   | 'residency'
   | 'strategies'
   | 'rag'
-  | 'deadlines';
+  | 'deadlines'
+  | 'account';
 
 const TABS = [
   'onboarding',
@@ -62,6 +64,7 @@ const TABS = [
   'strategies',
   'rag',
   'deadlines',
+  'account',
 ] as const;
 
 function isTab(value: string): value is Tab {
@@ -166,6 +169,7 @@ const App: Component = () => {
         {tabBtn('strategies', '节税策略')}
         {tabBtn('rag', '税法问答')}
         {tabBtn('deadlines', '截止日')}
+        {tabBtn('account', '账户设置')}
       </nav>
 
       {/* Active view */}
@@ -201,6 +205,9 @@ const App: Component = () => {
       </Show>
       <Show when={tab() === 'deadlines'}>
         <DeadlinesPage />
+      </Show>
+      <Show when={tab() === 'account'}>
+        <AccountPage />
       </Show>
 
       {/* Implementation status — collapsed by default */}

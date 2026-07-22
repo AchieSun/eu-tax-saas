@@ -28,8 +28,10 @@ import { logger } from 'hono/logger';
 import { type Auth, createAuth } from '../auth/auth';
 import { createDb } from '../db';
 import { users } from '../db/schema';
+import { registerLandingRoutes } from '../landing';
 import { auditMiddleware } from './middleware/audit';
 import { rateLimitD1 } from './middleware/rate-limit-d1';
+import { accountRoutes } from './routes/account';
 import adminRoutes from './routes/admin';
 import { calculateRoutes } from './routes/calculate';
 import { dashboardRoutes } from './routes/dashboard';
@@ -37,6 +39,7 @@ import { daysRoutes } from './routes/days';
 import { deadlinesRoutes } from './routes/deadlines';
 import { formsRoutes } from './routes/forms';
 import { onboardingRoutes } from './routes/onboarding';
+import { creemWebhookRoutes, paymentRoutes } from './routes/payment';
 import { ragRoutes } from './routes/rag';
 import { ragAdminRoutes } from './routes/rag-admin';
 import { residencyRoutes } from './routes/residency';
@@ -56,6 +59,9 @@ export interface Bindings {
   PADDLE_API_KEY?: string;
   PADDLE_WEBHOOK_SECRET?: string;
   CREEM_API_KEY?: string;
+  CREEM_WEBHOOK_SECRET?: string;
+  CREEM_MONTHLY_PRODUCT_ID?: string;
+  CREEM_YEARLY_PRODUCT_ID?: string;
   DEEPSEEK_API_KEY?: string;
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
@@ -105,6 +111,8 @@ app.use('*', (c, next) =>
     maxAge: 600,
   })(c, next),
 );
+
+registerLandingRoutes(app);
 
 // ── Workaround #4: per-request Better Auth instance ─────────────────────────
 app.use('*', async (c, next) => {
@@ -194,11 +202,14 @@ app.use(
 );
 
 // ── App routes ──────────────────────────────────────────────────────────────
+app.route('/api/account', accountRoutes);
 app.route('/api/calculate', calculateRoutes);
 app.route('/api/dashboard', dashboardRoutes);
 app.route('/api/onboarding', onboardingRoutes);
+app.route('/api/payment', paymentRoutes);
 app.route('/api/days', daysRoutes);
 app.route('/api/deadlines', deadlinesRoutes);
+app.route('/api/webhooks', creemWebhookRoutes);
 app.route('/api/forms', formsRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/admin/rag', ragAdminRoutes);

@@ -9,7 +9,7 @@
 | Layer | Status | Path | Notes |
 |-------|--------|------|-------|
 | Project scaffolding (pnpm, biome, tsconfig, wrangler.toml) | ✅ | `package.json`, `wrangler.toml`, `biome.json`, `tsconfig.json` | — |
-| Drizzle schema + 6 migrations | ✅ | `src/db/schema.ts`, `drizzle/migrations/` | Includes W3/W4 migrations |
+| Drizzle schema + 9 migrations | ✅ | `src/db/schema.ts`, `drizzle/migrations/` | Includes W3/W4/W5 migrations; payment columns provider-agnostic |
 | Better Auth (v1.6+) | ✅ | `src/auth/auth.ts` | Per-request instance + KV session store |
 | Hono API + middleware | ✅ | `src/api/index.ts`, `src/api/routes/*`, `src/api/middleware/*` | CORS allowlist, audit, rate-limit, admin guards |
 | **F1 tax calculator — DE / NL / PT / ES / UK** | ✅ | `src/rules/{de,nl,pt,es,uk}/calculator.ts` | 5 countries, all with legal citations |
@@ -20,7 +20,8 @@
 | **F5 RAG — crawler + Vectorize + Q&A (Wave 2)** | ✅ | `src/services/rag/`, `scripts/ingest-tax-law.ts`, `src/api/routes/rag.ts` | BGE-M3 embedding, Vectorize upsert/query, KV chunk store, `/api/rag/qa` |
 | **F6 days tracker + calendar UI** | ✅ | `src/frontend/calendar/`, `src/api/routes/days.ts` | Drag-to-paint, bulk POST, colour legend |
 | Admin routes + audit log | ✅ | `src/api/routes/admin.ts`, `src/db/schema.ts` | SHA-256 hash-only audit (GDPR-safe) |
-| Vitest unit tests | ✅ | `**/*.test.ts` | **61 files / 669 tests passing** |
+| **Creem payment integration** | ✅ | `src/payment/creem.ts`, `src/api/routes/payment.ts` | Checkout, redirect signature verify, webhook HMAC, D1 subscription update |
+| Vitest unit tests | ✅ | `**/*.test.ts` | **82 files / 852 tests passing** |
 
 **Legend:** ✅ shipped & tested 🔄 partial / WIP ⏳ not started
 

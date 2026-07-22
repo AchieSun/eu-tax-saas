@@ -56,8 +56,6 @@ enabled = true
 # cpu_ms = 50
 
 # F9 — Daily deadline reminder cron (09:00 UTC)
-[[triggers.crons]]
-schedule = "0 9 * * *"
 
 # === Staging environment ===
 [env.staging]
@@ -69,9 +67,43 @@ APP_URL = "https://staging.eu-tax-saas.com"
 # === Production environment ===
 [env.production]
 name = "eu-tax-saas-prod"
+
 [env.production.vars]
 ENVIRONMENT = "production"
-APP_URL = "https://eu-tax-saas.com"
+APP_URL = "https://taxmora.com"
+
+[[env.production.routes]]
+pattern = "taxmora.com"
+custom_domain = true
+
+[[env.production.routes]]
+pattern = "www.taxmora.com"
+custom_domain = true
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "eu-tax-saas-db"
+database_id = "d9b652fc-0183-44ab-9f4f-c8e9b341b3fe"
+migrations_dir = "drizzle/migrations"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "1e407b97d4214ec38d93906f4643964f"
+
+[[env.production.r2_buckets]]
+binding = "R2"
+bucket_name = "eu-tax-saas-pdfs"
+
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "tax-law"
+
+[env.production.ai]
+binding = "AI"
+
+[[env.production.queues.producers]]
+binding = "QUEUE"
+queue = "eu-tax-saas-jobs"
 
 # Secrets (set via `wrangler secret put`; see docs/CLOUDFLARE-SETUP-OVERVIEW.md):
 # - BETTER_AUTH_SECRET (32+ char random string)
