@@ -6,9 +6,14 @@
  */
 
 import { type Component, For, Show, createSignal } from 'solid-js';
-import { COUNTRY_META } from '../calendar/types';
 import type { Country } from '../../rules/common/types';
-import { postAssess, postAssessMulti, type ResidencyInput, type ResidencyResult } from './residency/api';
+import { COUNTRY_META } from '../calendar/types';
+import {
+  type ResidencyInput,
+  type ResidencyResult,
+  postAssess,
+  postAssessMulti,
+} from './residency/api';
 
 const COUNTRIES: Country[] = ['DE', 'NL', 'PT', 'ES', 'UK'];
 const YEARS = [2024, 2025, 2026];
@@ -66,7 +71,9 @@ const ResidencyPage: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [singleResult, setSingleResult] = createSignal<ResidencyResult | null>(null);
-  const [multiResult, setMultiResult] = createSignal<Awaited<ReturnType<typeof postAssessMulti>> | null>(null);
+  const [multiResult, setMultiResult] = createSignal<Awaited<
+    ReturnType<typeof postAssessMulti>
+  > | null>(null);
 
   function resetResults() {
     setSingleResult(null);
@@ -79,7 +86,9 @@ const ResidencyPage: Component = () => {
     resetResults();
     setLoading(true);
     try {
-      const result = await postAssess(makeSingleInput(country(), taxYear(), days(), hasPermanentHome()));
+      const result = await postAssess(
+        makeSingleInput(country(), taxYear(), days(), hasPermanentHome()),
+      );
       setSingleResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -133,9 +142,7 @@ const ResidencyPage: Component = () => {
 
       <header class="res-hero">
         <h1 class="res-h1">居留判定 (Residency)</h1>
-        <p class="res-sub">
-          根据各国国内法与 OECD 税收协定第 4 条，评估单国或多国税收居民身份。
-        </p>
+        <p class="res-sub">根据各国国内法与 OECD 税收协定第 4 条，评估单国或多国税收居民身份。</p>
       </header>
 
       <div class="res-mode-bar">
@@ -266,7 +273,9 @@ const ResidencyPage: Component = () => {
                       id={`res-m-country-${r.id}`}
                       class="res-input"
                       value={r.country}
-                      onChange={(e) => updateRow(r.id, { country: e.currentTarget.value as Country })}
+                      onChange={(e) =>
+                        updateRow(r.id, { country: e.currentTarget.value as Country })
+                      }
                     >
                       <For each={COUNTRIES}>
                         {(c) => (
@@ -297,7 +306,9 @@ const ResidencyPage: Component = () => {
                       min={0}
                       max={366}
                       value={r.daysInCountry}
-                      onInput={(e) => updateRow(r.id, { daysInCountry: Number(e.currentTarget.value) })}
+                      onInput={(e) =>
+                        updateRow(r.id, { daysInCountry: Number(e.currentTarget.value) })
+                      }
                     />
                   </div>
                   <div class="res-field">

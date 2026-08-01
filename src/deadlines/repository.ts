@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db';
-import { deadlines, type Deadline, type NewDeadline } from '../db/schema';
+import { type Deadline, type NewDeadline, deadlines } from '../db/schema';
 import type {
   DeadlineCategory,
   DeadlineInput,
@@ -11,7 +11,11 @@ import type {
 
 export interface DeadlineFilters extends DeadlineListQuery {}
 
-export function listDeadlines(db: Db, userId: string, filters: DeadlineFilters = {}): Promise<Deadline[]> {
+export function listDeadlines(
+  db: Db,
+  userId: string,
+  filters: DeadlineFilters = {},
+): Promise<Deadline[]> {
   const conditions = [eq(deadlines.userId, userId)];
 
   if (filters.taxYear !== undefined) {
@@ -116,7 +120,11 @@ export async function deleteDeadline(db: Db, userId: string, id: string): Promis
   return changes > 0;
 }
 
-export async function completeDeadline(db: Db, userId: string, id: string): Promise<Deadline | undefined> {
+export async function completeDeadline(
+  db: Db,
+  userId: string,
+  id: string,
+): Promise<Deadline | undefined> {
   return updateDeadline(db, userId, id, { status: 'completed' });
 }
 

@@ -23,7 +23,10 @@ export const step1Schema = z.object({
 export const step2Schema = z.object({
   step: z.literal(2),
   data: z.object({
-    nationality: z.string().length(2).transform((v) => v.toUpperCase()),
+    nationality: z
+      .string()
+      .length(2)
+      .transform((v) => v.toUpperCase()),
     primaryCountry: countrySchema,
     countries: z.array(countrySchema).min(1).max(5),
   }),

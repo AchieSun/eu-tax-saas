@@ -417,14 +417,30 @@ describe('POST /api/rag/qa', () => {
   const normalQuestions = [
     { jurisdiction: 'ES', topic: 'irpf', question: 'What are the IRPF brackets in Spain?' },
     { jurisdiction: 'PT', topic: 'irs', question: 'How is IRS calculated in Portugal?' },
-    { jurisdiction: 'DE', topic: 'estg', question: 'What is the German income tax basic allowance?' },
+    {
+      jurisdiction: 'DE',
+      topic: 'estg',
+      question: 'What is the German income tax basic allowance?',
+    },
     { jurisdiction: 'NL', topic: 'box1', question: 'How does Dutch Box 1 tax work?' },
     { jurisdiction: 'UK', topic: 'income-tax', question: 'What is the UK personal allowance?' },
     { jurisdiction: 'ES', topic: 'beckham', question: 'Who qualifies for the Beckham Law?' },
     { jurisdiction: 'PT', topic: 'ifici', question: 'What activities qualify for IFICI status?' },
-    { jurisdiction: 'DE', topic: 'dtt', question: 'How does a German double tax treaty assign employment income?' },
-    { jurisdiction: 'NL', topic: 'mortgage', question: 'Is Dutch mortgage interest deductible in Box 1?' },
-    { jurisdiction: 'EU', topic: 'pepp', question: 'What is the PEPP pan-European pension product?' },
+    {
+      jurisdiction: 'DE',
+      topic: 'dtt',
+      question: 'How does a German double tax treaty assign employment income?',
+    },
+    {
+      jurisdiction: 'NL',
+      topic: 'mortgage',
+      question: 'Is Dutch mortgage interest deductible in Box 1?',
+    },
+    {
+      jurisdiction: 'EU',
+      topic: 'pepp',
+      question: 'What is the PEPP pan-European pension product?',
+    },
   ];
 
   it.each(normalQuestions)(

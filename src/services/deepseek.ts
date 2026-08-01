@@ -125,7 +125,9 @@ export interface ChatOptions {
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   timeoutMs?: number;
   signal?: AbortSignal;
-  responseFormat?: { type: 'json_object' } | { type: 'json_schema'; json_schema: Record<string, unknown> };
+  responseFormat?:
+    | { type: 'json_object' }
+    | { type: 'json_schema'; json_schema: Record<string, unknown> };
   /** DeepSeek V4 thinking mode toggle. 'disabled' for chat (non-thinking), 'enabled' for selfCheck (CoT). */
   thinking?: 'enabled' | 'disabled';
 }
@@ -150,7 +152,10 @@ export class DeepSeekClient {
   private readonly baseUrl: string;
 
   constructor(
-    env: Pick<Bindings, 'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'>,
+    env: Pick<
+      Bindings,
+      'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+    >,
   ) {
     const key = env.DEEPSEEK_API_KEY;
     if (!key) {

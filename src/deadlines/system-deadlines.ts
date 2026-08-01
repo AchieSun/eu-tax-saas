@@ -1,5 +1,5 @@
-import type { DeadlineCategory } from './types';
 import type { SystemDeadlineTemplate } from './repository';
+import type { DeadlineCategory } from './types';
 
 interface CatalogEntry {
   jurisdiction: string;
@@ -47,7 +47,8 @@ const CATALOG: CatalogEntry[] = [
     jurisdiction: 'DE',
     category: 'tax_filing',
     title: 'DE Einkommensteuer filing deadline',
-    description: 'Annual German income tax return (Einkommensteuererklärung) deadline for self-prepared returns.',
+    description:
+      'Annual German income tax return (Einkommensteuererklärung) deadline for self-prepared returns.',
     dueDate: () => '2025-05-31',
     reminderDays: 14,
   },
@@ -82,16 +83,15 @@ export function getSystemDeadlines(
   taxYear: number,
 ): SystemDeadlineTemplate[] {
   const wanted = new Set(jurisdictions.map((j) => j.toUpperCase()));
-  return CATALOG.filter((entry) => wanted.has(entry.jurisdiction))
-    .map((entry) => ({
-      jurisdiction: entry.jurisdiction,
-      taxYear,
-      title: entry.title,
-      description: entry.description,
-      dueDate: entry.dueDate(taxYear),
-      category: entry.category,
-      reminderDays: entry.reminderDays,
-    }));
+  return CATALOG.filter((entry) => wanted.has(entry.jurisdiction)).map((entry) => ({
+    jurisdiction: entry.jurisdiction,
+    taxYear,
+    title: entry.title,
+    description: entry.description,
+    dueDate: entry.dueDate(taxYear),
+    category: entry.category,
+    reminderDays: entry.reminderDays,
+  }));
 }
 
 export function listSupportedJurisdictions(): string[] {

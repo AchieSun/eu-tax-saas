@@ -5,7 +5,7 @@
  */
 
 import { type Component, For, Show, createSignal } from 'solid-js';
-import { askQuestion, type RagAnswer, type RagJurisdiction } from './rag/api';
+import { type RagAnswer, type RagJurisdiction, askQuestion } from './rag/api';
 
 const JURISDICTIONS: { value: RagJurisdiction | ''; label: string }[] = [
   { value: '', label: '自动' },
@@ -102,9 +102,7 @@ const RagPage: Component = () => {
                 value={jurisdiction()}
                 onChange={(e) => setJurisdiction(e.currentTarget.value as RagJurisdiction | '')}
               >
-                <For each={JURISDICTIONS}>
-                  {(j) => <option value={j.value}>{j.label}</option>}
-                </For>
+                <For each={JURISDICTIONS}>{(j) => <option value={j.value}>{j.label}</option>}</For>
               </select>
             </div>
             <div class="rag-field-inline">
@@ -113,7 +111,9 @@ const RagPage: Component = () => {
                 id="rag-year"
                 class="rag-input"
                 value={String(taxYear())}
-                onChange={(e) => setTaxYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')}
+                onChange={(e) =>
+                  setTaxYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')
+                }
               >
                 <option value="">自动</option>
                 <For each={YEARS}>{(y) => <option value={String(y)}>{y}</option>}</For>
@@ -144,10 +144,7 @@ const RagPage: Component = () => {
         {(a) => (
           <section class="rag-answer" aria-label="回答">
             <div class="rag-answer-head">
-              <span
-                class="rag-confidence"
-                style={{ color: confidenceColor(a().confidence) }}
-              >
+              <span class="rag-confidence" style={{ color: confidenceColor(a().confidence) }}>
                 置信度: {a().confidence}
               </span>
               <span class="rag-year">年度: {a().taxYear}</span>
@@ -194,8 +191,8 @@ const RagPage: Component = () => {
             <Show when={a().usage}>
               {(u) => (
                 <p class="rag-usage">
-                  Tokens: {u().promptTokens} prompt / {u().completionTokens} completion / {u().totalTokens}{' '}
-                  total
+                  Tokens: {u().promptTokens} prompt / {u().completionTokens} completion /{' '}
+                  {u().totalTokens} total
                 </p>
               )}
             </Show>

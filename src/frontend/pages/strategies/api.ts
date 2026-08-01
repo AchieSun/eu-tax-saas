@@ -89,7 +89,10 @@ interface EvaluateErr {
 }
 type EvaluateResponse = EvaluateOk | EvaluateErr;
 
-export async function fetchStrategies(country?: Country, taxYear?: number): Promise<StrategyCatalogItem[]> {
+export async function fetchStrategies(
+  country?: Country,
+  taxYear?: number,
+): Promise<StrategyCatalogItem[]> {
   const params = new URLSearchParams();
   if (country) params.set('country', country);
   if (taxYear) params.set('taxYear', String(taxYear));

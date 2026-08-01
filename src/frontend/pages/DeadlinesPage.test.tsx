@@ -22,7 +22,12 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 function makeDeadline(
-  overrides: Partial<{ id: string; title: string; status: string; snoozedUntil: string | null }> = {},
+  overrides: Partial<{
+    id: string;
+    title: string;
+    status: string;
+    snoozedUntil: string | null;
+  }> = {},
 ): unknown {
   return {
     id: 'dl-1',
@@ -70,10 +75,13 @@ describe('fetchDeadlines', () => {
 
     const items = await fetchDeadlines({ taxYear: 2025, status: 'pending', jurisdiction: 'DE' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/deadlines?taxYear=2025&status=pending&jurisdiction=DE', {
-      credentials: 'include',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/deadlines?taxYear=2025&status=pending&jurisdiction=DE',
+      {
+        credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      },
+    );
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe('File tax return');
   });
@@ -86,9 +94,14 @@ describe('fetchDeadlines', () => {
 
 describe('createDeadline', () => {
   it('POSTs new deadline and returns the created item', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      jsonResponse({ ok: true, item: makeDeadline({ id: 'dl-2', title: 'New deadline' }) }, { status: 201 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { ok: true, item: makeDeadline({ id: 'dl-2', title: 'New deadline' }) },
+          { status: 201 },
+        ),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const item = await createDeadline({
@@ -114,9 +127,11 @@ describe('createDeadline', () => {
 
 describe('completeDeadline', () => {
   it('POSTs to complete endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      jsonResponse({ ok: true, item: makeDeadline({ status: 'completed' }) }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, item: makeDeadline({ status: 'completed' }) }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const item = await completeDeadline('dl-1');
@@ -132,9 +147,11 @@ describe('completeDeadline', () => {
 
 describe('snoozeDeadline', () => {
   it('POSTs snooze with until date', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      jsonResponse({ ok: true, item: makeDeadline({ snoozedUntil: '2025-08-15' }) }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, item: makeDeadline({ snoozedUntil: '2025-08-15' }) }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const item = await snoozeDeadline('dl-1', '2025-08-15');

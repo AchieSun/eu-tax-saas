@@ -78,7 +78,11 @@ function parseWhere(sql: string): Array<{ column: string; op: string; paramIndex
   return result;
 }
 
-function rowMatches(row: DeadlineRow, conditions: ReturnType<typeof parseWhere>, params: unknown[]): boolean {
+function rowMatches(
+  row: DeadlineRow,
+  conditions: ReturnType<typeof parseWhere>,
+  params: unknown[],
+): boolean {
   const record = row as unknown as Record<string, unknown>;
   for (const cond of conditions) {
     const val = record[cond.column];
@@ -101,15 +105,15 @@ async function batchExecutor(
     const columns = parseColumns(normalized);
     const conditions = parseWhere(normalized);
     const filtered = store.filter((row) => rowMatches(row, conditions, params));
-    const rows = filtered.map((row) => columns.map((col) => (row as unknown as Record<string, unknown>)[col] ?? null));
+    const rows = filtered.map((row) =>
+      columns.map((col) => (row as unknown as Record<string, unknown>)[col] ?? null),
+    );
     return { rows };
   }
 
   if (normalized.toUpperCase().startsWith('INSERT')) {
     const colMatch = normalized.match(/\(([^)]+)\)\s*VALUES/i);
-    const cols = colMatch
-      ? colMatch[1].split(',').map((c) => c.trim().replace(/"/g, ''))
-      : [];
+    const cols = colMatch ? colMatch[1].split(',').map((c) => c.trim().replace(/"/g, '')) : [];
     const rowCount = cols.length > 0 ? params.length / cols.length : 0;
     const inserted: DeadlineRow[] = [];
     for (let i = 0; i < rowCount; i++) {
@@ -221,17 +225,28 @@ describe('F9 deadlines API', () => {
     const app = createTestApp({ user: { id: 'user-1' } });
     const res = await requestWithEnv(app, '/');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; count: number; items: Array<{ title: string }> };
+    const body = (await res.json()) as {
+      ok: boolean;
+      count: number;
+      items: Array<{ title: string }>;
+    };
     expect(body.ok).toBe(true);
     expect(body.count).toBe(1);
     expect(body.items[0].title).toBe('User 1 deadline');
   });
 
   it('GET filters by taxYear, status, jurisdiction, category', async () => {
-    store.push(seedRow({ tax_year: 2025, jurisdiction: 'ES', status: 'pending', category: 'tax_filing' }));
-    store.push(seedRow({ tax_year: 2026, jurisdiction: 'PT', status: 'completed', category: 'payment' }));
+    store.push(
+      seedRow({ tax_year: 2025, jurisdiction: 'ES', status: 'pending', category: 'tax_filing' }),
+    );
+    store.push(
+      seedRow({ tax_year: 2026, jurisdiction: 'PT', status: 'completed', category: 'payment' }),
+    );
     const app = createTestApp({ user: { id: 'user-1' } });
-    const res = await requestWithEnv(app, '/?taxYear=2025&status=pending&jurisdiction=ES&category=tax_filing');
+    const res = await requestWithEnv(
+      app,
+      '/?taxYear=2025&status=pending&jurisdiction=ES&category=tax_filing',
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { count: number };
     expect(body.count).toBe(1);
@@ -341,7 +356,10 @@ describe('F9 deadlines API', () => {
       body: JSON.stringify({ until: '2025-08-01' }),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; item: { status: string; snoozedUntil: string | null } };
+    const body = (await res.json()) as {
+      ok: boolean;
+      item: { status: string; snoozedUntil: string | null };
+    };
     expect(body.item.status).toBe('snoozed');
     expect(body.item.snoozedUntil).toBe('2025-08-01');
   });

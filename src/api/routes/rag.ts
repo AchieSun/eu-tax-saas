@@ -104,7 +104,11 @@ ragRoutes.post('/qa', async (c) => {
   try {
     const parsedAnswer = QaAnswerSchema.safeParse(JSON.parse(rawContent));
     if (!parsedAnswer.success) {
-      console.error('RAG QA answer failed schema validation', parsedAnswer.error.issues, rawContent);
+      console.error(
+        'RAG QA answer failed schema validation',
+        parsedAnswer.error.issues,
+        rawContent,
+      );
       return c.json({ ok: false, error: 'answer-generation' }, 500);
     }
     qaAnswer = parsedAnswer.data;

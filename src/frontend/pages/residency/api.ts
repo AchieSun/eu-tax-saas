@@ -6,7 +6,11 @@
  */
 
 import type { Country } from '../../../rules/common/types';
-import type { MultiCountryAssessment, ResidencyInput, ResidencyResult } from '../../../rules/residency';
+import type {
+  MultiCountryAssessment,
+  ResidencyInput,
+  ResidencyResult,
+} from '../../../rules/residency';
 
 const XHR_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' } as const;
 

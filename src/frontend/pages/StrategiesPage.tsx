@@ -7,23 +7,21 @@
 
 import { type Component, For, Show, createEffect, createResource, createSignal } from 'solid-js';
 import {
-  FILING_STATUSES,
-  INCOME_TYPES,
-  SPECIAL_STATUSES,
   type Country,
+  FILING_STATUSES,
   type FilingStatus,
+  INCOME_TYPES,
   type IncomeType,
+  SPECIAL_STATUSES,
   type SpecialStatus,
 } from '../../rules/common/types';
+import { COUNTRY_META } from '../calendar/types';
 import {
-  COUNTRY_META,
-} from '../calendar/types';
-import {
-  evaluateStrategies,
-  fetchStrategies,
   type BaselineSummary,
   type StrategyCatalogItem,
   type StrategyEvaluation,
+  evaluateStrategies,
+  fetchStrategies,
 } from './strategies/api';
 
 const COUNTRIES: Country[] = ['DE', 'NL', 'PT', 'ES', 'UK'];
@@ -125,7 +123,8 @@ const StrategiesPage: Component = () => {
   };
 
   const hasCatalog = () => !catalog.loading && !catalogErrorMsg() && (catalog()?.length ?? 0) > 0;
-  const catalogEmpty = () => !catalog.loading && !catalogErrorMsg() && (catalog()?.length ?? 0) === 0;
+  const catalogEmpty = () =>
+    !catalog.loading && !catalogErrorMsg() && (catalog()?.length ?? 0) === 0;
 
   return (
     <div>
@@ -160,7 +159,9 @@ const StrategiesPage: Component = () => {
             <select
               class="str-select"
               value={String(catalogYear())}
-              onChange={(e) => setCatalogYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')}
+              onChange={(e) =>
+                setCatalogYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')
+              }
             >
               <option value="">全部年度</option>
               <For each={YEARS}>{(y) => <option value={String(y)}>{y}</option>}</For>
@@ -250,11 +251,7 @@ const StrategiesPage: Component = () => {
                 onChange={(e) => setIncomeType(e.currentTarget.value as IncomeType)}
               >
                 <For each={INCOME_TYPES}>
-                  {(t) => (
-                    <option value={t}>
-                      {t.replace(/_/g, ' ')}
-                    </option>
-                  )}
+                  {(t) => <option value={t}>{t.replace(/_/g, ' ')}</option>}
                 </For>
               </select>
             </div>
@@ -279,11 +276,7 @@ const StrategiesPage: Component = () => {
                 onChange={(e) => setSpecialStatus(e.currentTarget.value as SpecialStatus)}
               >
                 <For each={SPECIAL_STATUSES}>
-                  {(s) => (
-                    <option value={s}>
-                      {s === 'none' ? '无' : s}
-                    </option>
-                  )}
+                  {(s) => <option value={s}>{s === 'none' ? '无' : s}</option>}
                 </For>
               </select>
             </div>
@@ -296,11 +289,7 @@ const StrategiesPage: Component = () => {
                 onChange={(e) => setFilingStatus(e.currentTarget.value as FilingStatus)}
               >
                 <For each={FILING_STATUSES}>
-                  {(s) => (
-                    <option value={s}>
-                      {s.replace(/_/g, ' ')}
-                    </option>
-                  )}
+                  {(s) => <option value={s}>{s.replace(/_/g, ' ')}</option>}
                 </For>
               </select>
             </div>
@@ -368,10 +357,7 @@ const StrategiesPage: Component = () => {
             <h3 class="str-h3">策略排序</h3>
             <For each={evaluations()}>
               {(ev) => (
-                <div
-                  class="str-eval-card"
-                  classList={{ 'str-eval-inapplicable': !ev.applicable }}
-                >
+                <div class="str-eval-card" classList={{ 'str-eval-inapplicable': !ev.applicable }}>
                   <div class="str-eval-head">
                     <div>
                       <span class="str-eval-title">{ev.titleZh}</span>
@@ -396,7 +382,9 @@ const StrategiesPage: Component = () => {
                         ? `预计节税 ${eur.format(ev.estimatedSavingsEur)}`
                         : '预计节税 N/A'}
                     </span>
-                    <span class="str-eval-confidence">置信度 {(ev.confidence * 100).toFixed(0)}%</span>
+                    <span class="str-eval-confidence">
+                      置信度 {(ev.confidence * 100).toFixed(0)}%
+                    </span>
                   </div>
                   <p class="str-eval-cite">{ev.citation}</p>
                 </div>

@@ -13,7 +13,12 @@ function makeVector(seed = 0): Vectorize1024 {
 
 function makeFakeEnv(
   opts: {
-    matches?: { id: string; score: number; text: string; regimeStatus?: 'active' | 'transitional' | 'deprecated' }[];
+    matches?: {
+      id: string;
+      score: number;
+      text: string;
+      regimeStatus?: 'active' | 'transitional' | 'deprecated';
+    }[];
   } = {},
 ) {
   const matches = opts.matches ?? [
@@ -155,7 +160,14 @@ describe('createRetrievalService', () => {
 
   it('flags transitional regimes and keeps them with warning', async () => {
     const env = makeFakeEnv({
-      matches: [{ id: 'a'.repeat(64), score: 0.92, text: 'transitional chunk', regimeStatus: 'transitional' }],
+      matches: [
+        {
+          id: 'a'.repeat(64),
+          score: 0.92,
+          text: 'transitional chunk',
+          regimeStatus: 'transitional',
+        },
+      ],
     });
     const service = createRetrievalService(
       env as unknown as Parameters<typeof createRetrievalService>[0],

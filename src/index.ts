@@ -6,9 +6,9 @@
  */
 
 import type { ScheduledEvent } from '@cloudflare/workers-types';
+import type { Bindings } from './api';
 import { createDb } from './db';
 import { findDeadlinesDueForReminder } from './deadlines/repository';
-import type { Bindings } from './api';
 
 export { default } from './api';
 
@@ -35,4 +35,3 @@ export async function scheduled(event: ScheduledEvent, env: Bindings): Promise<v
     );
   }
 }
-

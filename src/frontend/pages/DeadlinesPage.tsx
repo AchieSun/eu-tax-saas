@@ -7,21 +7,21 @@
  */
 
 import { type Component, For, Show, createEffect, createSignal } from 'solid-js';
-import { COUNTRY_META } from '../calendar/types';
 import {
   DEADLINE_CATEGORIES,
   DEADLINE_STATUSES,
   type DeadlineCategory,
   type DeadlineStatus,
 } from '../../deadlines/types';
+import { COUNTRY_META } from '../calendar/types';
 import {
+  type Deadline,
   completeDeadline,
   createDeadline,
   deleteDeadline,
   fetchDeadlines,
   seedDeadlines,
   snoozeDeadline,
-  type Deadline,
 } from './deadlines/api';
 
 const COUNTRIES = ['DE', 'NL', 'PT', 'ES', 'UK'] as const;
@@ -183,7 +183,9 @@ const DeadlinesPage: Component = () => {
 
   async function onSeed() {
     const year = filterYear() ? Number(filterYear()) : 2025;
-    const jurisdictions = filterJurisdiction() ? [filterJurisdiction()] : COUNTRIES as unknown as string[];
+    const jurisdictions = filterJurisdiction()
+      ? [filterJurisdiction()]
+      : (COUNTRIES as unknown as string[]);
     setError(null);
     try {
       const count = await seedDeadlines(year, jurisdictions);
@@ -233,7 +235,11 @@ const DeadlinesPage: Component = () => {
         <div class="dl-section-head">
           <h2 class="dl-h2">筛选</h2>
           <div class="dl-actions">
-            <button type="button" class="dl-btn dl-btn-outline" onClick={() => setShowCreate((s) => !s)}>
+            <button
+              type="button"
+              class="dl-btn dl-btn-outline"
+              onClick={() => setShowCreate((s) => !s)}
+            >
               {showCreate() ? '取消' : '新增事项'}
             </button>
             <button type="button" class="dl-btn dl-btn-secondary" onClick={() => void onSeed()}>
@@ -248,7 +254,9 @@ const DeadlinesPage: Component = () => {
               id="dl-filter-year"
               class="dl-input"
               value={String(filterYear())}
-              onChange={(e) => setFilterYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')}
+              onChange={(e) =>
+                setFilterYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')
+              }
             >
               <For each={YEARS}>{(y) => <option value={String(y)}>{y}</option>}</For>
             </select>
@@ -277,11 +285,7 @@ const DeadlinesPage: Component = () => {
             >
               <option value="">全部</option>
               <For each={COUNTRIES}>
-                {(c) => (
-                  <option value={c}>
-                    {COUNTRY_META[c].label}
-                  </option>
-                )}
+                {(c) => <option value={c}>{COUNTRY_META[c].label}</option>}
               </For>
             </select>
           </div>
@@ -328,11 +332,7 @@ const DeadlinesPage: Component = () => {
                   onChange={(e) => setCreateJurisdiction(e.currentTarget.value)}
                 >
                   <For each={COUNTRIES}>
-                    {(c) => (
-                      <option value={c}>
-                        {COUNTRY_META[c].label}
-                      </option>
-                    )}
+                    {(c) => <option value={c}>{COUNTRY_META[c].label}</option>}
                   </For>
                 </select>
               </div>
@@ -426,7 +426,14 @@ const DeadlinesPage: Component = () => {
               <div class="dl-month-group">
                 <h3 class="dl-month-title">{fmtMonth(month)}</h3>
                 <For each={list}>
-                  {(item) => <DeadlineItem item={item} onComplete={onComplete} onSnooze={onSnooze} onDelete={onDelete} />}
+                  {(item) => (
+                    <DeadlineItem
+                      item={item}
+                      onComplete={onComplete}
+                      onSnooze={onSnooze}
+                      onDelete={onDelete}
+                    />
+                  )}
                 </For>
               </div>
             )}
@@ -468,14 +475,12 @@ function DeadlineItem(props: DeadlineItemProps) {
           <div class="dl-item-title-row">
             <span class="dl-item-jurisdiction">{props.item.jurisdiction}</span>
             <strong class="dl-item-title">{props.item.title}</strong>
-                    <span class={`dl-status-badge ${statusClass()}`}>{statusLabel(props.item.status)}</span>
-                    <span class="dl-item-category">{categoryLabel(props.item.category)}</span>
+            <span class={`dl-status-badge ${statusClass()}`}>{statusLabel(props.item.status)}</span>
+            <span class="dl-item-category">{categoryLabel(props.item.category)}</span>
           </div>
           <div class="dl-item-meta">
             <span>截止: {props.item.dueDate}</span>
-            <Show when={props.item.snoozedUntil}>
-              {(d) => <span>延后至: {d()}</span>}
-            </Show>
+            <Show when={props.item.snoozedUntil}>{(d) => <span>延后至: {d()}</span>}</Show>
             <Show when={props.item.description}>
               {(desc) => <span class="dl-item-desc">{desc()}</span>}
             </Show>

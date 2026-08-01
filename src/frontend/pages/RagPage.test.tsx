@@ -65,7 +65,11 @@ describe('askQuestion', () => {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
       },
-      body: JSON.stringify({ question: 'How are dividends taxed in Portugal?', jurisdiction: 'PT', taxYear: 2025 }),
+      body: JSON.stringify({
+        question: 'How are dividends taxed in Portugal?',
+        jurisdiction: 'PT',
+        taxYear: 2025,
+      }),
     });
     expect(result.answer).toContain('28%');
     expect(result.confidence).toBe('high');

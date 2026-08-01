@@ -259,7 +259,10 @@ describe('DeepSeekClient — model selection', () => {
     await client.selfCheck([{ role: 'user', content: 'audit this' }]);
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
-    const reqBody = JSON.parse(init.body as string) as { model: string; thinking?: { type: string } };
+    const reqBody = JSON.parse(init.body as string) as {
+      model: string;
+      thinking?: { type: string };
+    };
     expect(reqBody.model).toBe('deepseek-v4-flash');
     expect(reqBody.thinking).toEqual({ type: 'enabled' });
   });
@@ -271,7 +274,10 @@ describe('DeepSeekClient — model selection', () => {
     await client.chat([{ role: 'user', content: 'hi' }]);
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
-    const reqBody = JSON.parse(init.body as string) as { model: string; thinking?: { type: string } };
+    const reqBody = JSON.parse(init.body as string) as {
+      model: string;
+      thinking?: { type: string };
+    };
     expect(reqBody.model).toBe('deepseek-v4-flash');
     expect(reqBody.thinking).toEqual({ type: 'disabled' });
   });
@@ -341,7 +347,10 @@ describe('DeepSeekClient — config errors', () => {
         new DeepSeekClient(
           {} as Pick<
             Bindings,
-            'DEEPSEEK_API_KEY' | 'AI_GATEWAY_ACCOUNT_ID' | 'AI_GATEWAY_NAME' | 'AI_GATEWAY_API_TOKEN'
+            | 'DEEPSEEK_API_KEY'
+            | 'AI_GATEWAY_ACCOUNT_ID'
+            | 'AI_GATEWAY_NAME'
+            | 'AI_GATEWAY_API_TOKEN'
           >,
         ),
     ).toThrow(DeepSeekError);

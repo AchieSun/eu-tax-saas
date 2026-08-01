@@ -67,10 +67,9 @@ export function createRetrievalService(env: {
       const taxYear = input.taxYear ?? CURRENT_TAX_YEAR;
       const blacklistHit = queryHitsBlacklist(input.query);
       const vector = await embedder.embedQuery(input.query);
-      const filter: Partial<Pick<VectorizeChunkMetadata, 'jurisdiction' | 'taxYear' | 'topic'>> =
-        {
-          taxYear,
-        };
+      const filter: Partial<Pick<VectorizeChunkMetadata, 'jurisdiction' | 'taxYear' | 'topic'>> = {
+        taxYear,
+      };
       if (input.jurisdiction) filter.jurisdiction = input.jurisdiction;
       if (input.topic) filter.topic = input.topic;
 

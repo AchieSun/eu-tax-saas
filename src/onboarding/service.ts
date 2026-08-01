@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { userIncome, userOnboarding, userResidency } from '../db/schema';
 import type { Db } from '../db';
+import { userIncome, userOnboarding, userResidency } from '../db/schema';
 import type { StepSaveInput } from './types';
 
 export type OnboardingDraft = Record<string, unknown>;
@@ -129,7 +129,10 @@ export async function saveOnboardingStep(
     const currentSpecialStatus = toDraft(existing?.specialStatus);
     await db
       .update(userResidency)
-      .set({ specialStatus: { ...currentSpecialStatus, ...input.data.specialStatus }, updatedAt: now })
+      .set({
+        specialStatus: { ...currentSpecialStatus, ...input.data.specialStatus },
+        updatedAt: now,
+      })
       .where(eq(userResidency.userId, userId));
   }
 
@@ -148,7 +151,11 @@ export async function saveOnboardingStep(
   return getOnboardingState(db, userId);
 }
 
-export async function skipOnboardingStep(db: Db, userId: string, step: number): Promise<OnboardingState> {
+export async function skipOnboardingStep(
+  db: Db,
+  userId: string,
+  step: number,
+): Promise<OnboardingState> {
   await ensureRow(db, userId);
   const state = await getOnboardingState(db, userId);
   await db
