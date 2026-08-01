@@ -83,7 +83,7 @@ function makeMockChatResponse(content: string, usage?: DeepSeekUsage): DeepSeekR
     id: 'test-id',
     object: 'chat.completion',
     created: 1_700_000_000,
-    model: 'deepseek-chat',
+    model: 'deepseek-v4-flash',
     choices: [
       {
         index: 0,
@@ -108,7 +108,7 @@ const H6_PASS_RESPONSE = {
   id: 'selfcheck-id',
   object: 'chat.completion',
   created: 1_700_000_000,
-  model: 'deepseek-reasoner',
+  model: 'deepseek-v4-flash',
   choices: [
     {
       index: 0,
@@ -278,7 +278,7 @@ describe('H3 — tool calling', () => {
       id: 'test-id',
       object: 'chat.completion',
       created: 1_700_000_000,
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       choices: [
         {
           index: 0,

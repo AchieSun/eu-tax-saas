@@ -11,7 +11,7 @@
  *   H2 (Zod validation)       → parse LLM JSON output via strategyArraySchema
  *   H5 (numeric validation)   → if any estimatedSavingsEur deviates > 5% from
  *                                calculator, OVERRIDE with calculator value
- *   H6 (self-check)           → deepseek-reasoner audits primary output;
+ *   H6 (self-check)           → deepseek-v4-flash (thinking) audits primary output;
  *                                if critical issues → downgrade or reject
  *
  * Every surviving recommendation receives a `[AI建议·未经确定性验证]` prefix
@@ -65,7 +65,7 @@ const MAX_TOOL_ROUNDS = 3;
 /**
  * DeepSeek per-1M-token pricing (USD). Used ONLY for the cost meter; not for
  * billing. Configurable via env so deployments can update without code change.
- * Defaults reflect deepseek-chat list price as of 2026-06.
+ * Defaults reflect deepseek-v4-flash list price as of 2026-06.
  */
 function resolveTokenPricing(env: Bindings): {
   inputUsdPerMillion: number;
@@ -470,7 +470,7 @@ export function applyH5NumericValidation(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// H6 — Self-check via deepseek-reasoner
+// H6 — Self-check via deepseek-v4-flash (thinking enabled)
 // ────────────────────────────────────────────────────────────────────────────
 
 const selfCheckResponseSchema = z.object({
@@ -519,7 +519,7 @@ export async function applyH6SelfCheck(
   }
 
   // Oracle Wave C P1#2/4: detect when selfCheck and chat resolve to the same
-  // underlying model (i.e. deepseek-reasoner is currently a flash alias). H6
+  // underlying model (deepseek-v4-flash with thinking). H6
   // becomes a same-model self-audit with reduced independence — surface this
   // to operators via the warnings channel so it shows up in the UI/logs.
   if (
@@ -830,7 +830,7 @@ export async function recommendStrategies(
   warnings.push(...h5Warnings);
   recommendations = validated;
 
-  // ── H6: self-check via deepseek-reasoner ──────────────────────────────────
+  // ── H6: self-check via deepseek-v4-flash (thinking) ────────────────────────
   const h6 = await applyH6SelfCheck(client, recommendations, primaryModelEcho);
   warnings.push(...h6.warnings);
   if (h6.usage) {

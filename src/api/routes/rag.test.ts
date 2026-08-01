@@ -132,7 +132,7 @@ describe('POST /api/rag/qa', () => {
         id: 'chat-1',
         object: 'chat.completion',
         created: Date.now(),
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         choices: [
           {
             index: 0,
@@ -184,7 +184,7 @@ describe('POST /api/rag/qa', () => {
           id: 'chat-2',
           object: 'chat.completion',
           created: Date.now(),
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           choices: [
             {
               index: 0,
@@ -228,7 +228,7 @@ describe('POST /api/rag/qa', () => {
         id: 'chat-3',
         object: 'chat.completion',
         created: Date.now(),
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         choices: [
           {
             index: 0,
@@ -285,7 +285,7 @@ describe('POST /api/rag/qa', () => {
         id: 'chat-meta',
         object: 'chat.completion',
         created: Date.now(),
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         choices: [
           {
             index: 0,
@@ -345,7 +345,7 @@ describe('POST /api/rag/qa', () => {
         id: 'chat-blacklist',
         object: 'chat.completion',
         created: Date.now(),
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         choices: [
           {
             index: 0,
@@ -383,7 +383,7 @@ describe('POST /api/rag/qa', () => {
         id: 'chat-year',
         object: 'chat.completion',
         created: Date.now(),
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         choices: [
           {
             index: 0,
@@ -460,7 +460,7 @@ describe('POST /api/rag/qa', () => {
           id: `chat-${jurisdiction}`,
           object: 'chat.completion',
           created: Date.now(),
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           choices: [
             {
               index: 0,

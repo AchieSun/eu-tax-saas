@@ -3,8 +3,8 @@
  *
  * Supports:
  *   - Direct API or AI Gateway baseURL resolution
- *   - chat()   → deepseek-chat (tool calling, structured output)
- *   - selfCheck() → deepseek-reasoner (CoT self-audit, longer timeout)
+ *   - chat()   → deepseek-v4-flash (thinking disabled, tool calling, structured output)
+ *   - selfCheck() → deepseek-v4-flash (thinking enabled, CoT self-audit, longer timeout)
  *   - Retry with exponential backoff (5xx / 429 / network errors)
  *   - Configurable timeout per-call
  *   - Zod-validated response parsing
@@ -126,6 +126,8 @@ export interface ChatOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   responseFormat?: { type: 'json_object' } | { type: 'json_schema'; json_schema: Record<string, unknown> };
+  /** DeepSeek V4 thinking mode toggle. 'disabled' for chat (non-thinking), 'enabled' for selfCheck (CoT). */
+  thinking?: 'enabled' | 'disabled';
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -133,8 +135,8 @@ export interface ChatOptions {
 // ────────────────────────────────────────────────────────────────────────────
 
 const DIRECT_BASE_URL = 'https://api.deepseek.com/v1';
-const MODEL_CHAT = 'deepseek-chat';
-const MODEL_REASONER = 'deepseek-reasoner';
+const MODEL_CHAT = 'deepseek-v4-flash';
+const MODEL_REASONER = 'deepseek-v4-flash';
 const DEFAULT_TIMEOUT_CHAT = 30_000;
 const DEFAULT_TIMEOUT_REASONER = 90_000;
 const RETRY_DELAYS = [200, 800, 2000]; // exponential backoff ms
@@ -180,30 +182,32 @@ export class DeepSeekClient {
   }
 
   /**
-   * Chat completion (deepseek-chat). Supports tool calling.
+   * Chat completion (deepseek-v4-flash, non-thinking mode). Supports tool calling.
    */
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<DeepSeekResponse> {
     return this.complete(messages, {
       ...opts,
       model: opts.model ?? MODEL_CHAT,
+      thinking: opts.thinking ?? 'disabled',
       timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_CHAT,
     });
   }
 
   /**
-   * Self-check / reasoning call (deepseek-reasoner). Longer default timeout
-   * for chain-of-thought processing.
+   * Self-check / reasoning call (deepseek-v4-flash, thinking mode enabled).
+   * Longer default timeout for chain-of-thought processing.
    *
-   * NOTE: As of 2026-06, DeepSeek's `deepseek-reasoner` alias resolves to the
-   * same `deepseek-v4-flash` model as `deepseek-chat`. The H6 audit layer is
-   * therefore a same-model self-check with a different system prompt and
-   * temperature, not a true independent CoT reviewer. See also:
-   * `scripts/ping-deepseek.ts` for live alias resolution diagnostics.
+   * NOTE: As of 2026-07-24, DeepSeek retired the `deepseek-reasoner` alias.
+   * The equivalent behavior is now `deepseek-v4-flash` with thinking enabled.
+   * The H6 audit layer is a same-model self-check with a different system
+   * prompt and thinking mode, not a true independent CoT reviewer.
+   * See also: `scripts/ping-deepseek.ts` for live alias resolution diagnostics.
    */
   async selfCheck(messages: ChatMessage[], opts: ChatOptions = {}): Promise<DeepSeekResponse> {
     return this.complete(messages, {
       ...opts,
       model: opts.model ?? MODEL_REASONER,
+      thinking: opts.thinking ?? 'enabled',
       timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_REASONER,
     });
   }
@@ -223,6 +227,7 @@ export class DeepSeekClient {
     };
     if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
     if (opts.responseFormat !== undefined) body.response_format = opts.responseFormat;
+    if (opts.thinking) body.thinking = { type: opts.thinking };
     if (opts.tools && opts.tools.length > 0) {
       body.tools = opts.tools;
       body.tool_choice = opts.toolChoice ?? 'auto';

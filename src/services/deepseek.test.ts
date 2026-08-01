@@ -59,7 +59,7 @@ function makeOkResponse(
     id: 'chatcmpl-test',
     object: 'chat.completion',
     created: 1_700_000_000,
-    model: opts.model ?? 'deepseek-chat',
+    model: opts.model ?? 'deepseek-v4-flash',
     choices: [
       {
         index: 0,
@@ -252,15 +252,28 @@ describe('DeepSeekClient — model selection', () => {
     fetchMock._restore();
   });
 
-  it('selfCheck() uses deepseek-reasoner model', async () => {
-    fetchMock.mockResolvedValueOnce(makeOkResponse({ model: 'deepseek-reasoner' }));
+  it('selfCheck() uses deepseek-v4-flash model with thinking enabled', async () => {
+    fetchMock.mockResolvedValueOnce(makeOkResponse({ model: 'deepseek-v4-flash' }));
 
     const client = new DeepSeekClient(DIRECT_ENV);
     await client.selfCheck([{ role: 'user', content: 'audit this' }]);
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
-    const reqBody = JSON.parse(init.body as string) as { model: string };
-    expect(reqBody.model).toBe('deepseek-reasoner');
+    const reqBody = JSON.parse(init.body as string) as { model: string; thinking?: { type: string } };
+    expect(reqBody.model).toBe('deepseek-v4-flash');
+    expect(reqBody.thinking).toEqual({ type: 'enabled' });
+  });
+
+  it('chat() uses deepseek-v4-flash model with thinking disabled', async () => {
+    fetchMock.mockResolvedValueOnce(makeOkResponse({ model: 'deepseek-v4-flash' }));
+
+    const client = new DeepSeekClient(DIRECT_ENV);
+    await client.chat([{ role: 'user', content: 'hi' }]);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const reqBody = JSON.parse(init.body as string) as { model: string; thinking?: { type: string } };
+    expect(reqBody.model).toBe('deepseek-v4-flash');
+    expect(reqBody.thinking).toEqual({ type: 'disabled' });
   });
 });
 

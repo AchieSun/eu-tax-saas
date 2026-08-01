@@ -8,8 +8,8 @@
  * Run ONCE during development to confirm models exist and key works.
  *
  * Verifies:
- *   - deepseek-chat responds (returns actual model ID)
- *   - deepseek-reasoner responds (CoT — may take 30+ seconds)
+ *   - deepseek-v4-flash (thinking disabled) responds
+ *   - deepseek-v4-flash (thinking enabled) responds (CoT — may take 30+ seconds)
  */
 
 const API_KEY: string | undefined = process.env.DEEPSEEK_API_KEY;
@@ -28,9 +28,9 @@ interface ChatResp {
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
-async function ping(model: string, timeoutMs: number): Promise<void> {
+async function ping(model: string, thinkingMode: 'enabled' | 'disabled', timeoutMs: number): Promise<void> {
   const t0 = Date.now();
-  console.log(`\n→ Pinging ${model} ...`);
+  console.log(`\n→ Pinging ${model} (thinking: ${thinkingMode}) ...`);
 
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
@@ -46,6 +46,7 @@ async function ping(model: string, timeoutMs: number): Promise<void> {
         messages: [{ role: 'user', content: 'Reply with exactly one word: hello' }],
         max_tokens: 16,
         temperature: 0,
+        thinking: { type: thinkingMode },
       }),
       signal: controller.signal,
     });
@@ -82,12 +83,12 @@ async function ping(model: string, timeoutMs: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log('DeepSeek API ping — checking key + model aliases');
+  console.log('DeepSeek API ping — checking key + model (v4-flash thinking modes)');
   console.log(`base URL: ${BASE_URL}`);
   console.log(`key prefix: ${KEY.slice(0, 8)}…`);
 
-  await ping('deepseek-chat', 30_000);
-  await ping('deepseek-reasoner', 120_000);
+  await ping('deepseek-v4-flash', 'disabled', 30_000);
+  await ping('deepseek-v4-flash', 'enabled', 120_000);
 
   console.log('\nDone.');
 }
