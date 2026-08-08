@@ -226,7 +226,7 @@ export const signInPage = (): string =>
               })
               .then(function (result) {
                 if (result.res.ok && result.data.token) {
-                  window.location.href = '/pricing';
+                  window.location.href = '/app';
                 } else if (result.res.status === 429) {
                   errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
                   errorEl.hidden = false;
@@ -303,7 +303,7 @@ export const signUpPage = (): string =>
               })
               .then(function (result) {
                 if (result.res.ok && result.data.token) {
-                  window.location.href = '/pricing';
+                  window.location.href = '/app';
                 } else if (result.res.status === 429) {
                   errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
                   errorEl.hidden = false;

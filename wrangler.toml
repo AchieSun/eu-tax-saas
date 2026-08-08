@@ -4,6 +4,11 @@ main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
+# Static assets — the Solid SPA built by `pnpm build:app` into dist/app/.
+# Served at /app/* on taxmora.com; requests that don't match an asset fall
+# through to the Worker (API + landing pages).
+assets = { directory = "./dist", binding = "ASSETS" }
+
 # D1 - Primary database (SQLite at the edge)
 [[d1_databases]]
 binding = "DB"
