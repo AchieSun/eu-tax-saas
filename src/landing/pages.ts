@@ -177,6 +177,155 @@ export const pricingPage = (): string =>
     `,
   });
 
+export const signInPage = (): string =>
+  renderPage({
+    title: 'Sign in',
+    path: '/sign-in',
+    metaDescription: 'Sign in to your Taxmora account to subscribe and access Pro features.',
+    body: `
+      <h1>Sign in</h1>
+      <section class="card auth-card">
+        <p>
+          Sign in to subscribe and access your Taxmora account. New here?
+          <a href="/sign-up">Create an account</a>.
+        </p>
+        <form class="auth-form" id="signin-form" novalidate>
+          <label>
+            Email
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label>
+            Password
+            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Your password">
+          </label>
+          <p class="auth-error" id="error" hidden></p>
+          <button class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+      </section>
+
+      <script>
+        (function () {
+          var form = document.getElementById('signin-form');
+          var errorEl = document.getElementById('error');
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var email = document.getElementById('email').value;
+            var password = document.getElementById('password').value;
+            var button = form.querySelector('button[type="submit"]');
+            var original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Signing in...';
+            fetch('/api/auth/sign-in/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ email: email, password: password }),
+            })
+              .then(function (res) {
+                return res.json().then(function (data) { return { res: res, data: data }; });
+              })
+              .then(function (result) {
+                if (result.res.ok && result.data.token) {
+                  window.location.href = '/pricing';
+                } else if (result.res.status === 429) {
+                  errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
+                  errorEl.hidden = false;
+                } else {
+                  errorEl.textContent = 'Invalid email or password. Please try again.';
+                  errorEl.hidden = false;
+                }
+              })
+              .catch(function () {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.hidden = false;
+              })
+              .finally(function () {
+                button.disabled = false;
+                button.textContent = original;
+              });
+          });
+        })();
+      </script>
+    `,
+  });
+
+export const signUpPage = (): string =>
+  renderPage({
+    title: 'Create account',
+    path: '/sign-up',
+    metaDescription: 'Create a free Taxmora account to subscribe and access Pro features.',
+    body: `
+      <h1>Create account</h1>
+      <section class="card auth-card">
+        <p>
+          Create a free Taxmora account. Already have one?
+          <a href="/sign-in">Sign in</a>.
+        </p>
+        <form class="auth-form" id="signup-form" novalidate>
+          <label>
+            Name
+            <input type="text" id="name" name="name" required autocomplete="name" placeholder="Your name">
+          </label>
+          <label>
+            Email
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label>
+            Password
+            <input type="password" id="password" name="password" required autocomplete="new-password" placeholder="At least 8 characters" minlength="8">
+          </label>
+          <p class="auth-error" id="error" hidden></p>
+          <button class="btn btn-primary" type="submit">Create account</button>
+        </form>
+      </section>
+
+      <script>
+        (function () {
+          var form = document.getElementById('signup-form');
+          var errorEl = document.getElementById('error');
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var name = document.getElementById('name').value;
+            var email = document.getElementById('email').value;
+            var password = document.getElementById('password').value;
+            var button = form.querySelector('button[type="submit"]');
+            var original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Creating account...';
+            fetch('/api/auth/sign-up/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ name: name, email: email, password: password }),
+            })
+              .then(function (res) {
+                return res.json().then(function (data) { return { res: res, data: data }; });
+              })
+              .then(function (result) {
+                if (result.res.ok && result.data.token) {
+                  window.location.href = '/pricing';
+                } else if (result.res.status === 429) {
+                  errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
+                  errorEl.hidden = false;
+                } else {
+                  errorEl.textContent = result.data.message || 'Unable to create account. Please try again.';
+                  errorEl.hidden = false;
+                }
+              })
+              .catch(function () {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.hidden = false;
+              })
+              .finally(function () {
+                button.disabled = false;
+                button.textContent = original;
+              });
+          });
+        })();
+      </script>
+    `,
+  });
+
 export const termsPage = (): string =>
   renderPage({
     title: 'Terms of Service',

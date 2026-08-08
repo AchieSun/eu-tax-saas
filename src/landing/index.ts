@@ -15,6 +15,8 @@ import {
   pricingPage,
   privacyPage,
   refundPage,
+  signInPage,
+  signUpPage,
   termsPage,
 } from './pages';
 
@@ -25,6 +27,8 @@ const HTML = 'text/html; charset=utf-8';
 export function registerLandingRoutes(app: App): void {
   app.get('/', (c) => c.html(homePage(), 200, { 'Content-Type': HTML }));
   app.get('/pricing', (c) => c.html(pricingPage(), 200, { 'Content-Type': HTML }));
+  app.get('/sign-in', (c) => c.html(signInPage(), 200, { 'Content-Type': HTML }));
+  app.get('/sign-up', (c) => c.html(signUpPage(), 200, { 'Content-Type': HTML }));
   app.get('/terms', (c) => c.html(termsPage(), 200, { 'Content-Type': HTML }));
   app.get('/privacy', (c) => c.html(privacyPage(), 200, { 'Content-Type': HTML }));
   app.get('/refund', (c) => c.html(refundPage(), 200, { 'Content-Type': HTML }));

@@ -106,6 +106,36 @@ export function renderPage(options: PageOptions): string {
       border-radius: 6px;
     }
     .nav-link:hover, .nav-link-active { color: var(--color-primary); background: #eff6ff; }
+    .nav-cta {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--color-primary);
+      padding: 0.375rem 0.875rem;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    .nav-cta:hover { background: var(--color-primary-hover); color: #fff; }
+    .auth-card { max-width: 420px; }
+    .auth-form label {
+      display: block;
+      margin-bottom: var(--space-sm);
+      font-weight: 500;
+      color: var(--color-text);
+    }
+    .auth-form input {
+      display: block;
+      width: 100%;
+      margin-top: 0.25rem;
+      padding: 0.625rem 0.75rem;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+    }
+    .auth-form input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+    .auth-error { color: #dc2626; font-size: 0.9rem; margin: var(--space-sm) 0; }
+    .auth-hint { margin-top: var(--space-lg); }
     main { min-height: 60vh; padding-block: var(--space-xl); }
     h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 var(--space-md); letter-spacing: -0.02em; }
     h2 { font-size: 1.35rem; margin: var(--space-lg) 0 var(--space-sm); }
@@ -268,6 +298,7 @@ export function renderPage(options: PageOptions): string {
         ${navLink('/pricing', 'Pricing', path)}
         ${navLink('/terms', 'Terms', path)}
         ${navLink('/privacy', 'Privacy', path)}
+        <a class="nav-cta" href="/sign-in">Sign in</a>
       </nav>
     </div>
   </header>
