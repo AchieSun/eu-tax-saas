@@ -16,6 +16,8 @@ interface PageOptions {
   path: string;
   metaDescription: string;
   body: string;
+  /** HTML lang attribute; defaults to 'en'. Chinese-first pages pass 'zh-CN'. */
+  lang?: string;
 }
 
 const escapeHtml = (value: string): string =>
@@ -34,9 +36,8 @@ const navLink = (path: string, label: string, currentPath: string): string => {
 export function renderPage(options: PageOptions): string {
   const { title, path, metaDescription, body } = options;
   const fullTitle = title === SITE_NAME ? title : `${title} · ${SITE_NAME}`;
-
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(options.lang ?? 'en')}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -295,6 +296,7 @@ export function renderPage(options: PageOptions): string {
       <a class="brand" href="/">Tax<span>mora</span></a>
       <nav>
         ${navLink('/', 'Home', path)}
+        ${navLink('/compare', '五国对比', path)}
         ${navLink('/pricing', 'Pricing', path)}
         ${navLink('/terms', 'Terms', path)}
         ${navLink('/privacy', 'Privacy', path)}
@@ -312,6 +314,7 @@ export function renderPage(options: PageOptions): string {
       <div class="footer-col">
         <strong>Product</strong>
         <a href="/">Home</a>
+        <a href="/compare">五国税后收入对比计算器</a>
         <a href="/pricing">Pricing</a>
       </div>
       <div class="footer-col">

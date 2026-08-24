@@ -8,6 +8,7 @@
 
 import type { Hono } from 'hono';
 import type { Bindings, Variables } from '../api';
+import { registerCompareRoutes } from './compare';
 import {
   cookiePage,
   homePage,
@@ -34,4 +35,5 @@ export function registerLandingRoutes(app: App): void {
   app.get('/refund', (c) => c.html(refundPage(), 200, { 'Content-Type': HTML }));
   app.get('/cookie-policy', (c) => c.html(cookiePage(), 200, { 'Content-Type': HTML }));
   app.get('/impressum', (c) => c.html(impressumPage(), 200, { 'Content-Type': HTML }));
+  registerCompareRoutes(app);
 }
