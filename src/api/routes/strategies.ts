@@ -28,6 +28,7 @@ import { STRATEGIES, getStrategyById, listStrategiesByCountry } from '../../stra
 import type { Strategy, StrategyEvaluation } from '../../strategies/types';
 import type { Bindings, Variables } from '../index';
 import { rateLimitD1 } from '../middleware/rate-limit-d1';
+import { fetchUserAccess, isPro, requireActiveSubscription } from '../middleware/subscription';
 
 export const strategiesRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -71,11 +72,79 @@ strategiesRoutes.get('/', (c) => {
   return c.json({ ok: true, count: items.length, items });
 });
 
+// ── F4 free-tier server-side trimming (t3 spec gap #1) ──────────────────────
+//
+// Free users (anon / free / past_due) see a trimmed evaluation: applicable,
+// titleZh, and estimatedSavingsEur survive (the savings figure is the
+// conversion hook — "see how much you can save"), while the how-to details
+// are cut: reason clipped to REASON_MAX_CHARS with an ellipsis, actionSteps
+// and citations emptied. Pro users (admin OR active subscription) get the
+// full payload. Trimming happens HERE on the server — never via frontend
+// hiding, since the full JSON crosses the wire otherwise.
+const REASON_MAX_CHARS = 60;
+const ELLIPSIS = '…';
+
+function trimReason(reason: string): string {
+  if (reason.length <= REASON_MAX_CHARS) return reason;
+  // Reserve one char for the ellipsis so the trimmed string stays ≤ 61.
+  return `${reason.slice(0, REASON_MAX_CHARS - 1)}${ELLIPSIS}`;
+}
+
+interface EvaluationRow {
+  id: string;
+  tier: string;
+  category: string;
+  titleZh: string;
+  citation: unknown;
+  applicable: boolean;
+  reason: string;
+  estimatedSavingsEur?: number | null;
+  confidence: number;
+  assumptions?: unknown;
+  descriptionZh?: string;
+}
+
+/**
+ * Apply free-tier trimming to one evaluation row. Returns a new object —
+ * never mutates the input. Fields kept: id/tier/category/titleZh/applicable/
+ * estimatedSavingsEur/confidence (sorting already happened on the full data,
+ * so confidence survives for display). Fields cut: reason (clipped),
+ * actionSteps (→ []), citations (→ []).
+ */
+function trimEvaluationForFree(ev: EvaluationRow): EvaluationRow & {
+  actionSteps: string[];
+  citations: unknown[];
+} {
+  return {
+    ...ev,
+    reason: trimReason(ev.reason),
+    actionSteps: [],
+    citations: [],
+  };
+}
+
+/** Pro view of a rule-engine evaluation: full reason + guidance + citations. */
+function toFullEvaluation(
+  ev: EvaluationRow,
+  guidance: string,
+): EvaluationRow & { actionSteps: string[]; citations: unknown[] } {
+  return {
+    ...ev,
+    // Rule-engine strategies don't emit structured step lists; the strategy's
+    // usage description is the actionable guidance, and the full reason (with
+    // concrete numbers) plus the statute citation are the paid deliverables.
+    actionSteps: [guidance],
+    citations: [ev.citation],
+  };
+}
+
 // ── POST /api/strategies/evaluate ──────────────────────────────────────────
 // Body: CalculatorInput. Returns the baseline tax + per-strategy evaluation.
-// Pure compute: no DB writes, no auth. Oracle P1#3: rate-limited at 30/min
-// per (user|anon) bucket since each call iterates 22 strategies × calculator
-// — non-trivial CPU on a Worker.
+// Pure compute: no DB writes. Oracle P1#3: rate-limited at 30/min per
+// (user|anon) bucket since each call iterates 22 strategies × calculator
+// — non-trivial CPU on a Worker. No auth required; the caller's Pro status
+// (resolved via users.role + users.subscription_status when a session is
+// attached) decides full vs trimmed evaluations.
 strategiesRoutes.post(
   '/evaluate',
   rateLimitD1({
@@ -114,9 +183,28 @@ strategiesRoutes.post(
     } catch (err) {
       return c.json({ ok: false, error: (err as Error).message }, 400);
     }
+    // t3: resolve Pro status. /evaluate is the acquisition funnel — no auth
+    // required. Anon → trimmed. Session attached → look up role +
+    // subscription_status (same source of truth as the hard gates). On a DB
+    // lookup failure we degrade to the TRIMMED view (fail-safe for revenue:
+    // the funnel stays up, worst case a Pro user sees the free view).
+    let pro = false;
+    const sessionUserId = c.get('session')?.user?.id;
+    if (sessionUserId) {
+      try {
+        const db = createDb(c.env.DB);
+        pro = isPro(await fetchUserAccess(db, sessionUserId));
+      } catch (err) {
+        console.error('/evaluate: Pro lookup failed, degrading to trimmed view', err);
+        pro = false;
+      }
+    }
+
     // Evaluate ALL strategies; surface eligible AND ineligible so the UI can
     // explain *why* something was excluded (anti-hallucination G2).
-    const evaluations = STRATEGIES.map((s: Strategy) => {
+    // Sorting runs on the FULL rows; trimming is applied afterwards so the
+    // order is identical for free and Pro views.
+    const fullRows = STRATEGIES.map((s: Strategy) => {
       let result: StrategyEvaluation;
       try {
         result = s.evaluate(input, baseline);
@@ -134,17 +222,30 @@ strategiesRoutes.post(
         category: s.category,
         titleZh: s.titleZh,
         citation: s.citation,
+        descriptionZh: s.descriptionZh,
         ...result,
       };
     });
     // Sort: applicable first, then by estimated saving desc, then by confidence desc.
-    evaluations.sort((a, b) => {
+    fullRows.sort((a, b) => {
       if (a.applicable !== b.applicable) return a.applicable ? -1 : 1;
       const sa = a.estimatedSavingsEur ?? 0;
       const sb = b.estimatedSavingsEur ?? 0;
       if (sb !== sa) return sb - sa;
       return b.confidence - a.confidence;
     });
+
+    // t3: server-side paywall trimming. Free rows drop the how-to (reason
+    // clipped, no guidance step, no statute citations) but keep the savings
+    // figure — the conversion hook. Pro rows keep everything and gain the
+    // explicit actionSteps/citations arrays.
+    const evaluations = fullRows.map((row) => {
+      if (pro) {
+        return toFullEvaluation(row, row.descriptionZh);
+      }
+      return trimEvaluationForFree(row);
+    });
+
     return c.json({
       ok: true,
       baseline: {
@@ -173,6 +274,10 @@ const persistSchema = z.object({
 
 strategiesRoutes.post(
   '/persist',
+  // Paywall (F4): persisting a report is a Pro feature — the full strategy
+  // report (AI recommendations + saved baseline) is the paid deliverable.
+  // Mounted BEFORE rateLimitD1 so a refused 402 doesn't burn a quota slot.
+  requireActiveSubscription({ feature: 'strategy-report-persist' }),
   rateLimitD1({ keyPrefix: 'rl:strategies', max: 60, windowSeconds: 60 }),
   async (c) => {
     const session = c.get('session');
@@ -212,11 +317,13 @@ strategiesRoutes.post(
 export default strategiesRoutes;
 
 // ── POST /api/strategies/ai-recommend ──────────────────────────────────────
-// F4 Wave C: Auth required, rate-limited (10/hour per user). Wraps the
-// 6-layer LLM harness (recommendStrategies). Returns C-tier AI suggestions
-// alongside the rule-based evaluations the user has already seen.
+// F4 Wave C: Pro feature. Wraps the 6-layer LLM harness (recommendStrategies).
+// Returns C-tier AI suggestions alongside the rule-based evaluations the user
+// has already seen. The paywall mounts BEFORE the rate limit so a refused
+// 402 doesn't burn one of the 10/hour Pro slots.
 strategiesRoutes.post(
   '/ai-recommend',
+  requireActiveSubscription({ feature: 'ai-strategy-report' }),
   rateLimitD1({
     keyPrefix: 'rl:strategies:ai',
     max: 10,

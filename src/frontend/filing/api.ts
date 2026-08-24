@@ -126,6 +126,11 @@ export async function renderForm(
     body: JSON.stringify({ data, watermark: options?.watermark }),
   });
   if (res.status === 401) throw new Error(UNAUTHORIZED);
+  if (res.status === 402) {
+    // Paywall: watermark-free PDF is Pro-only. Surface the stable code so
+    // the view layer can render the upgrade card.
+    throw new Error('SUBSCRIPTION_REQUIRED');
+  }
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After') ?? '?';
     const err = new Error(RATE_LIMITED) as Error & { retryAfter?: string };

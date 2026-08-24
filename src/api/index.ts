@@ -151,16 +151,24 @@ app.get('/api/health', (c) =>
 // "Include DRAFT watermark" toggle from non-admins. Authed users get
 // `{ userId, role }`; anon gets 401. Deliberately NOT mounted under audit
 // middleware — it's a session-echo, not a state-changing operation.
+// Paywall wave: also echoes `subscriptionStatus` so the frontend can key
+// Pro-gated UI (F3 watermark-free PDF, F4 full strategy report) off the
+// same row the backend gates on — single source of truth is users.role +
+// users.subscription_status.
 app.get('/api/me', async (c) => {
   const session = c.get('session');
   if (!session?.user?.id) return c.json({ error: 'unauthorized' }, 401);
   const db = createDb(c.env.DB);
   const [row] = await db
-    .select({ role: users.role })
+    .select({ role: users.role, subscriptionStatus: users.subscriptionStatus })
     .from(users)
     .where(eq(users.id, session.user.id))
     .limit(1);
-  return c.json({ userId: session.user.id, role: row?.role ?? 'user' });
+  return c.json({
+    userId: session.user.id,
+    role: row?.role ?? 'user',
+    subscriptionStatus: row?.subscriptionStatus ?? 'free',
+  });
 });
 
 // ── Hash-only audit logging (Oracle P1#9) — mounts AFTER auth middleware ────

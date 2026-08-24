@@ -4,7 +4,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import StrategiesPage from './StrategiesPage';
-import { evaluateStrategies, fetchStrategies } from './strategies/api';
+import {
+  SubscriptionRequiredError,
+  aiRecommendStrategies,
+  evaluateStrategies,
+  fetchStrategies,
+} from './strategies/api';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -122,5 +127,85 @@ describe('evaluateStrategies', () => {
   it('throws RATE_LIMITED on 429', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 429 })));
     await expect(evaluateStrategies(input)).rejects.toThrow('RATE_LIMITED');
+  });
+});
+
+describe('aiRecommendStrategies (F4 paywall client)', () => {
+  const input = {
+    country: 'DE' as const,
+    taxYear: 2025,
+    incomeType: 'salary' as const,
+    grossIncome: 60000,
+    specialStatus: 'none' as const,
+    filingStatus: 'single' as const,
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs to /api/strategies/ai-recommend and returns the report', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        baseline: { country: 'DE', taxYear: 2025, taxOwed: 12000 },
+        recommendations: [
+          {
+            id: 'eu.holding',
+            tier: 'C',
+            titleZh: '[AI建议·未经确定性验证] eu.holding',
+            reasoning: '...',
+            confidence: 0.6,
+            estimatedSavingsEur: null,
+            actionSteps: ['step1'],
+            citations: ['c1'],
+            aiDisclaimer: '[AI建议·未经确定性验证]',
+          },
+        ],
+        warnings: [],
+        usage: { promptTokens: 100, completionTokens: 50, cost: 0.001 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await aiRecommendStrategies(input);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/strategies/ai-recommend', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(input),
+    });
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.usage.cost).toBe(0.001);
+  });
+
+  it('throws SubscriptionRequiredError with feature slug on 402', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'subscription_required',
+            feature: 'ai-strategy-report',
+            subscriptionStatus: 'free',
+          }),
+          { status: 402 },
+        ),
+      ),
+    );
+    const err = await aiRecommendStrategies(input).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SubscriptionRequiredError);
+    expect((err as SubscriptionRequiredError).feature).toBe('ai-strategy-report');
+    expect((err as SubscriptionRequiredError).subscriptionStatus).toBe('free');
+  });
+
+  it('throws RATE_LIMITED on 429', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 429 })));
+    await expect(aiRecommendStrategies(input)).rejects.toThrow('RATE_LIMITED');
   });
 });

@@ -101,14 +101,16 @@ vi.mock('../../db/queries/form-mappings', () => ({
 // Drizzle chain mock — supports:
 //   - db.select().from(table).where(cond) → Promise<rows[]>
 //   - db.select(cols).from(users).where(cond).limit(N) → Promise<rows[]>
-//     (used by requireAdminIfWatermarkOff() for role lookup)
+//     (used by requireProIfWatermarkOff() for the role/subscription lookup)
 //   - db.insert(auditLog).values(row) → Promise<void>
 //     (used by the watermark-off audit row write)
 //   - db.insert(rateLimitCounters).values(row).onConflictDoUpdate(...).returning(...)
 //     → Promise<[{count: number}]>
 //     (Oracle P1-7: used by rateLimitD1 middleware for atomic counter upsert.
 //      Simulates SQLite's INSERT…ON CONFLICT DO UPDATE per-row atomicity.)
-let mockUserRoles: Map<string, 'admin' | 'user'> = new Map();
+// Paywall wave: mockUsers values now carry subscriptionStatus alongside role
+// because requireProIfWatermarkOff consults both (admin OR active subscriber).
+let mockUsers: Map<string, { role: 'admin' | 'user'; subscriptionStatus: string }> = new Map();
 const insertedAuditRows: Array<Record<string, unknown>> = [];
 // Oracle P1-7 (W4 review): per-(key, windowStart) counter rows for
 // rateLimitD1. The map key is `${key}::${windowStart}`. We mutate counts
@@ -118,7 +120,7 @@ const mockRateLimitRows: Map<string, { key: string; windowStart: number; count: 
   new Map();
 
 function resetDbMocks() {
-  mockUserRoles = new Map();
+  mockUsers = new Map();
   insertedAuditRows.length = 0;
   mockRateLimitRows.clear();
 }
@@ -146,14 +148,15 @@ vi.mock('../../db', () => {
   };
 
   const fromFieldMappings = () => Promise.resolve(mockFields.filter((r) => r.deletedAt === null));
-  // Users-role lookups: pull from mockUserRoles. The session id is keyed by
-  // the value in the WHERE clause — but our mock doesn't unpack SQL, so we
-  // collapse to "first matching role". Tests inject either zero or one row.
+  // Users lookups (role + subscriptionStatus for the paywall gate): pull
+  // from mockUsers. The session id is keyed by the value in the WHERE
+  // clause — but our mock doesn't unpack SQL, so we collapse to "first
+  // matching row". Tests inject either zero or one entry.
   const fromUsers = () => {
-    const entries = [...mockUserRoles.entries()];
+    const entries = [...mockUsers.entries()];
     if (entries.length === 0) return Promise.resolve([]);
-    const [, role] = entries[0] as [string, string];
-    return Promise.resolve([{ role }]);
+    const [, access] = entries[0] as [string, { role: string; subscriptionStatus: string }];
+    return Promise.resolve([access]);
   };
 
   let nextResolver: () => Promise<unknown> = fromFieldMappings;
@@ -886,8 +889,8 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         yCoord: null,
       }),
     ];
-    // Oracle P0-1 (W4 review): admin role required for watermark:false.
-    mockUserRoles.set('user-1', 'admin');
+    // Paywall: admin role grants Pro (staff bypass).
+    mockUsers.set('user-1', { role: 'admin', subscriptionStatus: 'free' });
     const fakeKv = makeFakeKv();
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp();
@@ -917,7 +920,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(insertedAuditRows[0]?.userIdOrNull).toBe('user-1');
   });
 
-  it('8a. watermark:false (non-admin) returns 403 watermark_off_admin_only + no audit row + no quota burn', async () => {
+  it('8a. watermark:false (free user) returns 402 subscription_required + no audit row + no quota burn', async () => {
     mockVersion = makeVersion();
     mockFields = [
       makeField({
@@ -929,7 +932,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         yCoord: null,
       }),
     ];
-    mockUserRoles.set('user-1', 'user'); // explicitly non-admin
+    mockUsers.set('user-1', { role: 'user', subscriptionStatus: 'free' }); // explicitly non-Pro
     const fakeKv = makeFakeKv();
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp();
@@ -939,16 +942,72 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { data: { user: { firstName: 'Alice' } }, watermark: false },
       { KV: fakeKv.kv, R2: fakeR2 },
     );
-    expect(res.status).toBe(403);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe('watermark_off_admin_only');
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as {
+      error?: string;
+      feature?: string;
+      subscriptionStatus?: string;
+    };
+    expect(body.error).toBe('subscription_required');
+    expect(body.feature).toBe('watermark-free-pdf');
+    expect(body.subscriptionStatus).toBe('free');
     // Oracle P1-7 (W4 review): No audit row + no rate-limit row (gate runs BEFORE rateLimitD1).
     expect(insertedAuditRows).toHaveLength(0);
     expect(fakeKv.puts).toHaveLength(0);
     expect(mockRateLimitRows.size).toBe(0);
   });
 
-  it('8b. watermark:false (anon) returns 403 watermark_off_admin_only (gate runs before rateLimit)', async () => {
+  it('8a-pro. watermark:false (active subscriber) renders clean PDF + audit row', async () => {
+    mockVersion = makeVersion();
+    mockFields = [
+      makeField({
+        fieldName: 'txt_first_name',
+        fieldKind: 'acroform',
+        fieldType: 'text',
+        dataPath: 'user.firstName',
+        xCoord: null,
+        yCoord: null,
+      }),
+    ];
+    mockUsers.set('user-1', { role: 'user', subscriptionStatus: 'active' });
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: { user: { firstName: 'Alice' } }, watermark: false },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-render-watermark')).toBe('off');
+    // Exactly one audit row for the off-watermark render.
+    expect(insertedAuditRows).toHaveLength(1);
+    expect(insertedAuditRows[0]?.source).toBe('render-watermark-off');
+    expect(insertedAuditRows[0]?.userIdOrNull).toBe('user-1');
+  });
+
+  it('8a-dunning. watermark:false (past_due subscriber) returns 402 — no silent grace period', async () => {
+    mockVersion = makeVersion();
+    mockFields = [makeField({ fieldKind: 'acroform', xCoord: null, yCoord: null })];
+    mockUsers.set('user-1', { role: 'user', subscriptionStatus: 'past_due' });
+    const fakeKv = makeFakeKv();
+    const fakeR2 = makeFakeR2();
+    const app = createPostTestApp();
+    const res = await postJson(
+      app,
+      '/api/forms/DE/2024/mantelbogen/render',
+      { data: {}, watermark: false },
+      { KV: fakeKv.kv, R2: fakeR2 },
+    );
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as { error?: string; subscriptionStatus?: string };
+    expect(body.error).toBe('subscription_required');
+    expect(body.subscriptionStatus).toBe('past_due');
+    expect(mockRateLimitRows.size).toBe(0);
+  });
+
+  it('8b. watermark:false (anon) returns 402 subscription_required (gate runs before rateLimit)', async () => {
     mockVersion = makeVersion();
     mockFields = [makeField({ fieldKind: 'acroform', xCoord: null, yCoord: null })];
     const fakeKv = makeFakeKv();
@@ -960,9 +1019,9 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { data: {}, watermark: false },
       { KV: fakeKv.kv, R2: fakeR2 },
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(402);
     const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe('watermark_off_admin_only');
+    expect(body.error).toBe('subscription_required');
     expect(fakeKv.puts).toHaveLength(0);
     expect(mockRateLimitRows.size).toBe(0);
   });
@@ -979,7 +1038,7 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         yCoord: null,
       }),
     ];
-    mockUserRoles.set('user-1', 'user'); // non-admin still fine because no opt-out
+    mockUsers.set('user-1', { role: 'user', subscriptionStatus: 'free' }); // free user still fine because no opt-out
     const fakeKv = makeFakeKv();
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp();
@@ -1649,13 +1708,13 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     expect(transformFailed?.detail).not.toMatch(/[\u0080-\uffff]/);
   }, 20000);
 
-  // ── Oracle P1-NEW-5 (W5-A followup): bodyLimit → requireAdminIfWatermarkOff → handler chain ──
+  // ── Oracle P1-NEW-5 (W5-A followup): bodyLimit → requireProIfWatermarkOff → handler chain ──
   //
   // Pins the middleware ordering AND the body.clone() cache assumption.
   // A future hono upgrade that changes c.req.bodyCache semantics, or a
   // refactor that remounts these middlewares out of order, would silently
-  // break the admin gate without these tests.
-  it('28. POST /render with watermark:false + non-admin + near-bodyLimit body → 403 (not 401/200/500)', async () => {
+  // break the paywall gate without these tests.
+  it('28. POST /render with watermark:false + free user + near-bodyLimit body → 402 (not 401/200/500)', async () => {
     mockVersion = makeVersion();
     mockFields = [
       makeField({
@@ -1667,8 +1726,8 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
         yCoord: null,
       }),
     ];
-    // user-1 is in session but NOT in mockUserRoles → role-lookup returns
-    // no rows → middleware treats as non-admin and must 403.
+    // user-1 is in session but NOT in mockUsers → access lookup returns
+    // no rows → middleware treats as non-Pro (free) and must 402.
     const fakeKv = makeFakeKv();
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp({ user: { id: 'user-1' } });
@@ -1681,16 +1740,16 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { watermark: false, data: paddedData },
       { KV: fakeKv.kv, R2: fakeR2 },
     );
-    // The body fits under 256 KiB so bodyLimit passes; admin gate refuses.
-    expect(res.status).toBe(403);
+    // The body fits under 256 KiB so bodyLimit passes; paywall gate refuses.
+    expect(res.status).toBe(402);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body.error).toBe('watermark_off_admin_only');
-    // Rate-limit row never written: the admin gate runs BEFORE rateLimitD1
-    // (Oracle P0-1) so a refused misuse doesn't burn a quota slot.
+    expect(body.error).toBe('subscription_required');
+    // Rate-limit row never written: the paywall gate runs BEFORE rateLimitD1
+    // so a refused request doesn't burn a quota slot.
     expect(mockRateLimitRows.size).toBe(0);
   }, 20000);
 
-  it('29. POST /render with watermark omitted (default-on) + near-bodyLimit body → bodyLimit passes through to handler (NOT 403)', async () => {
+  it('29. POST /render with watermark omitted (default-on) + near-bodyLimit body → bodyLimit passes through to handler (NOT 402)', async () => {
     mockVersion = makeVersion();
     mockFields = [
       makeField({
@@ -1706,8 +1765,8 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
     const fakeR2 = makeFakeR2();
     const app = createPostTestApp({ user: { id: 'user-1' } });
     const paddedData = { user: { firstName: 'Alice' }, padding: 'p'.repeat(200 * 1024) };
-    // watermark omitted → schema default (DRAFT watermark on) → admin gate
-    // is a no-op. The 1:1 wire format only allows `false` or a
+    // watermark omitted → schema default (DRAFT watermark on) → paywall
+    // gate is a no-op. The 1:1 wire format only allows `false` or a
     // WatermarkOptions object — `true` is NOT in the union, so the
     // canonical "watermark on" wire shape is to omit the field.
     const res = await postJson(
@@ -1716,12 +1775,12 @@ describe('POST /api/forms/:country/:year/:form/render', () => {
       { data: paddedData },
       { KV: fakeKv.kv, R2: fakeR2 },
     );
-    // With watermark omitted the admin gate is a no-op; the body fits
+    // With watermark omitted the paywall gate is a no-op; the body fits
     // under 256 KiB so bodyLimit passes; the handler should render
     // successfully (200) OR hit some downstream limit (429), but it must
-    // NOT be 403: 403 here would mean the admin gate is misfiring on a
+    // NOT be 402: 402 here would mean the paywall gate is misfiring on a
     // non-watermark-off body, which is the regression we guard against.
-    expect(res.status).not.toBe(403);
+    expect(res.status).not.toBe(402);
     expect([200, 429]).toContain(res.status);
     // And the rate-limit upsert did happen (gate cleared, limiter ran).
     expect(mockRateLimitRows.size).toBe(1);

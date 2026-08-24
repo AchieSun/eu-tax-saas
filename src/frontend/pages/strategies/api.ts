@@ -70,11 +70,16 @@ export interface StrategyEvaluation {
   tier: string;
   category: string;
   titleZh: string;
-  citation: string;
+  /** Free view: `null` (server trims it). Pro view: full citation object. */
+  citation: unknown;
   applicable: boolean;
   reason: string;
   confidence: number;
   estimatedSavingsEur: number | null;
+  /** Free view: `[]` (server trims). Pro view: guidance steps. */
+  actionSteps?: string[];
+  /** Free view: `[]` (server trims). Pro view: statute citations. */
+  citations?: unknown[];
 }
 
 interface EvaluateOk {
@@ -126,6 +131,71 @@ export async function evaluateStrategies(input: CalculatorInput): Promise<Evalua
   if (!res.ok) throw new Error(`evaluateStrategies failed: ${res.status}`);
   const json = (await res.json()) as EvaluateResponse;
   if (!json.ok) throw new Error(json.error || 'evaluateStrategies failed');
+  return json;
+}
+
+// ── F4 full strategy report (Pro) ──────────────────────────────────────────
+
+/** Thrown when the backend answers 402 subscription_required. */
+export class SubscriptionRequiredError extends Error {
+  readonly feature: string;
+  readonly subscriptionStatus: string;
+
+  constructor(feature: string, subscriptionStatus: string) {
+    super('SUBSCRIPTION_REQUIRED');
+    this.name = 'SubscriptionRequiredError';
+    this.feature = feature;
+    this.subscriptionStatus = subscriptionStatus;
+  }
+}
+
+export interface AiRecommendation {
+  id: string;
+  tier: string;
+  titleZh: string;
+  reasoning: string;
+  confidence: number;
+  estimatedSavingsEur: number | null;
+  actionSteps: string[];
+  citations: string[];
+  aiDisclaimer: string;
+}
+
+export interface AiRecommendOk {
+  ok: true;
+  baseline: { country: Country; taxYear: number; taxOwed: number };
+  recommendations: AiRecommendation[];
+  warnings: string[];
+  usage: { promptTokens: number; completionTokens: number; cost: number };
+}
+
+/**
+ * POST /api/strategies/ai-recommend — Pro-gated. Throws
+ * SubscriptionRequiredError on 402 so the caller can show the paywall.
+ */
+export async function aiRecommendStrategies(input: CalculatorInput): Promise<AiRecommendOk> {
+  const res = await fetch('/api/strategies/ai-recommend', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...XHR_HEADERS },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new Error('UNAUTHORIZED');
+  if (res.status === 402) {
+    const body = (await res.json().catch(() => ({}))) as {
+      feature?: string;
+      subscriptionStatus?: string;
+    };
+    throw new SubscriptionRequiredError(
+      body.feature ?? 'ai-strategy-report',
+      body.subscriptionStatus ?? 'free',
+    );
+  }
+  if (res.status === 429) throw new Error('RATE_LIMITED');
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res, `aiRecommendStrategies failed: ${res.status}`));
+  }
+  const json = (await res.json()) as AiRecommendOk;
   return json;
 }
 

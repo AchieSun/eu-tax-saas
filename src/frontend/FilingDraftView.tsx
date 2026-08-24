@@ -35,6 +35,8 @@ import {
   type RenderResult,
   SUPPORTED_FORMS,
 } from './filing/types';
+import PaywallCard, { paywallStyles } from './paywall/PaywallCard';
+import { fetchMe, isPro } from './paywall/api';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,8 @@ function friendlyRenderError(err: Error & { retryAfter?: string }): string {
       return '请先登录 (Please sign in to generate drafts).';
     case 'RATE_LIMITED':
       return `已超过今日生成上限 (10/day). 请在 ${err.retryAfter ?? '?'} 秒后重试.`;
+    case 'SUBSCRIPTION_REQUIRED':
+      return '无水印 PDF 为 Pro 会员功能 (Watermark-free PDF is a Pro feature). 升级后解锁.';
     case 'FORM_NOT_FOUND':
       return '未找到该表格映射 (Form mapping not found).';
     case 'NO_ACTIVE_FIELDS':
@@ -145,21 +149,14 @@ const FilingDraftView: Component = () => {
 
   const [previewUrl, setPreviewUrl] = createSignal<string | null>(null);
 
-  // ── Oracle P0-1 (W4 review): admin gate ───────────────────────────────
-  // The DRAFT watermark toggle is admin-only. We fetch /api/me once on
-  // mount and default to non-admin on 401 / network error / parse failure
-  // so the toggle stays hidden for anon + non-admin users.
-  const [me] = createResource(async () => {
-    try {
-      const res = await fetch('/api/me', { credentials: 'include' });
-      if (!res.ok) return { role: 'user' as const };
-      const body = (await res.json()) as { userId?: string; role?: string };
-      return { role: body.role === 'admin' ? ('admin' as const) : ('user' as const) };
-    } catch {
-      return { role: 'user' as const };
-    }
-  });
-  const isAdmin = createMemo(() => me()?.role === 'admin');
+  // ── Paywall: Pro gate (admin OR active subscriber) ─────────────────────
+  // The watermark-free PDF is a Pro feature. We fetch /api/me once on mount
+  // — the same row the backend gates on — so the UI matches the server's
+  // decision. 401 / network error / parse failure all collapse to a
+  // signed-out (null) state, and isPro(null) === false, so the toggle
+  // stays locked for anon users.
+  const [me] = createResource(fetchMe);
+  const hasProAccess = createMemo(() => isPro(me()));
 
   // ── Picker helpers ───────────────────────────────────────────────────────
   // Distinct value sets driven entirely by SUPPORTED_FORMS so adding a new
@@ -228,9 +225,10 @@ const FilingDraftView: Component = () => {
     setRenderLoading(true);
     setRenderError(null);
     try {
-      // Oracle P0-1 (W4 review): only admins may opt out of the watermark.
-      // For non-admins we always omit the field so the server defaults ON.
-      const wantWatermarkOff = isAdmin() && !includeWatermark();
+      // Paywall: only Pro (admin OR active subscriber) may opt out of the
+      // watermark. For everyone else we omit the field so the server
+      // defaults ON — the backend re-checks anyway (402 on mismatch).
+      const wantWatermarkOff = hasProAccess() && !includeWatermark();
       const result = await renderForm(picker(), formData(), {
         watermark: wantWatermarkOff ? false : undefined,
       });
@@ -440,14 +438,14 @@ const FilingDraftView: Component = () => {
 
             {/* Action row ─────────────────────────────────────────── */}
             <div class="filing-action-row">
-              {/* Oracle P0-1 (W4 review): admin-only watermark toggle.
-                  Non-admins see a static help line instead so they know
-                  the feature exists but is gated. */}
+              {/* Paywall: the watermark toggle is Pro-gated. Non-Pro users
+                  get a static hint + the upgrade card below so they know
+                  the feature exists and how to unlock it. */}
               <Show
-                when={isAdmin()}
+                when={hasProAccess()}
                 fallback={
                   <span class="filing-watermark-disabled">
-                    Drafts are always watermarked (admin-only feature).
+                    Drafts are always watermarked — watermark-free PDFs are a Pro feature.
                   </span>
                 }
               >
@@ -476,6 +474,21 @@ const FilingDraftView: Component = () => {
                   {err().message}
                 </div>
               )}
+            </Show>
+
+            {/* Paywall: upgrade card for non-Pro users (watermark-free PDF) */}
+            <Show when={!hasProAccess()}>
+              <div class="filing-paywall-row">
+                <PaywallCard
+                  me={me() ?? null}
+                  title="无水印 PDF 生成"
+                  bullets={[
+                    '生成可直接提交的干净 PDF（无 DRAFT 水印）',
+                    '每日 10 次生成额度',
+                    '全部五国表格模板',
+                  ]}
+                />
+              </div>
             </Show>
           </div>
         )}
@@ -580,7 +593,7 @@ const FilingDraftView: Component = () => {
 
 export default FilingDraftView;
 
-const filingStyles = `
+const filingStyles = `${paywallStyles}
 .filing-panel {
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -707,6 +720,7 @@ const filingStyles = `
   transition: background-color 150ms;
 }
 .filing-btn-secondary:hover { background: #e5e7eb; }
+.filing-paywall-row { margin-top: 1.25rem; }
 .filing-banner-error {
   margin-top: 1rem;
   background: #fef2f2;

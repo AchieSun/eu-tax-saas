@@ -37,9 +37,9 @@ import { eq } from 'drizzle-orm';
  * endpoint owns auth + rate limiting + audit).
  *
  * POST /render is the user-facing draft-PDF builder:
- *   - Oracle P0-1 (W4 review): watermark:false gated to admin via
- *     `requireAdminIfWatermarkOff()` mounted BEFORE rateLimit so refused
- *     misuse doesn't burn a quota slot. Every off-watermark render also
+ *   - Paywall: watermark:false gated to Pro (admin OR active subscriber)
+ *     via `requireProIfWatermarkOff()` mounted BEFORE rateLimit so refused
+ *     calls don't burn a quota slot. Every off-watermark render also
  *     writes a dedicated audit_log row (source='render-watermark-off')
  *     for post-hoc tracing.
  *   - Oracle P0-2 (W4 review): refuses to render mappings whose active
@@ -95,8 +95,8 @@ import {
 } from '../../forms/types';
 import type { Bindings, Variables } from '../index';
 import { rateLimitD1 } from '../middleware/rate-limit-d1';
-import { requireAdminIfWatermarkOff } from '../middleware/require-admin-if-watermark-off';
 import { MAX_HASH_BYTES, sha256Hex } from '../middleware/sha256';
+import { requireProIfWatermarkOff } from '../middleware/subscription';
 
 export const formsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -248,11 +248,12 @@ formsRoutes.post(
     maxSize: MAX_RENDER_BODY_BYTES,
     onError: (c) => c.json({ error: 'body_too_large', limitBytes: MAX_RENDER_BODY_BYTES }, 413),
   }),
-  // Oracle P0-1 (W4 review): admin gate runs BEFORE rateLimitD1 so a refused
-  // non-admin watermark:false call does not burn one of the user's daily
-  // 10 render slots. The middleware peeks at body via Request.clone() and
-  // is a no-op for any body that doesn't carry `watermark: false`.
-  requireAdminIfWatermarkOff(),
+  // Paywall (F3): the watermark:false lever is now a Pro feature (admin OR
+  // active subscriber). Runs BEFORE rateLimitD1 so a refused non-Pro call
+  // does not burn one of the user's daily 10 render slots. The middleware
+  // peeks at body via Request.clone() and is a no-op for any body that
+  // doesn't carry `watermark: false`.
+  requireProIfWatermarkOff(),
   // Oracle P1-7 (W4 review): rateLimitD1 (D1-atomic upsert) replaces the
   // KV-based rateLimit so parallel requests can NEVER bypass the cap.
   rateLimitD1({
@@ -506,11 +507,11 @@ formsRoutes.post(
     }
 
     // 7. Render.
-    // Oracle P0-1 (W4 review): watermarkOff is computed once and used to
+    // Paywall: watermarkOff is computed once and used to
     // (a) write the post-render audit_log row, (b) flip the
     // X-Render-Watermark response header. By the time we get here the
-    // requireAdminIfWatermarkOff() middleware has already verified the
-    // caller is an admin if watermarkOff is true.
+    // requireProIfWatermarkOff() middleware has already verified the
+    // caller is Pro (admin OR active subscriber) if watermarkOff is true.
     // Oracle P0-4 (W4 review): userIdHash is a short (16-hex-char) prefix
     // of the SHA-256 of the user id — enough entropy to be collision-
     // resistant for audit but short enough to live inside PDF Keywords
@@ -594,7 +595,6 @@ formsRoutes.post(
         .then(
           () => {},
           (err: unknown) => {
-            // biome-ignore lint/suspicious/noConsoleLog: audit write failure must surface
             console.error('watermark-off audit write failed', err);
           },
         );

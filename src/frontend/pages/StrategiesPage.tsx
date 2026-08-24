@@ -5,7 +5,15 @@
  * to run rule-based strategy evaluation against a CalculatorInput.
  */
 
-import { type Component, For, Show, createEffect, createResource, createSignal } from 'solid-js';
+import {
+  type Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+} from 'solid-js';
 import {
   type Country,
   FILING_STATUSES,
@@ -16,10 +24,14 @@ import {
   type SpecialStatus,
 } from '../../rules/common/types';
 import { COUNTRY_META } from '../calendar/types';
+import PaywallCard, { paywallStyles } from '../paywall/PaywallCard';
+import { fetchMe, isPro } from '../paywall/api';
 import {
+  type AiRecommendation,
   type BaselineSummary,
   type StrategyCatalogItem,
   type StrategyEvaluation,
+  aiRecommendStrategies,
   evaluateStrategies,
   fetchStrategies,
 } from './strategies/api';
@@ -49,6 +61,8 @@ function friendlyError(err: Error): string {
       return '请先登录 (Please sign in).';
     case 'RATE_LIMITED':
       return '请求过于频繁，请稍后再试 (Rate limited).';
+    case 'SUBSCRIPTION_REQUIRED':
+      return '完整 AI 策略报告为 Pro 会员功能 (Full AI report is a Pro feature).';
     default:
       return err.message;
   }
@@ -82,6 +96,43 @@ const StrategiesPage: Component = () => {
   const [evalError, setEvalError] = createSignal<string | null>(null);
   const [baseline, setBaseline] = createSignal<BaselineSummary | null>(null);
   const [evaluations, setEvaluations] = createSignal<StrategyEvaluation[]>([]);
+
+  // Pro state + full AI report (F4 paywall).
+  const [me] = createResource(fetchMe);
+  const hasProAccess = createMemo(() => isPro(me()));
+  const [aiLoading, setAiLoading] = createSignal(false);
+  const [aiError, setAiError] = createSignal<string | null>(null);
+  const [aiRecs, setAiRecs] = createSignal<AiRecommendation[]>([]);
+  const [aiUsage, setAiUsage] = createSignal<{ cost: number } | null>(null);
+
+  async function onAiRecommend() {
+    setAiLoading(true);
+    setAiError(null);
+    setAiRecs([]);
+    setAiUsage(null);
+    try {
+      const input = {
+        country: evalCountry(),
+        taxYear: evalYear(),
+        incomeType: incomeType(),
+        grossIncome: grossIncome(),
+        specialStatus: specialStatus(),
+        filingStatus: filingStatus(),
+        ...(region() ? { region: region() } : {}),
+      };
+      const result = await aiRecommendStrategies(input);
+      setAiRecs(result.recommendations);
+      setAiUsage({ cost: result.usage.cost });
+    } catch (err) {
+      // SubscriptionRequiredError should be unreachable here: the button
+      // is only rendered for Pro users. Any 402 that still slips through
+      // (e.g. subscription cancelled server-side between load and click)
+      // falls through to the generic error banner.
+      setAiError(friendlyError(err instanceof Error ? err : new Error(String(err))));
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   createEffect(() => {
     // Reset region defaults when country changes.
@@ -378,7 +429,7 @@ const StrategiesPage: Component = () => {
                   <p class="str-eval-reason">{ev.reason}</p>
                   <div class="str-eval-foot">
                     <span class="str-eval-savings">
-                      {ev.estimatedSavingsEur !== null
+                      {ev.estimatedSavingsEur !== null && ev.estimatedSavingsEur !== undefined
                         ? `预计节税 ${eur.format(ev.estimatedSavingsEur)}`
                         : '预计节税 N/A'}
                     </span>
@@ -386,20 +437,144 @@ const StrategiesPage: Component = () => {
                       置信度 {(ev.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
-                  <p class="str-eval-cite">{ev.citation}</p>
+                  <Show
+                    when={hasProAccess()}
+                    fallback={
+                      <p class="str-eval-locked">
+                        🔒 订阅解锁完整行动步骤与法条引用
+                        <button
+                          type="button"
+                          class="str-eval-locked-btn"
+                          onClick={() => {
+                            window.location.hash = 'account';
+                          }}
+                        >
+                          升级订阅
+                        </button>
+                      </p>
+                    }
+                  >
+                    <Show when={(ev.actionSteps?.length ?? 0) > 0}>
+                      <ul class="str-ai-steps">
+                        <For each={ev.actionSteps}>{(step) => <li>{step}</li>}</For>
+                      </ul>
+                    </Show>
+                    <Show when={(ev.citations?.length ?? 0) > 0}>
+                      <p class="str-eval-cite">
+                        引用:{' '}
+                        {(ev.citations as Array<{ source?: string }>)
+                          .map((cit) =>
+                            typeof cit === 'string' ? cit : (cit.source ?? JSON.stringify(cit)),
+                          )
+                          .join(' · ')}
+                      </p>
+                    </Show>
+                  </Show>
                 </div>
               )}
             </For>
           </div>
         </Show>
+
+        {/* F4 paywall: full AI strategy report (Pro) */}
+        <div class="str-ai-section">
+          <div class="str-ai-head">
+            <h3 class="str-h3">完整 AI 策略报告</h3>
+            <Show when={hasProAccess()}>
+              <span class="str-ai-pro-badge">PRO</span>
+            </Show>
+          </div>
+          <p class="str-ai-sub">
+            在规则引擎排序之上，由 AI 补充 C 级创造性节税策略（含推理链、法条引用与置信度），
+            并经计算器交叉验证。
+          </p>
+
+          <Show
+            when={hasProAccess()}
+            fallback={
+              <div class="str-ai-locked">
+                <PaywallCard
+                  me={me() ?? null}
+                  title="完整 AI 策略报告"
+                  bullets={[
+                    'AI 生成的 C 级节税策略（每份报告最多 3 条）',
+                    '推理链 + 法条引用 + 计算器交叉验证',
+                    'H1-H6 六层反幻觉验证管线',
+                  ]}
+                />
+              </div>
+            }
+          >
+            <button
+              type="button"
+              class="str-btn str-btn-primary"
+              onClick={() => void onAiRecommend()}
+              disabled={aiLoading()}
+            >
+              {aiLoading() ? '生成中…' : '生成 AI 建议'}
+            </button>
+            <Show when={aiError()}>
+              {(msg) => (
+                <div class="str-error" role="alert">
+                  {msg()}
+                </div>
+              )}
+            </Show>
+            <Show when={aiRecs().length > 0}>
+              <div class="str-ai-list">
+                <For each={aiRecs()}>
+                  {(rec) => (
+                    <div class="str-eval-card">
+                      <div class="str-eval-head">
+                        <div>
+                          <span class="str-eval-title">{rec.titleZh}</span>
+                          <span class="str-eval-meta">{rec.tier} · AI 生成</span>
+                        </div>
+                        <span class="str-eval-badge str-eval-applicable">AI 建议</span>
+                      </div>
+                      <p class="str-eval-reason">{rec.reasoning}</p>
+                      <Show when={rec.actionSteps.length > 0}>
+                        <ul class="str-ai-steps">
+                          <For each={rec.actionSteps}>{(step) => <li>{step}</li>}</For>
+                        </ul>
+                      </Show>
+                      <div class="str-eval-foot">
+                        <span class="str-eval-savings">
+                          {rec.estimatedSavingsEur !== null
+                            ? `预计节税 ${eur.format(rec.estimatedSavingsEur)}`
+                            : '预计节税 N/A（需个案分析）'}
+                        </span>
+                        <span class="str-eval-confidence">
+                          置信度 {(rec.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Show when={rec.citations.length > 0}>
+                        <p class="str-eval-cite">引用: {rec.citations.join(' · ')}</p>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+                <Show when={aiUsage()}>
+                  <p class="str-ai-usage">
+                    本次生成成本 ${(aiUsage()?.cost ?? 0).toFixed(4)} · {recsDisclaimer()}
+                  </p>
+                </Show>
+              </div>
+            </Show>
+          </Show>
+        </div>
       </section>
     </div>
   );
 };
 
+function recsDisclaimer(): string {
+  return '所有 AI 建议均带 [AI建议·未经确定性验证] 标注，请咨询税务顾问后采用。';
+}
+
 export default StrategiesPage;
 
-const styles = `
+const styles = `${paywallStyles}
 .str-hero { margin: 0 0 1.5rem; }
 .str-h1 {
   font-size: clamp(1.5rem, 3vw, 2rem);
@@ -490,6 +665,67 @@ const styles = `
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
+.str-eval-locked {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.str-eval-locked-btn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.str-eval-locked-btn:hover { background: #1d4ed8; }
+.str-ai-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #f3f4f6;
+}
+.str-ai-head { display: flex; align-items: center; gap: 0.5rem; }
+.str-ai-head .str-h3 { margin: 0; }
+.str-ai-pro-badge {
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+.str-ai-sub {
+  margin: 0.5rem 0 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  max-width: 70ch;
+}
+.str-ai-locked { margin-top: 0.5rem; }
+.str-ai-list { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.str-ai-steps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.6;
+}
+.str-ai-steps li { margin-bottom: 0.25rem; }
+.str-ai-usage {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
 .str-actions {
   display: flex;
   gap: 0.75rem;

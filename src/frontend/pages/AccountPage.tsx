@@ -1,4 +1,5 @@
 import { type Component, Show, createResource, createSignal } from 'solid-js';
+import { type SubscriptionPlan, startCheckout } from '../paywall/api';
 
 interface AccountInfo {
   id: string;
@@ -52,6 +53,26 @@ const AccountPage: Component = () => {
   const [cancelling, setCancelling] = createSignal(false);
   const [cancelError, setCancelError] = createSignal<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = createSignal<CancelResult | null>(null);
+  const [upgradingPlan, setUpgradingPlan] = createSignal<SubscriptionPlan | null>(null);
+  const [upgradeError, setUpgradeError] = createSignal<string | null>(null);
+
+  const onUpgrade = async (plan: SubscriptionPlan) => {
+    setUpgradeError(null);
+    setUpgradingPlan(plan);
+    try {
+      const url = await startCheckout(plan);
+      window.location.assign(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUpgradeError(
+        msg === 'UNAUTHORIZED'
+          ? '请先登录后再升级 (Please sign in first).'
+          : `无法发起支付 (${msg}). 请稍后重试或联系支持.`,
+      );
+    } finally {
+      setUpgradingPlan(null);
+    }
+  };
 
   const onCancel = async () => {
     if (!confirm('确定要取消订阅吗？取消后将在当前计费周期结束时停止扣费。')) return;
@@ -125,6 +146,40 @@ const AccountPage: Component = () => {
               </div>
             </Show>
 
+            <Show
+              when={
+                acc().subscriptionStatus !== 'active' && acc().subscriptionStatus !== 'past_due'
+              }
+            >
+              <div class="acct-upgrade">
+                <h3 class="acct-h3">升级到 Taxmora Pro</h3>
+                <p class="acct-upgrade-sub">解锁无水印 PDF 税表生成与完整 AI 策略报告。</p>
+                <div class="acct-upgrade-actions">
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn-primary"
+                    disabled={upgradingPlan() !== null}
+                    onClick={() => void onUpgrade('monthly')}
+                  >
+                    {upgradingPlan() === 'monthly' ? '跳转中…' : '月付订阅'}
+                  </button>
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn-outline"
+                    disabled={upgradingPlan() !== null}
+                    onClick={() => void onUpgrade('annual')}
+                  >
+                    {upgradingPlan() === 'annual' ? '跳转中…' : '年付订阅（更优惠）'}
+                  </button>
+                </div>
+                <Show when={upgradeError()}>
+                  <div class="acct-error" role="alert">
+                    ⚠️ {upgradeError()}
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
             <Show when={cancelError()}>
               <p class="acct-error">⚠️ {cancelError()}</p>
             </Show>
@@ -194,6 +249,22 @@ const styles = `
 .acct-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .acct-btn-danger { background: #dc2626; color: #fff; }
 .acct-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.acct-h3 { font-size: 1rem; margin: 0 0 0.5rem; font-weight: 700; color: #111827; }
+.acct-upgrade {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+.acct-upgrade-sub { margin: 0 0 0.875rem; color: #6b7280; font-size: 0.9rem; }
+.acct-upgrade-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.acct-btn-primary { background: #2563eb; color: #ffffff; }
+.acct-btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+.acct-btn-outline {
+  background: #ffffff;
+  color: #2563eb;
+  border: 1.5px solid #2563eb;
+}
+.acct-btn-outline:hover:not(:disabled) { background: #eff6ff; }
 .acct-success {
   background: #d1fae5;
   border: 1px solid #a7f3d0;
