@@ -154,19 +154,10 @@ const AccountPage: Component = () => {
                 <h3 class="acct-h3">{t('account.upgrade.title')}</h3>
                 <p class="acct-upgrade-sub">{t('account.upgrade.subtitle')}</p>
                 <div class="acct-upgrade-actions">
+                  {/* t7: 单一 €29/年创始价叙事 - 月付按钮已移除，只保留年付 CTA */}
                   <button
                     type="button"
                     class="acct-btn acct-btn-primary"
-                    disabled={upgradingPlan() !== null}
-                    onClick={() => void onUpgrade('monthly')}
-                  >
-                    {upgradingPlan() === 'monthly'
-                      ? t('account.upgrade.redirecting')
-                      : t('account.upgrade.monthly')}
-                  </button>
-                  <button
-                    type="button"
-                    class="acct-btn acct-btn-outline"
                     disabled={upgradingPlan() !== null}
                     onClick={() => void onUpgrade('annual')}
                   >
@@ -264,12 +255,6 @@ const styles = `
 .acct-upgrade-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 .acct-btn-primary { background: #2563eb; color: #ffffff; }
 .acct-btn-primary:hover:not(:disabled) { background: #1d4ed8; }
-.acct-btn-outline {
-  background: #ffffff;
-  color: #2563eb;
-  border: 1.5px solid #2563eb;
-}
-.acct-btn-outline:hover:not(:disabled) { background: #eff6ff; }
 .acct-success {
   background: #d1fae5;
   border: 1px solid #a7f3d0;

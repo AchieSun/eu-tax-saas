@@ -106,9 +106,7 @@ describe('home page: five-screen landing (marketing/landing-page-spec.md)', () =
     expect(body).toContain('(Basque Country, Navarra) are partially implemented');
     expect(body).toContain('predates the 2023 Supreme Court ruling');
     // Updated post-bilingual-wave: honest note that AI strategy notes may still be Chinese.
-    expect(body).toContain(
-      'AI-generated strategy notes may still come back in Chinese',
-    );
+    expect(body).toContain('AI-generated strategy notes may still come back in Chinese');
     expect(body).toContain("That's why it's €29 and not €99");
     expect(body).toContain('keep €29 for as long as the product');
     expect(body).toContain("We'd rather tell you now than surprise you later.");

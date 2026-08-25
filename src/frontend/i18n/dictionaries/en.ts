@@ -99,8 +99,7 @@ export const en: Record<string, string> = {
   'account.cancel.inProgress': 'Cancelling…',
   'account.upgrade.title': 'Upgrade to Taxmora Pro',
   'account.upgrade.subtitle': 'Unlock watermark-free PDF tax forms and full AI strategy reports.',
-  'account.upgrade.monthly': 'Monthly plan',
-  'account.upgrade.annual': 'Annual plan (better value)',
+  'account.upgrade.annual': 'Get the founding price - €29/year',
   'account.upgrade.redirecting': 'Redirecting…',
   'account.upgrade.errorLogin': 'Please sign in before upgrading.',
   'account.upgrade.errorGeneric':
