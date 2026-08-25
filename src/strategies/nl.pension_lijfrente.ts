@@ -29,6 +29,9 @@ const STRATEGY: Strategy = {
   titleZh: '荷兰个人年金扣除 (Lijfrente jaarruimte)',
   descriptionZh:
     '《Wet IB 2001》art. 3.127:个人 lijfrente 贡献按年度可用空间 (jaarruimte) 扣除应税基数,2025 一般上限约 €34,550。本估算按贡献 €5,000 × 边际税率给出潜在节税额。需通过 Belastingdienst 在线工具确认您实际的 jaarruimte。',
+  titleEn: 'Netherlands annuity deduction (Lijfrente jaarruimte)',
+  descriptionEn:
+    'Wet IB 2001 art. 3.127: personal lijfrente (annuity) contributions are deducted from the taxable base within your annual room (jaarruimte), generically capped around €34,550 in 2025. This estimate uses a €5,000 contribution × marginal rate. Confirm your actual jaarruimte with the Belastingdienst online tool.',
   eligibility: {
     countries: ['NL'],
     incomeTypes: ['salary', 'self_employed'],
@@ -42,12 +45,18 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'NL') {
-      return { applicable: false, reason: '此扣除项仅适用于荷兰', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此扣除项仅适用于荷兰',
+        reasonEn: 'This deduction only applies in the Netherlands',
+        confidence: 1,
+      };
     }
     const saving = Math.round(ASSUMED_LIJFRENTE_CONTRIBUTION * baseline.marginalRate);
     return {
       applicable: true,
       reason: `按贡献 €${ASSUMED_LIJFRENTE_CONTRIBUTION.toLocaleString()} × 边际税率 ${(baseline.marginalRate * 100).toFixed(1)}% 估算节省 €${saving}/年。实际节税额上限取决于您的 jaarruimte (一般 ≤ €34,550)`,
+      reasonEn: `Estimated at a €${ASSUMED_LIJFRENTE_CONTRIBUTION.toLocaleString()} contribution × your ${(baseline.marginalRate * 100).toFixed(1)}% marginal rate, saving €${saving}/year. The actual ceiling depends on your jaarruimte (generally ≤ €34,550)`,
       estimatedSavingsEur: saving,
       confidence: 0.65,
       assumptions: [

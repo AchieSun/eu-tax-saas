@@ -29,6 +29,9 @@ const STRATEGY: Strategy = {
   titleZh: '荷兰按揭利息扣除 (Hypotheekrenteaftrek)',
   descriptionZh:
     '《Wet IB 2001》art. 3.119a:自住房按揭利息可在 Box 1 扣除,2025 年最高扣除率为 36.97% (自 2013 年逐步从 49% 降至此值)。需提供年度利息支出 (annualMortgageInterestEur) 才能精确计算。',
+  titleEn: 'Netherlands mortgage-interest deduction (Hypotheekrenteaftrek)',
+  descriptionEn:
+    'Wet IB 2001 art. 3.119a: mortgage interest on your owner-occupied home is deductible in Box 1; the maximum deduction rate is 36.97% in 2025 (phased down from 49% in 2013). Your annual interest expense (annualMortgageInterestEur) is needed for an exact figure.',
   eligibility: {
     countries: ['NL'],
     incomeTypes: ['salary', 'self_employed'],
@@ -42,12 +45,18 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, _baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'NL') {
-      return { applicable: false, reason: '此扣除项仅适用于荷兰', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此扣除项仅适用于荷兰',
+        reasonEn: 'This deduction only applies in the Netherlands',
+        confidence: 1,
+      };
     }
     const saving = Math.round(ASSUMED_ANNUAL_INTEREST * NL_HRA_MAX_RATE_2025);
     return {
       applicable: true,
       reason: `按年利息 €${ASSUMED_ANNUAL_INTEREST.toLocaleString()} × 36.97% 估算,可省约 €${saving}/年。需提供实际年利息支出 (annualMortgageInterestEur) 才能精确计算`,
+      reasonEn: `Estimated at €${ASSUMED_ANNUAL_INTEREST.toLocaleString()} annual interest × 36.97%, saving about €${saving}/year. Your actual annual interest expense (annualMortgageInterestEur) is needed for an exact figure`,
       estimatedSavingsEur: saving,
       confidence: 0.65,
       assumptions: [

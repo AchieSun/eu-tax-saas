@@ -72,6 +72,14 @@ export function registerStrategy(s: Strategy): void {
   if (!s.eligibility.countries || s.eligibility.countries.length === 0) {
     throw new Error(`registerStrategy(${s.id}): eligibility.countries must be non-empty`);
   }
+  // i18n wave: bilingual copy is optional in the type (test fixtures omit it)
+  // but MUST NOT be an empty/whitespace string when present.
+  if (s.titleEn !== undefined && s.titleEn.trim().length === 0) {
+    throw new Error(`registerStrategy(${s.id}): titleEn must be non-empty when provided`);
+  }
+  if (s.descriptionEn !== undefined && s.descriptionEn.trim().length === 0) {
+    throw new Error(`registerStrategy(${s.id}): descriptionEn must be non-empty when provided`);
+  }
   assertValidUrl(s.citation.url, s.id);
   assertValidLastVerified(s.citation.lastVerified, s.id);
 

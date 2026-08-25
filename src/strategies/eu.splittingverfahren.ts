@@ -23,6 +23,9 @@ const STRATEGY: Strategy = {
   titleZh: '德国 Ehegattensplitting — 夫妻合并申报税率分割',
   descriptionZh:
     '德国《所得税法》§ 32a Abs. 5 规定:已婚夫妻 (或登记的伴侣关系) 可选择合并申报,适用分割税率公式 T(合并) = 2 · T(合并/2)。当夫妻收入差距较大时节税效果最显著 (一方零收入时节税最高)。默认即合并申报,如需分开申报需主动选择 Einzelveranlagung。',
+  titleEn: 'Germany Ehegattensplitting — joint-filing income splitting for married couples',
+  descriptionEn:
+    "Under § 32a(5) EStG, married couples (or registered partners) may file jointly under the splitting formula T(joint) = 2 · T(joint / 2). Savings are largest when spouses' incomes differ greatly (maximal when one spouse has zero income). Joint assessment is the default — you must actively opt for Einzelveranlagung to file separately.",
   eligibility: {
     countries: ['DE'],
     incomeTypes: ['salary', 'self_employed'],
@@ -36,12 +39,19 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'DE') {
-      return { applicable: false, reason: '此策略仅适用于德国税务居民', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此策略仅适用于德国税务居民',
+        reasonEn: 'This strategy only applies to German tax residents',
+        confidence: 1,
+      };
     }
     if (input.filingStatus === 'married_joint') {
       return {
         applicable: false,
         reason: '您已选择合并申报 (married_joint),Splittingverfahren 已自动应用',
+        reasonEn:
+          'You already chose joint filing (married_joint) — the splitting method is applied automatically',
         confidence: 1,
       };
     }
@@ -49,6 +59,8 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '单身纳税人无法适用 Splittingverfahren,需要婚姻或注册伴侣关系',
+        reasonEn:
+          'Single filers cannot use the splitting method — marriage or a registered partnership is required',
         confidence: 1,
       };
     }
@@ -62,6 +74,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '此情形 Splittingverfahren 不带来节省',
+        reasonEn: 'The splitting method yields no saving in this case',
         estimatedSavingsEur: 0,
         confidence: 1,
       };
@@ -69,6 +82,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `假设配偶零收入 (最优情形),Splittingverfahren 最多可节省约 €${Math.round(delta)}/年。实际节税额取决于配偶实际收入,差距越大节税越多`,
+      reasonEn: `Assuming a zero-income spouse (best case), the splitting method saves up to about €${Math.round(delta)}/year. The actual saving depends on your spouse's real income — the wider the gap, the bigger the saving`,
       estimatedSavingsEur: Math.round(delta),
       confidence: 0.8,
     };

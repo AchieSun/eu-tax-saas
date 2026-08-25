@@ -125,6 +125,103 @@ describe('GET /compare page', () => {
   });
 });
 
+describe('GET /compare?lang=en (English mode, t4)', () => {
+  beforeEach(() => {
+    // The rate-limit mock store is module-level; reset it so requests in
+    // this block start with a fresh per-IP bucket (same trick as the
+    // /api/public/compare describe above).
+    mockStore = new Map();
+    vi.clearAllMocks();
+  });
+
+  it('200: renders the full English calculator page without other query', async () => {
+    const res = await request('/compare?lang=en');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const body = await res.text();
+    // Document language + SEO title switch to English.
+    expect(body).toContain('<html lang="en">');
+    expect(body).toContain('<title>Five-Country Take-Home Pay Calculator');
+    // Form labels / submit / hint all English.
+    expect(body).toContain('Annual gross income (€)');
+    expect(body).toContain('Tax year');
+    expect(body).toContain('Income type');
+    expect(body).toContain('Filing status');
+    expect(body).toContain('Compare five countries now');
+    // Hidden lang input keeps ?lang=en alive across no-JS GET submits.
+    expect(body).toContain('<input type="hidden" name="lang" value="en">');
+    // CTA links unchanged in href, English in copy.
+    expect(body).toContain('href="/app"');
+    expect(body).toContain('href="/app#strategies"');
+    expect(body).toContain('Sign up free - draft my tax filings');
+    expect(body).toContain('See all tax-saving strategies');
+    // English disclaimer.
+    expect(body).toContain('do not constitute tax advice');
+  });
+
+  it('200: server-renders the English results table for a valid query', async () => {
+    const res = await request('/compare?grossIncome=60000&taxYear=2025&lang=en');
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // English table headers + badge + country names.
+    expect(body).toContain('Highest net');
+    expect(body).toContain('>Country</th>');
+    expect(body).toContain('>Net income</th>');
+    expect(body).toContain('>Tax</th>');
+    expect(body).toContain('>Effective rate</th>');
+    expect(body).toContain('Germany');
+    expect(body).toContain('Netherlands');
+    expect(body).toContain('Portugal');
+    expect(body).toContain('Spain');
+    expect(body).toContain('United Kingdom');
+    // zh-only compare.ts strings must not leak into the EN page.
+    expect(body).not.toContain('德国');
+    expect(body).not.toContain('到手最高');
+    expect(body).not.toContain('到手净收入');
+  });
+
+  it('400: invalid query renders the English error banner', async () => {
+    const res = await request('/compare?grossIncome=-5&lang=en');
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain('Annual gross income must be greater than 0');
+  });
+
+  it('API error message stays Chinese even with lang=en (API layer untouched)', async () => {
+    const res = await request('/api/public/compare?grossIncome=-1&lang=en');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { message: string };
+    expect(body.message).toBe('税前年收入必须大于 0');
+  });
+
+  it('API 200 with lang=en still returns Chinese countryName + English countryNameEn pair', async () => {
+    const res = await request('/api/public/compare?grossIncome=60000&taxYear=2025&lang=en');
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      results: Array<{ country: string; countryName: string; countryNameEn: string }>;
+    };
+    expect(data.results).toHaveLength(5);
+    for (const row of data.results) {
+      // API default language stays zh; the English pair rides along so the
+      // EN page script can render English names without a second request.
+      expect(row.countryName).toMatch(/德国|荷兰|葡萄牙|西班牙|英国/);
+      expect(row.countryNameEn.length).toBeGreaterThan(0);
+      expect(row.countryNameEn).toMatch(/^[A-Za-z ]+$/);
+    }
+  });
+
+  it('?lang=zh keeps Chinese; an invalid lang value falls back to Chinese', async () => {
+    const zh = await request('/compare?lang=zh');
+    const zhBody = await zh.text();
+    expect(zhBody).toContain('<html lang="zh-CN">');
+    expect(zhBody).toContain('立即对比五国到手');
+    const bogus = await request('/compare?lang=fr');
+    const bogusBody = await bogus.text();
+    expect(bogusBody).toContain('<html lang="zh-CN">');
+    expect(bogusBody).toContain('五国税后收入对比计算器');
+  });
+});
+
 describe('GET /api/public/compare', () => {
   beforeEach(() => {
     mockStore = new Map();

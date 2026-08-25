@@ -27,6 +27,9 @@ const STRATEGY: Strategy = {
   titleZh: '葡萄牙 IRS Jovem — 35岁以下青年劳动者前10年所得税减免',
   descriptionZh:
     '葡萄牙《CIRS》art. 12.º-B (Lei 82/2023, 经 Lei 73-A/2025 修订):18-35 岁青年的工资或自雇所得享受为期10年的递减式免税:第1年100%、第2-4年75%、第5-7年50%、第8-10年25%。年度免税额上限为 55 × IAS (2025年为 €28,737.50)。仅适用于职业生涯前10年累计未使用过此优惠的纳税人。',
+  titleEn: 'Portugal IRS Jovem — 10-year income tax relief for workers under 35',
+  descriptionEn:
+    'Art. 12.º-B CIRS (Lei 82/2023, amended by Lei 73-A/2025): employment or self-employment income of 18-35-year-olds enjoys a 10-year tapering exemption — 100% in year 1, 75% in years 2-4, 50% in years 5-7, 25% in years 8-10. The annual exempted amount is capped at 55 × IAS (€28,737.50 for 2025). Only available to taxpayers who have not exhausted the benefit within their first 10 career years.',
   eligibility: {
     countries: ['PT'],
     incomeTypes: ['salary', 'self_employed'],
@@ -41,12 +44,18 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'PT') {
-      return { applicable: false, reason: '此策略仅适用于葡萄牙税务居民', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此策略仅适用于葡萄牙税务居民',
+        reasonEn: 'This strategy only applies to Portuguese tax residents',
+        confidence: 1,
+      };
     }
     if (input.incomeType !== 'salary' && input.incomeType !== 'self_employed') {
       return {
         applicable: false,
         reason: 'IRS Jovem 仅适用于 Cat A (工资) 或 Cat B (自雇) 所得',
+        reasonEn: 'IRS Jovem only covers Category A (employment) or B (self-employment) income',
         confidence: 1,
       };
     }
@@ -54,6 +63,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '需要提供年龄 (age) 才能判断资格 (要求 18-35 岁)',
+        reasonEn: 'Age (age) is required to assess eligibility (must be 18-35)',
         confidence: 0.9,
       };
     }
@@ -61,6 +71,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: `IRS Jovem 要求年龄 18-${PT_JOVEM_MAX_AGE} 岁,您当前 ${input.age} 岁`,
+        reasonEn: `IRS Jovem requires ages 18-${PT_JOVEM_MAX_AGE}; you are ${input.age}`,
         confidence: 1,
       };
     }
@@ -76,6 +87,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '此情形 IRS Jovem 不带来节省',
+        reasonEn: 'IRS Jovem yields no saving in this case',
         estimatedSavingsEur: 0,
         confidence: 1,
       };
@@ -83,6 +95,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `假设第1年100%免税档 (最优情形,免税额封顶 €${PT_JOVEM_EXEMPT_CAP_2025.toLocaleString()}),最多可节省约 €${Math.round(delta)}/年。第2-4年降至75%,第5-7年50%,第8-10年25%`,
+      reasonEn: `Assuming the year-1 100% exemption band (best case, exempt amount capped at €${PT_JOVEM_EXEMPT_CAP_2025.toLocaleString()}), you can save up to about €${Math.round(delta)}/year. It drops to 75% in years 2-4, 50% in years 5-7, and 25% in years 8-10`,
       estimatedSavingsEur: Math.round(delta),
       confidence: 0.8,
     };

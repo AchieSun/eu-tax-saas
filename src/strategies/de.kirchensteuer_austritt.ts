@@ -33,6 +33,10 @@ const STRATEGY: Strategy = {
   titleZh: '德国教会税退出 (Kirchenaustritt) — 直接节省8-9%所得税附加',
   descriptionZh:
     '《EStG》§ 51a + 各州 Kirchensteuergesetz:教会税为所得税的 8% (拜仁、巴登-符腾堡) 或 9% (其余州)。在户籍所在 Standesamt 办理 Kirchenaustritt 即可终止;此为个人宗教选择,本策略仅识别经济影响。',
+  titleEn:
+    'Germany church-tax exit (Kirchenaustritt) — directly saves the 8-9% surcharge on income tax',
+  descriptionEn:
+    "§ 51a EStG plus each Land's Kirchensteuergesetz: church tax is 8% of income tax (Bavaria, Baden-Württemberg) or 9% (other Länder). A formal Kirchenaustritt at your local Standesamt ends it. This is a personal religious choice — this strategy only quantifies the economic impact.",
   eligibility: {
     countries: ['DE'],
     minAgeYears: 14,
@@ -45,7 +49,12 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'DE') {
-      return { applicable: false, reason: '此扣除项仅适用于德国', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此扣除项仅适用于德国',
+        reasonEn: 'This deduction only applies in Germany',
+        confidence: 1,
+      };
     }
     const region = (input.region ?? '').toUpperCase();
     const rate = BY_BW_REGIONS.includes(region) ? KISTG_RATE_BY_BW : KISTG_RATE_DEFAULT;
@@ -72,6 +81,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '当前应税额为零,无教会税可省',
+        reasonEn: 'Your current tax liability is zero — no church tax to save',
         estimatedSavingsEur: 0,
         confidence: 1,
       };
@@ -79,6 +89,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `若您是教会成员,在 ${BY_BW_REGIONS.includes(region) ? '巴伐利亚/巴登-符腾堡 (8%)' : '其它联邦州 (9%)'} 可省约 €${saving}/年 (按 ${(rate * 100).toFixed(0)}% × 所得税估算)。此为宗教个人决定,数字仅供参考`,
+      reasonEn: `If you are a church member, in ${BY_BW_REGIONS.includes(region) ? 'Bavaria / Baden-Württemberg (8%)' : 'the other Länder (9%)'} you could save about €${saving}/year (estimated as ${(rate * 100).toFixed(0)}% × income tax). This is a personal religious decision — the figure is informational only`,
       estimatedSavingsEur: saving,
       confidence: 0.95,
     };

@@ -32,6 +32,23 @@ import { fetchUserAccess, isPro, requireActiveSubscription } from '../middleware
 
 export const strategiesRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+// ── i18n (bilingual strategy output) ────────────────────────────────────────
+//
+// GET / and POST /evaluate serve BOTH languages side by side on every
+// response - the payload carries titleZh+titleEn, descriptionZh+descriptionEn,
+// reason+reasonEn - so the SPA can switch language instantly with no refetch.
+// Per the t4 contract the server is NOT locale-aware: it never sniffs
+// Accept-Language and never picks a language for the client. The SPA reads
+// whichever paired field matches its locale (falling back to Zh).
+//
+// The one exception is POST /ai-recommend's single-string `aiDisclaimer`,
+// which cannot carry both languages at once - an EXPLICIT ?lang=en query
+// param switches it to English (default stays zh).
+
+function resolveLang(c: { req: { query: (k: string) => string | undefined } }): 'zh' | 'en' {
+  return (c.req.query('lang') ?? '').toLowerCase() === 'en' ? 'en' : 'zh';
+}
+
 // ── GET /api/strategies/status ─────────────────────────────────────────────
 strategiesRoutes.get('/status', (c) =>
   c.json({
@@ -58,27 +75,29 @@ strategiesRoutes.get('/', (c) => {
     }
     list = listStrategiesByCountry(country as Country, taxYear);
   }
-  const items = list.map(
-    ({ id, tier, category, titleZh, descriptionZh, eligibility, citation }) => ({
-      id,
-      tier,
-      category,
-      titleZh,
-      descriptionZh,
-      eligibility,
-      citation,
-    }),
-  );
+  const items = list.map((s) => ({
+    id: s.id,
+    tier: s.tier,
+    category: s.category,
+    // Full bilingual pair always crosses the wire; the SPA picks the side
+    // matching its locale (Zh fallback) - the server never chooses.
+    titleZh: s.titleZh,
+    titleEn: s.titleEn ?? '',
+    descriptionZh: s.descriptionZh,
+    descriptionEn: s.descriptionEn ?? '',
+    eligibility: s.eligibility,
+    citation: s.citation,
+  }));
   return c.json({ ok: true, count: items.length, items });
 });
 
 // ── F4 free-tier server-side trimming (t3 spec gap #1) ──────────────────────
 //
 // Free users (anon / free / past_due) see a trimmed evaluation: applicable,
-// titleZh, and estimatedSavingsEur survive (the savings figure is the
-// conversion hook — "see how much you can save"), while the how-to details
-// are cut: reason clipped to REASON_MAX_CHARS with an ellipsis, actionSteps
-// and citations emptied. Pro users (admin OR active subscription) get the
+// the bilingual title pair (titleZh+titleEn), and estimatedSavingsEur survive
+// (the savings figure is the conversion hook — "see how much you can save"),
+// while the how-to details are cut: reason and reasonEn clipped to
+// REASON_MAX_CHARS with an ellipsis, actionSteps and citations emptied. Pro users (admin OR active subscription) get the
 // full payload. Trimming happens HERE on the server — never via frontend
 // hiding, since the full JSON crosses the wire otherwise.
 const REASON_MAX_CHARS = 60;
@@ -95,21 +114,25 @@ interface EvaluationRow {
   tier: string;
   category: string;
   titleZh: string;
+  titleEn?: string;
+  descriptionZh?: string;
+  descriptionEn?: string;
   citation: unknown;
   applicable: boolean;
   reason: string;
+  reasonEn?: string;
   estimatedSavingsEur?: number | null;
   confidence: number;
   assumptions?: unknown;
-  descriptionZh?: string;
 }
 
 /**
  * Apply free-tier trimming to one evaluation row. Returns a new object —
- * never mutates the input. Fields kept: id/tier/category/titleZh/applicable/
- * estimatedSavingsEur/confidence (sorting already happened on the full data,
- * so confidence survives for display). Fields cut: reason (clipped),
- * actionSteps (→ []), citations (→ []).
+ * never mutates the input. Fields kept: id/tier/category/titleZh+titleEn/
+ * applicable/estimatedSavingsEur/confidence (sorting already happened on the
+ * full data, so confidence survives for display). Fields cut: reason AND
+ * reasonEn (both clipped to REASON_MAX_CHARS), actionSteps (→ []),
+ * citations (→ []).
  */
 function trimEvaluationForFree(ev: EvaluationRow): EvaluationRow & {
   actionSteps: string[];
@@ -118,6 +141,7 @@ function trimEvaluationForFree(ev: EvaluationRow): EvaluationRow & {
   return {
     ...ev,
     reason: trimReason(ev.reason),
+    reasonEn: ev.reasonEn !== undefined ? trimReason(ev.reasonEn) : undefined,
     actionSteps: [],
     citations: [],
   };
@@ -212,6 +236,7 @@ strategiesRoutes.post(
         result = {
           applicable: false,
           reason: `策略评估失败: ${(err as Error).message}`,
+          reasonEn: `Strategy evaluation failed: ${(err as Error).message}`,
           confidence: 0,
           estimatedSavingsEur: null,
         };
@@ -221,8 +246,10 @@ strategiesRoutes.post(
         tier: s.tier,
         category: s.category,
         titleZh: s.titleZh,
+        titleEn: s.titleEn ?? '',
         citation: s.citation,
         descriptionZh: s.descriptionZh,
+        descriptionEn: s.descriptionEn ?? '',
         ...result,
       };
     });
@@ -241,7 +268,7 @@ strategiesRoutes.post(
     // explicit actionSteps/citations arrays.
     const evaluations = fullRows.map((row) => {
       if (pro) {
-        return toFullEvaluation(row, row.descriptionZh);
+        return toFullEvaluation(row, row.descriptionZh ?? row.titleZh);
       }
       return trimEvaluationForFree(row);
     });
@@ -371,6 +398,7 @@ strategiesRoutes.post(
         existingStrategies: existing,
         maxLlmStrategies: 3,
       });
+      const lang = resolveLang(c);
       return c.json({
         ok: true,
         baseline: {
@@ -382,12 +410,16 @@ strategiesRoutes.post(
           id: r.id,
           tier: r.tier,
           titleZh: r.titleZh,
+          titleEn: r.titleEn,
           reasoning: r.raw.reasoning,
           confidence: r.confidence,
           estimatedSavingsEur: r.estimatedSavingsEur,
           actionSteps: r.raw.action_steps,
           citations: r.raw.citations,
-          aiDisclaimer: '[AI建议·未经确定性验证]',
+          aiDisclaimer:
+            lang === 'en'
+              ? '[AI suggestion · not deterministically verified]'
+              : '[AI建议·未经确定性验证]',
         })),
         warnings: result.warnings,
         usage: result.usage,

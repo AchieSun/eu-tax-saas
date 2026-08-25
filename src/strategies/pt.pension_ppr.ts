@@ -32,6 +32,9 @@ const STRATEGY: Strategy = {
   titleZh: '葡萄牙 PPR 退休储蓄抵免 (Plano Poupança Reforma)',
   descriptionZh:
     '《EBF》art. 21.º:PPR 贡献的 20% 可抵免所得税,上限按年龄阶梯:<35 岁 €400/年,35-50 岁 €350/年,>50 岁 €300/年。对应贡献上限分别为 €2,000 / €1,750 / €1,500。本策略按年龄段返回该年龄最高节税额估算。',
+  titleEn: 'Portugal retirement-savings credit (PPR — Plano Poupança Reforma)',
+  descriptionEn:
+    'Art. 21.º EBF: 20% of PPR contributions is credited against income tax, capped by age band: <35 €400/year, 35-50 €350/year, >50 €300/year. The matching contribution caps are €2,000 / €1,750 / €1,500. This strategy returns the maximum credit for your age band.',
   eligibility: {
     countries: ['PT'],
     minAgeYears: 18,
@@ -44,12 +47,18 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, _baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'PT') {
-      return { applicable: false, reason: '此抵免项仅适用于葡萄牙', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此抵免项仅适用于葡萄牙',
+        reasonEn: 'This credit only applies in Portugal',
+        confidence: 1,
+      };
     }
     const maxCredit = maxCreditForAge(input.age);
     return {
       applicable: true,
       reason: `按您的年龄段,PPR 贡献最高可抵免 €${maxCredit}/年 (贡献 €${maxCredit * 5} 时达上限)。注意:提前赎回非退休用途需补缴税款`,
+      reasonEn: `For your age band, PPR contributions earn a credit of up to €${maxCredit}/year (reaching the cap at a €${maxCredit * 5} contribution). Note: early redemption for non-retirement purposes triggers clawback tax`,
       estimatedSavingsEur: maxCredit,
       confidence: 0.75,
     };

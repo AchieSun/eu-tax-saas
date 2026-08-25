@@ -26,6 +26,10 @@ const STRATEGY: Strategy = {
   titleZh: '西班牙主居所按揭利息扣除 (Deducción inversión vivienda habitual, 历史保留)',
   descriptionZh:
     '《LIRPF》DT 18ª 过渡条款:2013-01-01 前购买的主居所按揭仍可享受 15% 抵免 (基础上限 €9,040,最高 €1,356)。新合同 (2013 及以后) 已不再适用。需提供按揭购买日期 + 2025 年还款额才能精确估算。',
+  titleEn:
+    'Spain primary-residence mortgage deduction (Deducción inversión vivienda habitual, legacy only)',
+  descriptionEn:
+    'Transitional provision DT 18ª LIRPF: mortgages on a primary residence bought before 2013-01-01 still qualify for the 15% credit (base capped at €9,040, max credit €1,356). New contracts (2013 onwards) no longer qualify. A precise estimate needs the mortgage purchase date plus 2025 repayments.',
   eligibility: {
     countries: ['ES'],
     minAgeYears: 18,
@@ -38,12 +42,19 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, _baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'ES') {
-      return { applicable: false, reason: '此扣除项仅适用于西班牙', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此扣除项仅适用于西班牙',
+        reasonEn: 'This deduction only applies in Spain',
+        confidence: 1,
+      };
     }
     return {
       applicable: true,
       reason:
         '此扣除项仅适用于 2013-01-01 前签订的按揭合同。最大节税额 €1,356/年 (基础上限 €9,040 × 15%)。需提供按揭购买日期 + 2025 年还款额',
+      reasonEn:
+        'This deduction only covers mortgage contracts signed before 2013-01-01. Maximum saving €1,356/year (base cap €9,040 × 15%). The mortgage purchase date and 2025 repayments are needed for a precise estimate',
       estimatedSavingsEur: null,
       confidence: 0.7,
     };

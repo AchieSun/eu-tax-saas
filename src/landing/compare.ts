@@ -14,6 +14,9 @@
  *
  * 计算复用 F1 的 compareCountriesDetailed：五国各跑一次，specialStatus
  * 强制为 'none'（apples-to-apples），按 netIncome 降序返回。
+ *
+ * i18n（双语波）：?lang=en 切换整页英文（zh 为默认）。表单 GET 提交、
+ * fetch 增强、JSON API 错误信息、国家名与标签全部跟随 lang 参数。
  */
 
 import type { Hono } from 'hono';
@@ -28,80 +31,214 @@ import { renderPage } from './layout';
 
 type App = Hono<{ Bindings: Bindings; Variables: Variables }>;
 
+export type CompareLang = 'zh' | 'en';
+
+/** ?lang= 只接受 zh / en；缺省/非法值回落 zh（产品默认语言）。 */
+export function resolveCompareLang(raw: string | null | undefined): CompareLang {
+  return (raw ?? '').toLowerCase() === 'en' ? 'en' : 'zh';
+}
+
 // ─── 国家展示元数据 ──────────────────────────────────────────────────────────
 
-const COUNTRY_META: Record<Country, { name: string; flag: string }> = {
-  DE: { name: '德国', flag: '🇩🇪' },
-  NL: { name: '荷兰', flag: '🇳🇱' },
-  PT: { name: '葡萄牙', flag: '🇵🇹' },
-  ES: { name: '西班牙', flag: '🇪🇸' },
-  UK: { name: '英国', flag: '🇬🇧' },
+const COUNTRY_META: Record<Country, { name: string; nameEn: string; flag: string }> = {
+  DE: { name: '德国', nameEn: 'Germany', flag: '🇩🇪' },
+  NL: { name: '荷兰', nameEn: 'Netherlands', flag: '🇳🇱' },
+  PT: { name: '葡萄牙', nameEn: 'Portugal', flag: '🇵🇹' },
+  ES: { name: '西班牙', nameEn: 'Spain', flag: '🇪🇸' },
+  UK: { name: '英国', nameEn: 'United Kingdom', flag: '🇬🇧' },
 };
 
-const INCOME_TYPE_LABELS: Record<IncomeType, string> = {
-  salary: '工资薪金',
-  self_employed: '自雇 / 自由职业',
-  dividends: '股息',
-  interest: '利息',
-  rental: '租金收入',
-  capital_gains: '资本利得',
-  crypto: '加密货币',
-  other: '其他',
+const INCOME_TYPE_LABELS: Record<CompareLang, Record<IncomeType, string>> = {
+  zh: {
+    salary: '工资薪金',
+    self_employed: '自雇 / 自由职业',
+    dividends: '股息',
+    interest: '利息',
+    rental: '租金收入',
+    capital_gains: '资本利得',
+    crypto: '加密货币',
+    other: '其他',
+  },
+  en: {
+    salary: 'Salary',
+    self_employed: 'Self-employed / freelance',
+    dividends: 'Dividends',
+    interest: 'Interest',
+    rental: 'Rental income',
+    capital_gains: 'Capital gains',
+    crypto: 'Crypto',
+    other: 'Other',
+  },
 };
 
-const FILING_STATUS_LABELS: Record<FilingStatus, string> = {
-  single: '单身申报',
-  married_joint: '已婚合并申报',
-  married_separate: '已婚分开申报',
+const FILING_STATUS_LABELS: Record<CompareLang, Record<FilingStatus, string>> = {
+  zh: {
+    single: '单身申报',
+    married_joint: '已婚合并申报',
+    married_separate: '已婚分开申报',
+  },
+  en: {
+    single: 'Single',
+    married_joint: 'Married filing jointly',
+    married_separate: 'Married filing separately',
+  },
 };
 
 export const DISCLAIMER_TEXT =
   '本工具提供的计算结果仅供参考，不构成税务建议；重大决策请咨询持牌税务顾问。';
+/**
+ * 页面层双语字典（i18n 波）：zh 为默认；?lang=en 时整页文案（标题、表单
+ * 标签、表头、CTA、错误提示、免责声明、计算口径注记）全部取 en 侧。
+ * 校验文案同源，供 buildQuerySchema 生成对应语言的 zod 错误信息。
+ * API 层（/api/public/compare）不读该字典 - 其错误 message 固定中文。
+ */
+const MESSAGES = {
+  zh: {
+    // zod 校验文案（buildQuerySchema 消费）
+    grossRequired: '请输入税前年收入',
+    grossInvalid: '税前年收入必须是数字',
+    grossPositive: '税前年收入必须大于 0',
+    grossMax: '税前年收入不能超过 €1,000,000,000',
+    yearInvalid: '税年必须是数字',
+    yearInt: '税年必须是整数',
+    yearRange: '税年仅支持 2025 或 2026',
+    incomeTypeInvalid: '收入类型不合法',
+    filingStatusInvalid: '申报状态不合法',
+    // 页面文案（comparePage 消费）
+    docTitle: '五国税后收入对比计算器',
+    metaDescription:
+      '免费五国税后收入对比计算器：输入税前年收入，即时对比西班牙、葡萄牙、德国、荷兰、英国的到手净收入、税额与有效税率，无需注册。',
+    heroTitle: '五国税后收入对比计算器',
+    heroSubtitle:
+      '输入税前年收入，立即对比 🇪🇸 西班牙 · 🇵🇹 葡萄牙 · 🇩🇪 德国 · 🇳🇱 荷兰 · 🇬🇧 英国 五国到手净收入 -- 免费、无需注册。',
+    labelGross: '税前年收入（€）',
+    placeholderGross: '如 60000',
+    labelYear: '税年',
+    labelType: '收入类型',
+    labelFiling: '申报状态',
+    submitLabel: '立即对比五国到手',
+    formHint: '默认按各国标准税制单身申报计算；数据源为各国官方税率表（附法条引用）。',
+    errGeneric: '输入不合法，请检查后重试',
+    errAllFailed: '五国计算均失败，请稍后再试',
+    resultsHeading: (year: number, gross: string) => `对比结果 · ${year} 税年 · 税前 ${gross}`,
+    thCountry: '国家',
+    thNet: '到手净收入',
+    thTax: '税额',
+    thRate: '有效税率',
+    badge: '到手最高',
+    provisionalNote: '注：部分国家该税年税率为暂定值（provisional），官方正式发布后将自动更新。',
+    scopeNote:
+      '计算口径：基于各国标准税制（不含 Beckham、IFICI、FIG、30% ruling、Forschungspauschale 等特殊人才制度），' +
+      '社保与地区附加视各国规则处理；注册后可解锁特殊制度对比与逐项明细。',
+    disclaimer: DISCLAIMER_TEXT,
+    ctaTitle: '想知道怎么合法少缴？',
+    ctaBody:
+      '注册免费账号，用你的真实收入生成五国申报草稿；解锁 Pro 可查看逐项税额明细、' +
+      '特殊人才制度（Beckham / IFICI / FIG / 30% ruling）对比与完整节税策略报告。',
+    ctaPrimary: '免费注册，生成我的申报草稿',
+    ctaSecondary: '查看完整节税策略',
+  },
+  en: {
+    // zod validation copy (consumed by buildQuerySchema)
+    grossRequired: 'Please enter your annual gross income',
+    grossInvalid: 'Annual gross income must be a number',
+    grossPositive: 'Annual gross income must be greater than 0',
+    grossMax: 'Annual gross income cannot exceed €1,000,000,000',
+    yearInvalid: 'Tax year must be a number',
+    yearInt: 'Tax year must be an integer',
+    yearRange: 'Only tax years 2025 and 2026 are supported',
+    incomeTypeInvalid: 'Invalid income type',
+    filingStatusInvalid: 'Invalid filing status',
+    // Page copy (consumed by comparePage)
+    docTitle: 'Five-Country Take-Home Pay Calculator',
+    metaDescription:
+      'Free take-home pay calculator for five countries: enter your annual gross income and instantly compare net income, tax owed and effective tax rates across Spain, Portugal, Germany, the Netherlands and the UK. No sign-up required.',
+    heroTitle: 'Five-Country Take-Home Pay Calculator',
+    heroSubtitle:
+      'Enter your annual gross income and instantly compare take-home pay across 🇪🇸 Spain · 🇵🇹 Portugal · 🇩🇪 Germany · 🇳🇱 Netherlands · 🇬🇧 the UK - free, no sign-up required.',
+    labelGross: 'Annual gross income (€)',
+    placeholderGross: 'e.g. 60000',
+    labelYear: 'Tax year',
+    labelType: 'Income type',
+    labelFiling: 'Filing status',
+    submitLabel: 'Compare five countries now',
+    formHint:
+      "Defaults to each country's standard regime with single filing; rates come from official tax tables (with statute citations).",
+    errGeneric: 'Invalid input - please check and try again',
+    errAllFailed: 'All five country calculations failed; please try again later',
+    resultsHeading: (year: number, gross: string) =>
+      `Comparison · ${year} tax year · gross ${gross}`,
+    thCountry: 'Country',
+    thNet: 'Net income',
+    thTax: 'Tax',
+    thRate: 'Effective rate',
+    badge: 'Highest net',
+    provisionalNote:
+      "Note: some countries' rates for this tax year are provisional; they will update automatically once officially published.",
+    scopeNote:
+      "Methodology: based on each country's standard regime (excluding special-status schemes such as Beckham, IFICI, FIG, the 30% ruling and Forschungspauschale); " +
+      "social security and regional surcharges follow each country's rules. Sign up to unlock special-regime comparisons and line-item details.",
+    disclaimer:
+      'Estimates are for information only and do not constitute tax advice; consult a licensed tax advisor before making major decisions.',
+    ctaTitle: 'Want to pay less - legally?',
+    ctaBody:
+      'Create a free account and generate filing drafts for all five countries from your real income. ' +
+      'Unlock Pro for line-item tax breakdowns, special-regime comparisons (Beckham / IFICI / FIG / 30% ruling) and the full tax-saving strategy report.',
+    ctaPrimary: 'Sign up free - draft my tax filings',
+    ctaSecondary: 'See all tax-saving strategies',
+  },
+} as const;
 
-const CALCULATION_SCOPE_NOTE =
-  '计算口径：基于各国标准税制（不含 Beckham、IFICI、FIG、30% ruling、Forschungspauschale 等特殊人才制度），' +
-  '社保与地区附加视各国规则处理；注册后可解锁特殊制度对比与逐项明细。';
-
-// ─── Query 校验（zod，中文错误信息）─────────────────────────────────────────
+// ─── Query 校验（zod，中英双语错误信息）─────────────────────────────────────
 
 const MAX_GROSS_INCOME = 1_000_000_000;
 
-export const publicCompareQuerySchema = z.object({
-  grossIncome: z.preprocess(
-    (v) => {
-      if (typeof v === 'string') {
-        return v.trim() === '' ? undefined : Number(v);
-      }
-      return v;
-    },
-    z
-      .number({
-        required_error: '请输入税前年收入',
-        invalid_type_error: '税前年收入必须是数字',
-      })
-      .positive('税前年收入必须大于 0')
-      .max(MAX_GROSS_INCOME, '税前年收入不能超过 €1,000,000,000'),
-  ),
-  taxYear: z.preprocess(
-    (v) => {
-      if (v === undefined || v === null || v === '') return 2026;
-      if (typeof v === 'string') return Number(v);
-      return v;
-    },
-    z
-      .number({ invalid_type_error: '税年必须是数字' })
-      .int('税年必须是整数')
-      .refine((v) => v === 2025 || v === 2026, '税年仅支持 2025 或 2026'),
-  ),
-  incomeType: z.preprocess(
-    (v) => (v === undefined || v === null || v === '' ? 'salary' : v),
-    z.enum(INCOME_TYPES, { errorMap: () => ({ message: '收入类型不合法' }) }),
-  ),
-  filingStatus: z.preprocess(
-    (v) => (v === undefined || v === null || v === '' ? 'single' : v),
-    z.enum(FILING_STATUSES, { errorMap: () => ({ message: '申报状态不合法' }) }),
-  ),
-});
+/**
+ * 构建当前语言的 query schema。zh 与 en 校验规则完全一致，仅错误信息不同；
+ * schema 每次请求重建（zod 构建开销极小，换来零全局状态）。
+ */
+function buildQuerySchema(lang: CompareLang) {
+  const m = MESSAGES[lang];
+  return z.object({
+    grossIncome: z.preprocess(
+      (v) => {
+        if (typeof v === 'string') {
+          return v.trim() === '' ? undefined : Number(v);
+        }
+        return v;
+      },
+      z
+        .number({
+          required_error: m.grossRequired,
+          invalid_type_error: m.grossInvalid,
+        })
+        .positive(m.grossPositive)
+        .max(MAX_GROSS_INCOME, m.grossMax),
+    ),
+    taxYear: z.preprocess(
+      (v) => {
+        if (v === undefined || v === null || v === '') return 2026;
+        if (typeof v === 'string') return Number(v);
+        return v;
+      },
+      z
+        .number({ invalid_type_error: m.yearInvalid })
+        .int(m.yearInt)
+        .refine((v) => v === 2025 || v === 2026, m.yearRange),
+    ),
+    incomeType: z.preprocess(
+      (v) => (v === undefined || v === null || v === '' ? 'salary' : v),
+      z.enum(INCOME_TYPES, { errorMap: () => ({ message: m.incomeTypeInvalid }) }),
+    ),
+    filingStatus: z.preprocess(
+      (v) => (v === undefined || v === null || v === '' ? 'single' : v),
+      z.enum(FILING_STATUSES, { errorMap: () => ({ message: m.filingStatusInvalid }) }),
+    ),
+  });
+}
+
+/** Back-compat: default-language schema (zh) — used by legacy tests/callers. */
+export const publicCompareQuerySchema = buildQuerySchema('zh');
 
 export type PublicCompareInput = z.infer<typeof publicCompareQuerySchema>;
 
@@ -109,7 +246,10 @@ export type PublicCompareInput = z.infer<typeof publicCompareQuerySchema>;
 
 export interface CompareRow {
   country: Country;
+  /** Country display name in the response language (zh default, en optional). */
   countryName: string;
+  /** English name — always present so clients can switch without refetch. */
+  countryNameEn: string;
   flag: string;
   grossIncome: number;
   taxOwed: number;
@@ -147,7 +287,10 @@ function summarizeBreakdown(raw: unknown): Array<{ label: string; amount: number
   return items.slice(0, 8);
 }
 
-export function runPublicCompare(input: PublicCompareInput): {
+export function runPublicCompare(
+  input: PublicCompareInput,
+  lang: CompareLang = 'zh',
+): {
   rows: CompareRow[];
   countryErrors: Array<{ country: Country; error: string }>;
 } {
@@ -161,10 +304,12 @@ export function runPublicCompare(input: PublicCompareInput): {
       continue;
     }
     const r = entry.result;
+    const meta = COUNTRY_META[r.country];
     rows.push({
       country: r.country,
-      countryName: COUNTRY_META[r.country].name,
-      flag: COUNTRY_META[r.country].flag,
+      countryName: lang === 'en' ? meta.nameEn : meta.name,
+      countryNameEn: meta.nameEn,
+      flag: meta.flag,
       grossIncome: r.grossIncome,
       taxOwed: r.taxOwed,
       netIncome: r.netIncome,
@@ -199,11 +344,17 @@ const escapeHtml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+/**
+ * 表单参数（驱动 hasQuery 判定与 queryToObject 收集）。lang 不算表单参数：
+ * 裸 /compare?lang=en（无其他参数）仍渲染空表单页（200），而非报「缺
+ * grossIncome」错误；lang 由 queryToObject 单独并入，交给 zod 忽略。
+ */
 const COMPARE_PARAMS = ['grossIncome', 'taxYear', 'incomeType', 'filingStatus'] as const;
+const COMPARE_LANG_PARAM = 'lang';
 
 function queryToObject(query: URLSearchParams): Record<string, string> {
   const obj: Record<string, string> = {};
-  for (const key of COMPARE_PARAMS) {
+  for (const key of [...COMPARE_PARAMS, COMPARE_LANG_PARAM]) {
     const value = query.get(key);
     if (value !== null) obj[key] = value;
   }
@@ -293,8 +444,64 @@ const PAGE_STYLE = `
     }
 `;
 
-const PAGE_SCRIPT = `
+/** JS 增强：提交时 fetch JSON、渲染结果表。文案按 lang 输出（zh 用 \u 转义保持既有模式）。 */
+function buildPageScript(lang: CompareLang): string {
+  const i18n =
+    lang === 'en'
+      ? {
+          badge: 'Highest net',
+          scopeNote: MESSAGES.en.scopeNote.replace(/'/g, "\\'"),
+          provisionalNote:
+            'Note: some countries\\u2019 rates for this tax year are provisional; they will update automatically once officially published.',
+          resultsTitle: 'Comparison \\u00B7 ',
+          taxYearLabel: ' tax year \\u00B7 gross ',
+          thCountry: 'Country',
+          thNet: 'Net income',
+          thTax: 'Tax',
+          thRate: 'Effective rate',
+          calculating: 'Calculating\\u2026',
+          errRateLimited: 'Too many requests \\u2014 please try again in a minute.',
+          errInvalid: 'Invalid input \\u2014 please check and try again.',
+          errNetwork: 'Network error \\u2014 please try again.',
+        }
+      : {
+          badge: '\\u5230\\u624B\\u6700\\u9AD8',
+          scopeNote:
+            '\\u8BA1\\u7B97\\u53E3\\u5F84\\uFF1A\\u57FA\\u4E8E\\u5404\\u56FD\\u6807\\u51C6\\u7A0E\\u5236\\uFF08\\u4E0D\\u542B Beckham\\u3001IFICI\\u3001FIG\\u300130% ruling\\u3001Forschungspauschale \\u7B49\\u7279\\u6B8A\\u4EBA\\u624D\\u5236\\u5EA6\\uFF09\\uFF0C\\u793E\\u4FDD\\u4E0E\\u5730\\u533A\\u9644\\u52A0\\u89C6\\u5404\\u56FD\\u89C4\\u5219\\u5904\\u7406\\uFF1B\\u6CE8\\u518C\\u540E\\u53EF\\u89E3\\u9501\\u7279\\u6B8A\\u5236\\u5EA6\\u5BF9\\u6BD4\\u4E0E\\u9010\\u9879\\u660E\\u7EC6\\u3002',
+          provisionalNote:
+            '\\u6CE8\\uFF1A\\u90E8\\u5206\\u56FD\\u5BB6\\u8BE5\\u7A0E\\u5E74\\u7A0E\\u7387\\u4E3A\\u6682\\u5B9A\\u503C\\uFF08provisional\\uFF09\\uFF0C\\u5B98\\u65B9\\u6B63\\u5F0F\\u53D1\\u5E03\\u540E\\u5C06\\u81EA\\u52A8\\u66F4\\u65B0\\u3002',
+          resultsTitle: '\\u5BF9\\u6BD4\\u7ED3\\u679C \\u00B7 ',
+          taxYearLabel: ' \\u7A0E\\u5E74 \\u00B7 \\u7A0E\\u524D ',
+          thCountry: '\\u56FD\\u5BB6',
+          thNet: '\\u5230\\u624B\\u51C0\\u6536\\u5165',
+          thTax: '\\u7A0E\\u989D',
+          thRate: '\\u6709\\u6548\\u7A0E\\u7387',
+          calculating: '\\u8BA1\\u7B97\\u4E2D\\u2026',
+          errRateLimited:
+            '\\u8BF7\\u6C42\\u8FC7\\u4E8E\\u9891\\u7E41\\uFF0C\\u8BF7\\u4E00\\u5206\\u949F\\u540E\\u518D\\u8BD5\\u3002',
+          errInvalid:
+            '\\u8F93\\u5165\\u4E0D\\u5408\\u6CD5\\uFF0C\\u8BF7\\u68C0\\u67E5\\u540E\\u91CD\\u8BD5\\u3002',
+          errNetwork: '\\u7F51\\u7EDC\\u9519\\u8BEF\\uFF0C\\u8BF7\\u91CD\\u8BD5\\u3002',
+        };
+  return `
     (function () {
+      var i18n = {
+        badge: '${i18n.badge}',
+        scopeNote: '${i18n.scopeNote}',
+        provisionalNote: '${i18n.provisionalNote}',
+        resultsTitle: '${i18n.resultsTitle}',
+        taxYearLabel: '${i18n.taxYearLabel}',
+        thCountry: '${i18n.thCountry}',
+        thNet: '${i18n.thNet}',
+        thTax: '${i18n.thTax}',
+        thRate: '${i18n.thRate}',
+        calculating: '${i18n.calculating}',
+        errRateLimited: '${i18n.errRateLimited}',
+        errInvalid: '${i18n.errInvalid}',
+        errNetwork: '${i18n.errNetwork}'
+      };
+      // API 的 countryName 固定中文；英文页改用响应里的 countryNameEn。
+      var useEnNames = ${lang === 'en'};
       var form = document.getElementById('cmp-form');
       var resultsEl = document.getElementById('cmp-results');
       var errorEl = document.getElementById('cmp-error');
@@ -315,7 +522,7 @@ const PAGE_SCRIPT = `
           var r = data.results[i];
           var top = i === 0;
           rows += '<tr' + (top ? ' class="cmp-top"' : '') + '>'
-            + '<td>' + r.flag + ' ' + r.countryName + (top ? ' <span class="cmp-badge">\\u5230\\u624B\\u6700\\u9AD8</span>' : '') + '</td>'
+            + '<td>' + r.flag + ' ' + (useEnNames && r.countryNameEn ? r.countryNameEn : r.countryName) + (top ? ' <span class="cmp-badge">' + i18n.badge + '</span>' : '') + '</td>'
             + '<td class="num"><strong>' + fmtEur(r.netIncome) + '</strong></td>'
             + '<td class="num">' + fmtEur(r.taxOwed) + '</td>'
             + '<td class="num">' + fmtRate(r.effectiveRate) + '</td>'
@@ -325,15 +532,15 @@ const PAGE_SCRIPT = `
         for (var j = 0; j < data.results.length; j++) {
           if (data.results[j].provisional) { hasProvisional = true; break; }
         }
-        var notes = '<p class="cmp-note">\\u8BA1\\u7B97\\u53E3\\u5F84\\uFF1A\\u57FA\\u4E8E\\u5404\\u56FD\\u6807\\u51C6\\u7A0E\\u5236\\uFF08\\u4E0D\\u542B Beckham\\u3001IFICI\\u3001FIG\\u300130% ruling\\u3001Forschungspauschale \\u7B49\\u7279\\u6B8A\\u4EBA\\u624D\\u5236\\u5EA6\\uFF09\\uFF0C\\u793E\\u4FDD\\u4E0E\\u5730\\u533A\\u9644\\u52A0\\u89C6\\u5404\\u56FD\\u89C4\\u5219\\u5904\\u7406\\uFF1B\\u6CE8\\u518C\\u540E\\u53EF\\u89E3\\u9501\\u7279\\u6B8A\\u5236\\u5EA6\\u5BF9\\u6BD4\\u4E0E\\u9010\\u9879\\u660E\\u7EC6\\u3002</p>';
+        var notes = '<p class="cmp-note">' + i18n.scopeNote + '</p>';
         if (hasProvisional) {
-          notes += '<p class="cmp-note">\\u6CE8\\uFF1A\\u90E8\\u5206\\u56FD\\u5BB6\\u8BE5\\u7A0E\\u5E74\\u7A0E\\u7387\\u4E3A\\u6682\\u5B9A\\u503C\\uFF08provisional\\uFF09\\uFF0C\\u5B98\\u65B9\\u6B63\\u5F0F\\u53D1\\u5E03\\u540E\\u5C06\\u81EA\\u52A8\\u66F4\\u65B0\\u3002</p>';
+          notes += '<p class="cmp-note">' + i18n.provisionalNote + '</p>';
         }
-        resultsEl.innerHTML = '<h2>\\u5BF9\\u6BD4\\u7ED3\\u679C \\u00B7 ' + data.input.taxYear
-          + ' \\u7A0E\\u5E74 \\u00B7 \\u7A0E\\u524D ' + fmtEur(data.input.grossIncome) + '</h2>'
+        resultsEl.innerHTML = '<h2>' + i18n.resultsTitle + data.input.taxYear
+          + i18n.taxYearLabel + fmtEur(data.input.grossIncome) + '</h2>'
           + '<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr>'
-          + '<th>\\u56FD\\u5BB6</th><th class="num">\\u5230\\u624B\\u51C0\\u6536\\u5165</th>'
-          + '<th class="num">\\u7A0E\\u989D</th><th class="num">\\u6709\\u6548\\u7A0E\\u7387</th>'
+          + '<th>' + i18n.thCountry + '</th><th class="num">' + i18n.thNet + '</th>'
+          + '<th class="num">' + i18n.thTax + '</th><th class="num">' + i18n.thRate + '</th>'
           + '</tr></thead><tbody>' + rows + '</tbody></table></div>' + notes;
         resultsEl.hidden = false;
         resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -346,7 +553,7 @@ const PAGE_SCRIPT = `
         var button = form.querySelector('button[type=submit]');
         var original = button.textContent;
         button.disabled = true;
-        button.textContent = '\\u8BA1\\u7B97\\u4E2D\\u2026';
+        button.textContent = i18n.calculating;
         fetch('/api/public/compare?' + params.toString(), { headers: { 'X-Requested-With': 'fetch' } })
           .then(function (res) {
             return res.json().then(function (data) { return { res: res, data: data }; });
@@ -356,21 +563,25 @@ const PAGE_SCRIPT = `
               renderResults(r.data);
               try { history.replaceState(null, '', '/compare?' + params.toString()); } catch (e) { /* noop */ }
             } else if (r.res.status === 429) {
-              showError('\\u8BF7\\u6C42\\u8FC7\\u4E8E\\u9891\\u7E41\\uFF0C\\u8BF7\\u4E00\\u5206\\u949F\\u540E\\u518D\\u8BD5\\u3002');
+              showError(i18n.errRateLimited);
             } else {
-              showError((r.data && r.data.message) || '\\u8F93\\u5165\\u4E0D\\u5408\\u6CD5\\uFF0C\\u8BF7\\u68C0\\u67E5\\u540E\\u91CD\\u8BD5\\u3002');
+              showError((r.data && r.data.message) || i18n.errInvalid);
             }
           })
-          .catch(function () { showError('\\u7F51\\u7EDC\\u9519\\u8BEF\\uFF0C\\u8BF7\\u91CD\\u8BD5\\u3002'); })
+          .catch(function () { showError(i18n.errNetwork); })
           .finally(function () {
             button.disabled = false;
             button.textContent = original;
           });
       });
     })();
-`;
+  `;
+}
 
 export function comparePage(query: URLSearchParams): { html: string; status: number } {
+  // ?lang=en 切换整页英文；缺省/非法值回落中文（产品默认语言）。
+  const lang = resolveCompareLang(query.get(COMPARE_LANG_PARAM));
+  const m = MESSAGES[lang];
   const hasQuery = [...query.keys()].some((k) => (COMPARE_PARAMS as readonly string[]).includes(k));
   const raw = queryToObject(query);
 
@@ -379,16 +590,16 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
   let input: PublicCompareInput | null = null;
 
   if (hasQuery) {
-    const parsed = publicCompareQuerySchema.safeParse(raw);
+    const parsed = buildQuerySchema(lang).safeParse(raw);
     if (parsed.success) {
       input = parsed.data;
-      const computed = runPublicCompare(parsed.data);
+      const computed = runPublicCompare(parsed.data, lang);
       rows = computed.rows;
       if (rows.length === 0) {
-        errorMessage = '五国计算均失败，请稍后再试';
+        errorMessage = m.errAllFailed;
       }
     } else {
-      errorMessage = parsed.error.issues[0]?.message ?? '输入不合法，请检查后重试';
+      errorMessage = parsed.error.issues[0]?.message ?? m.errGeneric;
     }
   }
 
@@ -401,7 +612,7 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
     .map(
       (row, i) => `
           <tr${i === 0 ? ' class="cmp-top"' : ''}>
-            <td>${row.flag} ${row.countryName}${i === 0 ? ' <span class="cmp-badge">到手最高</span>' : ''}</td>
+            <td>${row.flag} ${row.countryName}${i === 0 ? ` <span class="cmp-badge">${m.badge}</span>` : ''}</td>
             <td class="num"><strong>${formatEur(row.netIncome)}</strong></td>
             <td class="num">${formatEur(row.taxOwed)}</td>
             <td class="num">${formatRate(row.effectiveRate)}</td>
@@ -410,22 +621,22 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
     .join('');
 
   const provisionalNote = rows.some((r) => r.provisional)
-    ? '<p class="cmp-note">注：部分国家该税年税率为暂定值（provisional），官方正式发布后将自动更新。</p>'
+    ? `<p class="cmp-note">${m.provisionalNote}</p>`
     : '';
 
   const resultsHtml =
     input !== null
       ? `
       <section class="cmp-card cmp-results" id="cmp-results">
-        <h2>对比结果 · ${input.taxYear} 税年 · 税前 ${formatEur(input.grossIncome)}</h2>
+        <h2>${m.resultsHeading(input.taxYear, formatEur(input.grossIncome))}</h2>
         <div class="cmp-table-wrap">
           <table class="cmp-table">
             <thead>
               <tr>
-                <th scope="col">国家</th>
-                <th scope="col" class="num">到手净收入</th>
-                <th scope="col" class="num">税额</th>
-                <th scope="col" class="num">有效税率</th>
+                <th scope="col">${m.thCountry}</th>
+                <th scope="col" class="num">${m.thNet}</th>
+                <th scope="col" class="num">${m.thTax}</th>
+                <th scope="col" class="num">${m.thRate}</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}
@@ -433,59 +644,60 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
           </table>
         </div>
         ${provisionalNote}
-        <p class="cmp-note">${CALCULATION_SCOPE_NOTE}</p>
+        <p class="cmp-note">${m.scopeNote}</p>
       </section>`
       : '<section class="cmp-card cmp-results" id="cmp-results" hidden></section>';
 
   const incomeTypeOptions = INCOME_TYPES.map(
-    (t) => `<option value="${t}"${selected(incomeTypeValue, t)}>${INCOME_TYPE_LABELS[t]}</option>`,
+    (t) =>
+      `<option value="${t}"${selected(incomeTypeValue, t)}>${INCOME_TYPE_LABELS[lang][t]}</option>`,
   ).join('');
 
   const filingStatusOptions = FILING_STATUSES.map(
     (s) =>
-      `<option value="${s}"${selected(filingStatusValue, s)}>${FILING_STATUS_LABELS[s]}</option>`,
+      `<option value="${s}"${selected(filingStatusValue, s)}>${FILING_STATUS_LABELS[lang][s]}</option>`,
   ).join('');
 
   const body = `
       <style>${PAGE_STYLE}</style>
 
       <section class="cmp-hero">
-        <h1>五国税后收入对比计算器</h1>
+        <h1>${m.heroTitle}</h1>
         <p>
-          输入税前年收入，立即对比 🇪🇸 西班牙 · 🇵🇹 葡萄牙 · 🇩🇪 德国 · 🇳🇱 荷兰 · 🇬🇧 英国
-          五国到手净收入 —— 免费、无需注册。
+          ${m.heroSubtitle}
         </p>
       </section>
 
       <section class="cmp-card">
         <form class="cmp-form" id="cmp-form" action="/compare" method="get">
+          ${lang === 'en' ? '<input type="hidden" name="lang" value="en">' : ''}
           <div class="cmp-field">
-            <label for="cmp-gross">税前年收入（€）</label>
+            <label for="cmp-gross">${m.labelGross}</label>
             <input id="cmp-gross" name="grossIncome" type="number" inputmode="decimal"
-              min="1" max="1000000000" step="any" placeholder="如 60000" value="${grossValue}" required>
+              min="1" max="1000000000" step="any" placeholder="${m.placeholderGross}" value="${grossValue}" required>
           </div>
           <div class="cmp-field">
-            <label for="cmp-year">税年</label>
-            <select id="cmp-year" name="taxYear" aria-label="税年">
+            <label for="cmp-year">${m.labelYear}</label>
+            <select id="cmp-year" name="taxYear" aria-label="${m.labelYear}">
               <option value="2025"${selected(taxYearValue, '2025')}>2025</option>
               <option value="2026"${selected(taxYearValue, '2026')}>2026</option>
             </select>
           </div>
           <div class="cmp-field">
-            <label for="cmp-type">收入类型</label>
-            <select id="cmp-type" name="incomeType" aria-label="收入类型">${incomeTypeOptions}
+            <label for="cmp-type">${m.labelType}</label>
+            <select id="cmp-type" name="incomeType" aria-label="${m.labelType}">${incomeTypeOptions}
             </select>
           </div>
           <div class="cmp-field">
-            <label for="cmp-filing">申报状态</label>
-            <select id="cmp-filing" name="filingStatus" aria-label="申报状态">${filingStatusOptions}
+            <label for="cmp-filing">${m.labelFiling}</label>
+            <select id="cmp-filing" name="filingStatus" aria-label="${m.labelFiling}">${filingStatusOptions}
             </select>
           </div>
           <div class="cmp-field cmp-submit-col">
-            <button class="cmp-submit" type="submit">立即对比五国到手</button>
+            <button class="cmp-submit" type="submit">${m.submitLabel}</button>
           </div>
         </form>
-        <p class="cmp-hint">默认按各国标准税制单身申报计算；数据源为各国官方税率表（附法条引用）。</p>
+        <p class="cmp-hint">${m.formHint}</p>
       </section>
 
       <div class="cmp-error" id="cmp-error" role="alert"${errorMessage ? '' : ' hidden'}>
@@ -495,29 +707,27 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
       ${resultsHtml}
 
       <section class="cmp-card cmp-cta">
-        <h2>想知道怎么合法少缴？</h2>
+        <h2>${m.ctaTitle}</h2>
         <p>
-          注册免费账号，用你的真实收入生成五国申报草稿；解锁 Pro 可查看逐项税额明细、
-          特殊人才制度（Beckham / IFICI / FIG / 30% ruling）对比与完整节税策略报告。
+          ${m.ctaBody}
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="/app">免费注册，生成我的申报草稿</a>
-          <a class="btn btn-secondary" href="/app#strategies">查看完整节税策略</a>
+          <a class="btn btn-primary" href="/app">${m.ctaPrimary}</a>
+          <a class="btn btn-secondary" href="/app#strategies">${m.ctaSecondary}</a>
         </div>
       </section>
 
-      <p class="cmp-disclaimer">${DISCLAIMER_TEXT}</p>
+      <p class="cmp-disclaimer">${m.disclaimer}</p>
 
-      <script>${PAGE_SCRIPT}</script>
+      <script>${buildPageScript(lang)}</script>
     `;
 
   return {
     html: renderPage({
-      title: '五国税后收入对比计算器',
+      title: m.docTitle,
       path: '/compare',
-      lang: 'zh-CN',
-      metaDescription:
-        '免费五国税后收入对比计算器：输入税前年收入，即时对比西班牙、葡萄牙、德国、荷兰、英国的到手净收入、税额与有效税率，无需注册。',
+      lang: lang === 'en' ? 'en' : 'zh-CN',
+      metaDescription: m.metaDescription,
       body,
     }),
     status: errorMessage ? 400 : 200,

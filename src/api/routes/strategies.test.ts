@@ -126,6 +126,134 @@ describe('GET /api/strategies', () => {
   });
 });
 
+describe('i18n (t4): bilingual strategy output', () => {
+  // Spot-check three strategies from different jurisdictions/regimes.
+  const SPOT_CHECK = ['es.beckham', 'nl.30percent', 'uk.fig'] as const;
+
+  it('GET / catalog carries non-empty titleEn + descriptionEn alongside Zh (spot-check 3)', async () => {
+    const res = await strategiesRoutes.request('/');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: Array<{
+        id: string;
+        titleZh: string;
+        titleEn?: string;
+        descriptionZh: string;
+        descriptionEn?: string;
+      }>;
+    };
+    expect(body.items.length).toBeGreaterThanOrEqual(22);
+    for (const id of SPOT_CHECK) {
+      const item = body.items.find((i) => i.id === id);
+      expect(item, `strategy ${id} missing from catalog`).toBeTruthy();
+      expect(item?.titleZh.length).toBeGreaterThan(0);
+      expect(item?.titleEn, `${id}.titleEn must exist`).toBeTruthy();
+      expect((item?.titleEn ?? '').length).toBeGreaterThan(0);
+      expect(item?.descriptionEn, `${id}.descriptionEn must exist`).toBeTruthy();
+      expect((item?.descriptionEn ?? '').length).toBeGreaterThan(0);
+      // English copy is real copy, not the Zh string repeated.
+      expect(item?.titleEn).not.toBe(item?.titleZh);
+      expect(item?.descriptionEn).not.toBe(item?.descriptionZh);
+    }
+  });
+
+  it('POST /evaluate rows carry titleEn + reasonEn alongside Zh (spot-check 3)', async () => {
+    const res = await strategiesRoutes.request(
+      '/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 200_000,
+          specialStatus: 'beckham',
+          filingStatus: 'single',
+          region: 'MAD',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      evaluations: Array<{
+        id: string;
+        titleZh: string;
+        titleEn?: string;
+        reason: string;
+        reasonEn?: string;
+      }>;
+    };
+    for (const id of SPOT_CHECK) {
+      const ev = body.evaluations.find((e) => e.id === id);
+      expect(ev, `strategy ${id} missing from evaluations`).toBeTruthy();
+      expect(ev?.titleZh.length).toBeGreaterThan(0);
+      expect(ev?.titleEn, `${id}.titleEn must exist in evaluate rows`).toBeTruthy();
+      expect((ev?.titleEn ?? '').length).toBeGreaterThan(0);
+      // Every branch returns a bilingual reason (registry-side guarantee is
+      // covered by src/strategies/i18n.test.ts; here we assert the API wire).
+      expect(ev?.reasonEn, `${id}.reasonEn must exist in evaluate rows`).toBeTruthy();
+      expect((ev?.reasonEn ?? '').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('free-tier trimming keeps titleEn and clips reasonEn like reason', async () => {
+    // Default mock makes the caller Pro (admin); flip to free for trimming.
+    mockUserAccess = { role: 'user', subscriptionStatus: 'free' };
+    type Vars = { session: { user: { id: string } } | null };
+    const { Hono } = require('hono') as typeof import('hono');
+    const parent = new Hono<{ Bindings: typeof TEST_ENV; Variables: Vars }>();
+    parent.use('*', async (c, next) => {
+      c.set('session', { user: { id: 'i18n-free-1' } });
+      await next();
+    });
+    parent.route('/api/strategies', strategiesRoutes);
+    const res = await parent.request(
+      '/api/strategies/evaluate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: 'ES',
+          taxYear: 2025,
+          incomeType: 'salary',
+          grossIncome: 200_000,
+          specialStatus: 'beckham',
+          filingStatus: 'single',
+          region: 'MAD',
+        }),
+      },
+      TEST_ENV,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      evaluations: Array<{
+        id: string;
+        titleEn?: string;
+        reasonEn?: string;
+        actionSteps: string[];
+        citations: unknown[];
+      }>;
+    };
+    expect(body.evaluations.length).toBeGreaterThan(0);
+    for (const ev of body.evaluations) {
+      // Bilingual title pair survives the trim (the savings hook).
+      if (ev.titleEn !== undefined) {
+        expect(ev.titleEn.length).toBeGreaterThan(0);
+      }
+      // reasonEn is clipped with the exact same rule as reason (≤ 60+ellipsis).
+      if (ev.reasonEn !== undefined) {
+        expect(ev.reasonEn.length).toBeLessThanOrEqual(61);
+      }
+      expect(ev.actionSteps).toEqual([]);
+      expect(ev.citations).toEqual([]);
+    }
+    // Restore the Pro default so later describes keep their semantics.
+    mockUserAccess = { role: 'admin', subscriptionStatus: 'active' };
+  });
+});
+
 describe('POST /api/strategies/evaluate', () => {
   it('returns baseline + evaluations sorted (applicable first, saving desc)', async () => {
     const res = await strategiesRoutes.request(

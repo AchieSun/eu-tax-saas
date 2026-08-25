@@ -37,6 +37,9 @@ const STRATEGY: Strategy = {
   titleZh: '葡萄牙医疗费用抵免 (Despesas de Saúde, 15% 上限 €1,000)',
   descriptionZh:
     '《CIRS》art. 78.º-C:15% 医疗费用 (含处方、医院、保险) 可抵免所得税,年度上限 €1,000 (即 ≥€6,667 医疗支出可达上限)。需通过 e-fatura 关联发票。需提供 medicalExpensesEur 才能精确估算实际节税额。',
+  titleEn: 'Portugal health-expenses credit (Despesas de Saúde, 15% capped at €1,000)',
+  descriptionEn:
+    'Art. 78.º-C CIRS: 15% of qualifying medical expenses (prescriptions, hospitals, insurance) is credited against income tax, capped at €1,000/year (i.e. spending ≥ €6,667 hits the cap). Invoices must be linked via e-fatura. Provide medicalExpensesEur for a precise estimate of the actual saving.',
   eligibility: {
     countries: ['PT'],
     minAgeYears: 18,
@@ -49,7 +52,12 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, _baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'PT') {
-      return { applicable: false, reason: '此抵免项仅适用于葡萄牙', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此抵免项仅适用于葡萄牙',
+        reasonEn: 'This credit only applies in Portugal',
+        confidence: 1,
+      };
     }
     // Without a `medicalExpensesEur` field on the input, we cannot compute the
     // 15% × spend deduction. Surface the input gap rather than defaulting to
@@ -58,6 +66,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `葡萄牙医疗费用 15% 抵免 (上限 €1,000/年)。需提供年度医疗支出 (medicalExpensesEur) 才能给出实际节税估算 — 15% × 支出, 支出 ≥ €${Math.round(PT_HEALTH_CAP_SPEND_EUR).toLocaleString()} 时达到上限。当前未估算金额。`,
+      reasonEn: `Portugal's 15% health-expenses credit (capped at €1,000/year). Your annual medical spend (medicalExpensesEur) is needed for an actual estimate — 15% × spend, reaching the cap at spend ≥ €${Math.round(PT_HEALTH_CAP_SPEND_EUR).toLocaleString()}. No amount is estimated yet.`,
       estimatedSavingsEur: null,
       confidence: 0.5,
       assumptions: [

@@ -112,6 +112,13 @@ export const evaluationSchema = z.object({
    */
   reason: z.string().min(1),
   /**
+   * English parallel of `reason` (i18n wave: bilingual strategy output).
+   * Optional so legacy fixtures and Tier C LLM evaluations may omit it;
+   * every bundled A/B-tier strategy MUST return it on every branch —
+   * enforced by src/strategies/i18n.test.ts.
+   */
+  reasonEn: z.string().min(1).optional(),
+  /**
    * Annual saving in EUR. Null when not computable (e.g. requires extra
    * user data, or strategy is informational-only).
    */
@@ -169,6 +176,14 @@ export interface Strategy {
   titleZh: string;
   /** End-user-facing Chinese description (1-3 sentences). */
   descriptionZh: string;
+  /**
+   * English parallel of `titleZh` (i18n wave). Required for every bundled
+   * A/B-tier strategy — a strategy MUST NOT register with an empty/whitespace
+   * titleEn (registry throws). Test fixtures may omit it entirely.
+   */
+  titleEn?: string;
+  /** English parallel of `descriptionZh`. Same registry guard as titleEn. */
+  descriptionEn?: string;
   eligibility: StrategyEligibility;
   citation: StrategyCitation;
   /**
@@ -212,6 +227,9 @@ export const strategyDefinitionSchema = z.object({
   category: z.enum(STRATEGY_CATEGORIES),
   titleZh: z.string().min(1),
   descriptionZh: z.string().min(1),
+  /** English parallel copy — optional for round-tripping legacy fixtures. */
+  titleEn: z.string().min(1).optional(),
+  descriptionEn: z.string().min(1).optional(),
   eligibility: eligibilitySchema,
   citation: citationSchema,
 });

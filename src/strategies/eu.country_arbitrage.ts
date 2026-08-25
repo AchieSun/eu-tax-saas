@@ -29,6 +29,9 @@ const STRATEGY: Strategy = {
   titleZh: '欧盟跨国居民身份套利 — 比较5国有效税率',
   descriptionZh:
     '基于欧盟《TFEU》第21条自由迁徙权,在 DE/NL/PT/ES/UK 之间比较相同收入下的有效税负。本策略仅识别税率差异;真实迁居决策需综合社保、生活成本、家庭、签证等多维因素,请勿仅凭此数字搬家。',
+  titleEn: 'EU cross-country residency arbitrage — compare effective tax rates across 5 countries',
+  descriptionEn:
+    'Based on free movement under TFEU art. 21, compares the effective tax burden on the same income across DE/NL/PT/ES/UK. This strategy only identifies rate differences; a real relocation decision must weigh social security, cost of living, family and visas — do not move on this number alone.',
   eligibility: {
     countries: ['ES', 'PT', 'DE', 'NL', 'UK'],
     minAgeYears: 18,
@@ -61,6 +64,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: `您当前居住的 ${input.country} 已是 5 国中税负最低`,
+        reasonEn: `Your current country ${input.country} already has the lowest tax among the 5`,
         estimatedSavingsEur: 0,
         confidence: 0.6,
       };
@@ -68,6 +72,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `相同收入下,${bestCountry} 比 ${input.country} 少缴税约 €${Math.round(delta)}/年。但跨国搬迁涉及社保、医疗、家庭等多重因素,本数字仅供参考`,
+      reasonEn: `On the same income, ${bestCountry} taxes about €${Math.round(delta)}/year less than ${input.country}. But relocation involves social security, healthcare, family and more — treat this figure as informational only`,
       estimatedSavingsEur: Math.round(delta),
       confidence: 0.6,
     };

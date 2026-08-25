@@ -22,6 +22,10 @@ const STRATEGY: Strategy = {
   titleZh: '英国 FIG 制度 — 新入境居民前4年境外收入免税 (取代已废除的 Non-Dom 汇入制)',
   descriptionZh:
     '英国《2025财政法》Schedule 9 引入 FIG (Foreign Income & Gains) 制度:新入境英国税务居民前4个税年,境外收入与境外资本利得 100% 免英国税。⚠️ 旧的 Non-Dom Remittance Basis 自 2025-04-06 已被废除,请勿推荐汇入制;FIG 是其替代品,但要求迁入英国前必须有连续10个税年非英国居民身份,且仅前4个税年有效,需每年通过 SA109 Box 28/29 申请。',
+  titleEn:
+    'UK FIG regime — 4-year 100% exemption on foreign income for new residents (replaces the abolished Non-Dom remittance basis)',
+  descriptionEn:
+    'The UK Finance Act 2025 Schedule 9 introduces the FIG (Foreign Income & Gains) regime: for their first 4 tax years, newly arrived UK tax residents pay 0% UK tax on foreign income and foreign capital gains. ⚠️ The old Non-Dom remittance basis was abolished on 2025-04-06 — never recommend it; FIG is the replacement, but it requires 10 consecutive tax years of non-UK residence before arrival, lasts only 4 tax years, and must be claimed annually via SA109 Box 28/29.',
   eligibility: {
     countries: ['UK'],
     specialStatuses: ['fig'],
@@ -35,12 +39,19 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'UK') {
-      return { applicable: false, reason: '此策略仅适用于英国税务居民', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此策略仅适用于英国税务居民',
+        reasonEn: 'This strategy only applies to UK tax residents',
+        confidence: 1,
+      };
     }
     if (input.specialStatus !== 'fig') {
       return {
         applicable: false,
         reason: '需要满足 FIG 资格 (前10年非英国居民 + 在前4个税年内) 并通过 SA109 申请',
+        reasonEn:
+          'You must qualify for FIG (10 prior tax years of non-UK residence + within your first 4 tax years) and claim it via SA109',
         confidence: 1,
       };
     }
@@ -54,6 +65,7 @@ const STRATEGY: Strategy = {
       return {
         applicable: false,
         reason: '此情形 FIG 不带来节省 (基线已是零税)',
+        reasonEn: 'FIG yields no saving in this case (the baseline tax is already zero)',
         estimatedSavingsEur: 0,
         confidence: 1,
       };
@@ -61,6 +73,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `FIG 制度对境外收入 100% 免税,可节省约 £${Math.round(delta)}/年 (前4个税年)。请通过 F2 居民评估确认10年非居民前提`,
+      reasonEn: `FIG exempts foreign income at 100%, saving about £${Math.round(delta)}/year (first 4 tax years). Confirm the 10-year non-residence prerequisite via the F2 residency assessment`,
       estimatedSavingsEur: Math.round(delta),
       confidence: 0.9,
     };

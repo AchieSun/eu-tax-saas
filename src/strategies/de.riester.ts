@@ -29,6 +29,9 @@ const STRATEGY: Strategy = {
   titleZh: '德国 Riester 养老金补贴 + 税收扣除',
   descriptionZh:
     '《EStG》§ 10a + § 79-99:Riester-Rente 由国家直接补贴 (Grundzulage €175 + Kinderzulage €185-€300/孩) 并可附加 Sonderausgabenabzug 上限 €2,100/年。税务局自动选择补贴或扣除中较优方式 (Günstigerprüfung)。',
+  titleEn: 'Germany Riester pension — state subsidy + tax deduction',
+  descriptionEn:
+    '§ 10a + §§ 79-99 EStG: the Riester pension is directly subsidised by the state (Grundzulage €175 plus Kinderzulage €185-€300 per child) and can additionally be deducted as Sonderausgaben up to €2,100/year. The tax office automatically picks whichever of subsidy or deduction is better for you (Günstigerprüfung).',
   eligibility: {
     countries: ['DE'],
     incomeTypes: ['salary'],
@@ -42,12 +45,19 @@ const STRATEGY: Strategy = {
   },
   evaluate(input: CalculatorInput, baseline: BaselineTax): StrategyEvaluation {
     if (input.country !== 'DE') {
-      return { applicable: false, reason: '此补贴仅适用于德国', confidence: 1 };
+      return {
+        applicable: false,
+        reason: '此补贴仅适用于德国',
+        reasonEn: 'This subsidy only applies in Germany',
+        confidence: 1,
+      };
     }
     if (input.incomeType !== 'salary') {
       return {
         applicable: false,
         reason: 'Riester 主要面向 Pflichtversicherte (强制社保者),通常为工资所得者',
+        reasonEn:
+          'Riester mainly targets Pflichtversicherte (statutorily insured people), typically employees with salary income',
         confidence: 0.9,
       };
     }
@@ -56,6 +66,7 @@ const STRATEGY: Strategy = {
     return {
       applicable: true,
       reason: `Grundzulage €${DE_RIESTER_GRUNDZULAGE} vs 扣除节税 €${deductionSaving} (按边际税率 ${(baseline.marginalRate * 100).toFixed(1)}%),税局自动取优,本年最多约 €${totalBest}。有孩可再加 €185-€300/孩`,
+      reasonEn: `Grundzulage €${DE_RIESTER_GRUNDZULAGE} vs deduction saving €${deductionSaving} (at your ${(baseline.marginalRate * 100).toFixed(1)}% marginal rate); the tax office takes the better one — up to about €${totalBest} this year. Add €185-€300 more per child`,
       estimatedSavingsEur: totalBest,
       confidence: 0.65,
     };

@@ -107,6 +107,8 @@ const FORBIDDEN_STRATEGY_IDS = new Set([
 
 /** Hard prefix mandated by G2 for any AI-derived recommendation. */
 const AI_PREFIX = '[AI建议·未经确定性验证]';
+/** English parallel of AI_PREFIX (i18n wave — surfaced by /ai-recommend?lang=en). */
+const AI_PREFIX_EN = '[AI suggestion · not deterministically verified]';
 
 /**
  * Region whitelist per supported country. Prevents prompt-injection via the
@@ -147,6 +149,10 @@ export interface LlmStrategyEvaluation extends StrategyEvaluation {
   id: string;
   tier: 'C';
   titleZh: string;
+  /** English parallel of titleZh (i18n wave). */
+  titleEn: string;
+  /** English parallel of the G2 disclaimer prefix. */
+  aiPrefixEn: string;
   /** The full LLM-emitted recommendation for downstream UI inspection. */
   raw: StrategyRecommendation;
 }
@@ -856,8 +862,11 @@ export async function recommendStrategies(
       id: rec.strategy_id,
       tier: 'C' as const,
       titleZh: `${AI_PREFIX} ${rec.strategy_id}`,
+      titleEn: `${AI_PREFIX_EN} ${rec.strategy_id}`,
+      aiPrefixEn: AI_PREFIX_EN,
       applicable: rec.eligible,
       reason: rec.reasoning,
+      reasonEn: rec.reasoning,
       estimatedSavingsEur: rec.estimated_savings_eur,
       confidence: cappedConfidence,
       raw: finalRec,
