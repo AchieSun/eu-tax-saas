@@ -22,6 +22,7 @@
  */
 
 import { type Component, For, createMemo, onCleanup, onMount } from 'solid-js';
+import { t } from '../i18n';
 import { COUNTRY_META, type Country, ERASE, type Erase, type PaintTool } from './types';
 
 /** Map from YYYY-MM-DD → paint value (Country or ERASE sentinel). */
@@ -72,7 +73,8 @@ function buildGrid(monthAnchor: Date): Date[] {
   return cells;
 }
 
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+/** Locale-aware weekday header labels (Mon..Sun). */
+const WEEKDAY_KEYS = [0, 1, 2, 3, 4, 5, 6];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -175,9 +177,11 @@ const MonthGrid: Component<Props> = (props) => {
       onPointerMove={handlePointerMove}
     >
       <div class="cal-grid-head" aria-hidden="true">
-        <For each={WEEKDAY_LABELS}>{(w) => <div class="cal-grid-head-cell">{w}</div>}</For>
+        <For each={WEEKDAY_KEYS}>
+          {(i) => <div class="cal-grid-head-cell">{t(`calendar.weekday.${i}`)}</div>}
+        </For>
       </div>
-      <div class="cal-grid" role="grid" aria-label="月份日历">
+      <div class="cal-grid" role="grid" aria-label={t('calendar.grid.ariaLabel')}>
         <For each={cells()}>
           {(d) => {
             const date = fmtISO(d);
@@ -195,7 +199,7 @@ const MonthGrid: Component<Props> = (props) => {
                   color: color().fg,
                   ...(color().border ? { 'border-color': color().border } : {}),
                 }}
-                aria-label={`${date}${pending() ? '（未保存）' : ''}`}
+                aria-label={`${date}${pending() ? t('calendar.grid.cellPending') : ''}`}
               >
                 <span class="cal-cell-num">{d.getDate()}</span>
               </div>

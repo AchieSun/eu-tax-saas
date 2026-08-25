@@ -23,7 +23,7 @@ import {
   SPECIAL_STATUSES,
   type SpecialStatus,
 } from '../../rules/common/types';
-import { COUNTRY_META } from '../calendar/types';
+import { t, useI18n } from '../i18n';
 import PaywallCard, { paywallStyles } from '../paywall/PaywallCard';
 import { fetchMe, isPro } from '../paywall/api';
 import {
@@ -55,20 +55,81 @@ const eur = new Intl.NumberFormat('en-EU', {
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
+/** Map an API error code to a locale-aware friendly message. */
 function friendlyError(err: Error): string {
   switch (err.message) {
     case 'UNAUTHORIZED':
-      return '请先登录 (Please sign in).';
+      return t('strategies.error.unauthorized');
     case 'RATE_LIMITED':
-      return '请求过于频繁，请稍后再试 (Rate limited).';
+      return t('strategies.error.rateLimited');
     case 'SUBSCRIPTION_REQUIRED':
-      return '完整 AI 策略报告为 Pro 会员功能 (Full AI report is a Pro feature).';
+      return t('strategies.error.subscriptionRequired');
     default:
       return err.message;
   }
 }
 
+/**
+ * Locale-aware strategy title/description pickers.
+ * The backend (t4 contract) emits titleZh + titleEn (and descriptionZh +
+ * descriptionEn) side by side; when the English field is missing (older
+ * backend or trimmed response), fall back to the Zh field so the EN locale
+ * never renders a blank card.
+ */
+function pickTitle<T extends { titleZh: string; titleEn?: string }>(
+  item: T,
+  locale: string,
+): string {
+  if (locale === 'en' && item.titleEn) return item.titleEn;
+  return item.titleZh;
+}
+
+function pickDescription<T extends { descriptionZh: string; descriptionEn?: string }>(
+  item: T,
+  locale: string,
+): string {
+  if (locale === 'en' && item.descriptionEn) return item.descriptionEn;
+  return item.descriptionZh;
+}
+
+/**
+ * Locale-aware reason picker (t5 integration fix): the backend ships
+ * reason + reasonEn on every evaluation row (t4 contract), so the EN
+ * locale shows the English reason and falls back to Zh when the English
+ * field is absent (older backend / trimmed free-tier row).
+ */
+export function pickReason<T extends { reason: string; reasonEn?: string }>(
+  item: T,
+  locale: string,
+): string {
+  if (locale === 'en' && item.reasonEn) return item.reasonEn;
+  return item.reason;
+}
+
+/**
+ * Locale-aware guidance steps for Pro evaluation rows (t5 integration
+ * fix). The backend's toFullEvaluation() sets actionSteps[0] to the
+ * strategy's descriptionZh; in the EN locale substitute the descriptionEn
+ * pair member when available so the paid guidance follows the UI
+ * language. Rows whose steps are NOT the description (AI recommendations,
+ * future structured steps) pass through untouched in every locale.
+ */
+export function pickGuidanceSteps<
+  T extends { actionSteps?: string[]; descriptionZh?: string; descriptionEn?: string },
+>(item: T, locale: string): string[] | undefined {
+  const steps = item.actionSteps;
+  if (!steps || steps.length === 0) return steps;
+  if (locale === 'en' && item.descriptionEn && steps[0] === item.descriptionZh) {
+    return [item.descriptionEn, ...steps.slice(1)];
+  }
+  return steps;
+}
+
 const StrategiesPage: Component = () => {
+  const { locale } = useI18n();
+  /** Locale-aware country label ('德国 DE' / 'Germany DE'). */
+  const countryLabel = (c: Country) => t(`calendar.country.${c}`);
+
   // Catalog filters
   const [catalogCountry, setCatalogCountry] = createSignal<Country | ''>('');
   const [catalogYear, setCatalogYear] = createSignal<number | ''>('');
@@ -120,7 +181,9 @@ const StrategiesPage: Component = () => {
         filingStatus: filingStatus(),
         ...(region() ? { region: region() } : {}),
       };
-      const result = await aiRecommendStrategies(input);
+      // t5 integration fix: pass the UI locale so the backend's single-string
+      // aiDisclaimer switches to its English form in the EN locale.
+      const result = await aiRecommendStrategies(input, locale());
       setAiRecs(result.recommendations);
       setAiUsage({ cost: result.usage.cost });
     } catch (err) {
@@ -182,27 +245,25 @@ const StrategiesPage: Component = () => {
       <style>{styles}</style>
 
       <header class="str-hero">
-        <h1 class="str-h1">节税策略 (Strategies)</h1>
-        <p class="str-sub">
-          浏览 A/B 级节税策略目录，输入个人情况后获得基线税负与可适用策略的排序评估。
-        </p>
+        <h1 class="str-h1">{t('strategies.title')}</h1>
+        <p class="str-sub">{t('strategies.subtitle')}</p>
       </header>
 
       {/* Catalog */}
       <section class="str-panel">
         <div class="str-section-head">
-          <h2 class="str-h2">策略目录</h2>
+          <h2 class="str-h2">{t('strategies.catalog.title')}</h2>
           <div class="str-filters">
             <select
               class="str-select"
               value={catalogCountry()}
               onChange={(e) => setCatalogCountry(e.currentTarget.value as Country | '')}
             >
-              <option value="">全部国家</option>
+              <option value="">{t('strategies.catalog.allCountries')}</option>
               <For each={COUNTRIES}>
                 {(c) => (
                   <option value={c}>
-                    {COUNTRY_FLAGS[c]} {COUNTRY_META[c].label}
+                    {COUNTRY_FLAGS[c]} {countryLabel(c)}
                   </option>
                 )}
               </For>
@@ -214,7 +275,7 @@ const StrategiesPage: Component = () => {
                 setCatalogYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')
               }
             >
-              <option value="">全部年度</option>
+              <option value="">{t('strategies.catalog.allYears')}</option>
               <For each={YEARS}>{(y) => <option value={String(y)}>{y}</option>}</For>
             </select>
           </div>
@@ -243,10 +304,10 @@ const StrategiesPage: Component = () => {
                     <span class="str-tier">{item.tier}</span>
                     <span class="str-category">{item.category}</span>
                   </div>
-                  <h3 class="str-catalog-title">{item.titleZh}</h3>
-                  <p class="str-catalog-desc">{item.descriptionZh}</p>
+                  <h3 class="str-catalog-title">{pickTitle(item, locale())}</h3>
+                  <p class="str-catalog-desc">{pickDescription(item, locale())}</p>
                   <p class="str-catalog-elig">
-                    <strong>适用:</strong> {item.eligibility}
+                    <strong>{t('strategies.catalog.applicableTo')}</strong> {item.eligibility}
                   </p>
                   <p class="str-catalog-cite">{item.citation}</p>
                 </article>
@@ -256,17 +317,17 @@ const StrategiesPage: Component = () => {
         </Show>
 
         <Show when={catalogEmpty()}>
-          <p class="str-empty">暂无匹配策略。</p>
+          <p class="str-empty">{t('strategies.catalog.empty')}</p>
         </Show>
       </section>
 
       {/* Evaluation */}
       <section class="str-panel">
-        <h2 class="str-h2">策略评估</h2>
+        <h2 class="str-h2">{t('strategies.eval.title')}</h2>
         <form onSubmit={onEvaluate}>
           <div class="str-form-grid">
             <div class="str-field">
-              <label for="str-country">国家</label>
+              <label for="str-country">{t('strategies.eval.field.country')}</label>
               <select
                 id="str-country"
                 class="str-input"
@@ -276,14 +337,14 @@ const StrategiesPage: Component = () => {
                 <For each={COUNTRIES}>
                   {(c) => (
                     <option value={c}>
-                      {COUNTRY_FLAGS[c]} {COUNTRY_META[c].label}
+                      {COUNTRY_FLAGS[c]} {countryLabel(c)}
                     </option>
                   )}
                 </For>
               </select>
             </div>
             <div class="str-field">
-              <label for="str-year">年度</label>
+              <label for="str-year">{t('strategies.eval.field.year')}</label>
               <select
                 id="str-year"
                 class="str-input"
@@ -294,7 +355,7 @@ const StrategiesPage: Component = () => {
               </select>
             </div>
             <div class="str-field">
-              <label for="str-income-type">收入类型</label>
+              <label for="str-income-type">{t('strategies.eval.field.incomeType')}</label>
               <select
                 id="str-income-type"
                 class="str-input"
@@ -302,12 +363,12 @@ const StrategiesPage: Component = () => {
                 onChange={(e) => setIncomeType(e.currentTarget.value as IncomeType)}
               >
                 <For each={INCOME_TYPES}>
-                  {(t) => <option value={t}>{t.replace(/_/g, ' ')}</option>}
+                  {(it) => <option value={it}>{it.replace(/_/g, ' ')}</option>}
                 </For>
               </select>
             </div>
             <div class="str-field">
-              <label for="str-income">年收入 (€)</label>
+              <label for="str-income">{t('strategies.eval.field.income')}</label>
               <input
                 id="str-income"
                 class="str-input"
@@ -319,7 +380,7 @@ const StrategiesPage: Component = () => {
               />
             </div>
             <div class="str-field">
-              <label for="str-special">特殊身份</label>
+              <label for="str-special">{t('strategies.eval.field.specialStatus')}</label>
               <select
                 id="str-special"
                 class="str-input"
@@ -327,12 +388,16 @@ const StrategiesPage: Component = () => {
                 onChange={(e) => setSpecialStatus(e.currentTarget.value as SpecialStatus)}
               >
                 <For each={SPECIAL_STATUSES}>
-                  {(s) => <option value={s}>{s === 'none' ? '无' : s}</option>}
+                  {(s) => (
+                    <option value={s}>
+                      {s === 'none' ? t('strategies.eval.field.specialStatus.none') : s}
+                    </option>
+                  )}
                 </For>
               </select>
             </div>
             <div class="str-field">
-              <label for="str-filing">申报身份</label>
+              <label for="str-filing">{t('strategies.eval.field.filingStatus')}</label>
               <select
                 id="str-filing"
                 class="str-input"
@@ -345,7 +410,7 @@ const StrategiesPage: Component = () => {
               </select>
             </div>
             <div class="str-field">
-              <label for="str-region">地区代码 (可选)</label>
+              <label for="str-region">{t('strategies.eval.field.region')}</label>
               <input
                 id="str-region"
                 class="str-input"
@@ -358,7 +423,9 @@ const StrategiesPage: Component = () => {
           </div>
           <div class="str-actions">
             <button type="submit" class="str-btn str-btn-primary" disabled={evalLoading()}>
-              {evalLoading() ? '评估中…' : '运行策略评估'}
+              {evalLoading()
+                ? t('strategies.eval.action.evaluating')
+                : t('strategies.eval.action.run')}
             </button>
           </div>
         </form>
@@ -374,28 +441,28 @@ const StrategiesPage: Component = () => {
         <Show when={baseline()}>
           {(b) => (
             <div class="str-baseline">
-              <h3 class="str-h3">基线税负</h3>
+              <h3 class="str-h3">{t('strategies.eval.baseline.title')}</h3>
               <div class="str-baseline-grid">
                 <div>
-                  <span class="str-stat-label">国家</span>
+                  <span class="str-stat-label">{t('strategies.eval.baseline.country')}</span>
                   <span class="str-stat-val">
-                    {COUNTRY_FLAGS[b().country]} {COUNTRY_META[b().country].label}
+                    {COUNTRY_FLAGS[b().country]} {countryLabel(b().country)}
                   </span>
                 </div>
                 <div>
-                  <span class="str-stat-label">年收入</span>
+                  <span class="str-stat-label">{t('strategies.eval.baseline.income')}</span>
                   <span class="str-stat-val">{eur.format(b().grossIncome)}</span>
                 </div>
                 <div>
-                  <span class="str-stat-label">应纳税额</span>
+                  <span class="str-stat-label">{t('strategies.eval.baseline.taxOwed')}</span>
                   <span class="str-stat-val">{eur.format(b().taxOwed)}</span>
                 </div>
                 <div>
-                  <span class="str-stat-label">有效税率</span>
+                  <span class="str-stat-label">{t('strategies.eval.baseline.effectiveRate')}</span>
                   <span class="str-stat-val">{pct(b().effectiveRate)}</span>
                 </div>
                 <div>
-                  <span class="str-stat-label">边际税率</span>
+                  <span class="str-stat-label">{t('strategies.eval.baseline.marginalRate')}</span>
                   <span class="str-stat-val">{pct(b().marginalRate)}</span>
                 </div>
               </div>
@@ -405,13 +472,13 @@ const StrategiesPage: Component = () => {
 
         <Show when={evaluations().length > 0}>
           <div class="str-eval-list">
-            <h3 class="str-h3">策略排序</h3>
+            <h3 class="str-h3">{t('strategies.eval.ranking.title')}</h3>
             <For each={evaluations()}>
               {(ev) => (
                 <div class="str-eval-card" classList={{ 'str-eval-inapplicable': !ev.applicable }}>
                   <div class="str-eval-head">
                     <div>
-                      <span class="str-eval-title">{ev.titleZh}</span>
+                      <span class="str-eval-title">{pickTitle(ev, locale())}</span>
                       <span class="str-eval-meta">
                         {ev.tier} · {ev.category}
                       </span>
@@ -423,25 +490,31 @@ const StrategiesPage: Component = () => {
                         'str-eval-not-applicable': !ev.applicable,
                       }}
                     >
-                      {ev.applicable ? '可适用' : '不适用'}
+                      {ev.applicable
+                        ? t('strategies.eval.applicable')
+                        : t('strategies.eval.notApplicable')}
                     </span>
                   </div>
-                  <p class="str-eval-reason">{ev.reason}</p>
+                  <p class="str-eval-reason">{pickReason(ev, locale())}</p>
                   <div class="str-eval-foot">
                     <span class="str-eval-savings">
                       {ev.estimatedSavingsEur !== null && ev.estimatedSavingsEur !== undefined
-                        ? `预计节税 ${eur.format(ev.estimatedSavingsEur)}`
-                        : '预计节税 N/A'}
+                        ? t('strategies.eval.estimatedSavings', {
+                            amount: eur.format(ev.estimatedSavingsEur),
+                          })
+                        : t('strategies.eval.estimatedSavingsNA')}
                     </span>
                     <span class="str-eval-confidence">
-                      置信度 {(ev.confidence * 100).toFixed(0)}%
+                      {t('strategies.eval.confidence', {
+                        value: (ev.confidence * 100).toFixed(0),
+                      })}
                     </span>
                   </div>
                   <Show
                     when={hasProAccess()}
                     fallback={
                       <p class="str-eval-locked">
-                        🔒 订阅解锁完整行动步骤与法条引用
+                        {t('strategies.eval.locked')}
                         <button
                           type="button"
                           class="str-eval-locked-btn"
@@ -449,24 +522,27 @@ const StrategiesPage: Component = () => {
                             window.location.hash = 'account';
                           }}
                         >
-                          升级订阅
+                          {t('strategies.eval.upgrade')}
                         </button>
                       </p>
                     }
                   >
                     <Show when={(ev.actionSteps?.length ?? 0) > 0}>
                       <ul class="str-ai-steps">
-                        <For each={ev.actionSteps}>{(step) => <li>{step}</li>}</For>
+                        <For each={pickGuidanceSteps(ev, locale())}>
+                          {(step) => <li>{step}</li>}
+                        </For>
                       </ul>
                     </Show>
                     <Show when={(ev.citations?.length ?? 0) > 0}>
                       <p class="str-eval-cite">
-                        引用:{' '}
-                        {(ev.citations as Array<{ source?: string }>)
-                          .map((cit) =>
-                            typeof cit === 'string' ? cit : (cit.source ?? JSON.stringify(cit)),
-                          )
-                          .join(' · ')}
+                        {t('strategies.eval.citations', {
+                          citations: (ev.citations as Array<{ source?: string }>)
+                            .map((cit) =>
+                              typeof cit === 'string' ? cit : (cit.source ?? JSON.stringify(cit)),
+                            )
+                            .join(' · '),
+                        })}
                       </p>
                     </Show>
                   </Show>
@@ -479,15 +555,12 @@ const StrategiesPage: Component = () => {
         {/* F4 paywall: full AI strategy report (Pro) */}
         <div class="str-ai-section">
           <div class="str-ai-head">
-            <h3 class="str-h3">完整 AI 策略报告</h3>
+            <h3 class="str-h3">{t('strategies.ai.title')}</h3>
             <Show when={hasProAccess()}>
               <span class="str-ai-pro-badge">PRO</span>
             </Show>
           </div>
-          <p class="str-ai-sub">
-            在规则引擎排序之上，由 AI 补充 C 级创造性节税策略（含推理链、法条引用与置信度），
-            并经计算器交叉验证。
-          </p>
+          <p class="str-ai-sub">{t('strategies.ai.subtitle')}</p>
 
           <Show
             when={hasProAccess()}
@@ -495,11 +568,11 @@ const StrategiesPage: Component = () => {
               <div class="str-ai-locked">
                 <PaywallCard
                   me={me() ?? null}
-                  title="完整 AI 策略报告"
+                  title={t('strategies.ai.cardTitle')}
                   bullets={[
-                    'AI 生成的 C 级节税策略（每份报告最多 3 条）',
-                    '推理链 + 法条引用 + 计算器交叉验证',
-                    'H1-H6 六层反幻觉验证管线',
+                    t('strategies.ai.bullet1'),
+                    t('strategies.ai.bullet2'),
+                    t('strategies.ai.bullet3'),
                   ]}
                 />
               </div>
@@ -511,7 +584,9 @@ const StrategiesPage: Component = () => {
               onClick={() => void onAiRecommend()}
               disabled={aiLoading()}
             >
-              {aiLoading() ? '生成中…' : '生成 AI 建议'}
+              {aiLoading()
+                ? t('strategies.ai.action.generating')
+                : t('strategies.ai.action.generate')}
             </button>
             <Show when={aiError()}>
               {(msg) => (
@@ -527,10 +602,14 @@ const StrategiesPage: Component = () => {
                     <div class="str-eval-card">
                       <div class="str-eval-head">
                         <div>
-                          <span class="str-eval-title">{rec.titleZh}</span>
-                          <span class="str-eval-meta">{rec.tier} · AI 生成</span>
+                          <span class="str-eval-title">{pickTitle(rec, locale())}</span>
+                          <span class="str-eval-meta">
+                            {t('strategies.ai.generatedBy', { tier: rec.tier })}
+                          </span>
                         </div>
-                        <span class="str-eval-badge str-eval-applicable">AI 建议</span>
+                        <span class="str-eval-badge str-eval-applicable">
+                          {t('strategies.ai.badge')}
+                        </span>
                       </div>
                       <p class="str-eval-reason">{rec.reasoning}</p>
                       <Show when={rec.actionSteps.length > 0}>
@@ -541,22 +620,31 @@ const StrategiesPage: Component = () => {
                       <div class="str-eval-foot">
                         <span class="str-eval-savings">
                           {rec.estimatedSavingsEur !== null
-                            ? `预计节税 ${eur.format(rec.estimatedSavingsEur)}`
-                            : '预计节税 N/A（需个案分析）'}
+                            ? t('strategies.eval.estimatedSavings', {
+                                amount: eur.format(rec.estimatedSavingsEur),
+                              })
+                            : t('strategies.eval.estimatedSavingsNAIndividual')}
                         </span>
                         <span class="str-eval-confidence">
-                          置信度 {(rec.confidence * 100).toFixed(0)}%
+                          {t('strategies.eval.confidence', {
+                            value: (rec.confidence * 100).toFixed(0),
+                          })}
                         </span>
                       </div>
                       <Show when={rec.citations.length > 0}>
-                        <p class="str-eval-cite">引用: {rec.citations.join(' · ')}</p>
+                        <p class="str-eval-cite">
+                          {t('strategies.eval.citations', { citations: rec.citations.join(' · ') })}
+                        </p>
                       </Show>
                     </div>
                   )}
                 </For>
                 <Show when={aiUsage()}>
                   <p class="str-ai-usage">
-                    本次生成成本 ${(aiUsage()?.cost ?? 0).toFixed(4)} · {recsDisclaimer()}
+                    {t('strategies.ai.usage', {
+                      cost: (aiUsage()?.cost ?? 0).toFixed(4),
+                      disclaimer: t('strategies.ai.disclaimer'),
+                    })}
                   </p>
                 </Show>
               </div>
@@ -567,10 +655,6 @@ const StrategiesPage: Component = () => {
     </div>
   );
 };
-
-function recsDisclaimer(): string {
-  return '所有 AI 建议均带 [AI建议·未经确定性验证] 标注，请咨询税务顾问后采用。';
-}
 
 export default StrategiesPage;
 

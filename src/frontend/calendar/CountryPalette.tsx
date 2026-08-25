@@ -7,10 +7,12 @@
  *
  * Visual: each chip uses the country's brand color as background. The active
  * chip wears a 3px outline ring + slight lift so it's unambiguous which
- * country the next drag will paint.
+ * country the next drag will paint. Labels are locale-aware via the i18n
+ * dictionary (calendar.country.*); colors stay static from COUNTRY_META.
  */
 
 import { type Component, For } from 'solid-js';
+import { t } from '../i18n';
 import { COUNTRIES, COUNTRY_META, ERASE, type PaintTool } from './types';
 
 interface Props {
@@ -20,7 +22,7 @@ interface Props {
 
 const CountryPalette: Component<Props> = (props) => {
   return (
-    <div class="cal-palette" role="radiogroup" aria-label="选择要标记的国家">
+    <div class="cal-palette" role="radiogroup" aria-label={t('calendar.palette.ariaLabel')}>
       <For each={COUNTRIES}>
         {(c) => {
           const meta = COUNTRY_META[c];
@@ -36,9 +38,9 @@ const CountryPalette: Component<Props> = (props) => {
                 color: meta.fg,
               }}
               onClick={() => props.onChange(c)}
-              title={`点击后拖动日历，把日期标记为 ${meta.label}`}
+              title={t('calendar.palette.chipTitle', { label: t(`calendar.country.${c}`) })}
             >
-              {meta.label}
+              {t(`calendar.country.${c}`)}
             </button>
           );
         }}
@@ -49,9 +51,9 @@ const CountryPalette: Component<Props> = (props) => {
         aria-checked={props.current === ERASE}
         class={`cal-chip cal-chip-erase ${props.current === ERASE ? 'cal-chip-active' : ''}`}
         onClick={() => props.onChange(ERASE)}
-        title="橡皮擦：拖动后将删除已标记的日期"
+        title={t('calendar.palette.eraseTitle')}
       >
-        ✕ 清除
+        {t('calendar.palette.erase')}
       </button>
     </div>
   );

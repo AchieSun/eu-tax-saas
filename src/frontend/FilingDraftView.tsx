@@ -35,6 +35,7 @@ import {
   type RenderResult,
   SUPPORTED_FORMS,
 } from './filing/types';
+import { t } from './i18n';
 import PaywallCard, { paywallStyles } from './paywall/PaywallCard';
 import { fetchMe, isPro } from './paywall/api';
 
@@ -93,19 +94,19 @@ function humanizeKey(key: string): string {
     .join(' ');
 }
 
-/** Translate a thrown render error into a friendly Chinese+English banner. */
+/** Translate a thrown render error into a locale-aware friendly banner. */
 function friendlyRenderError(err: Error & { retryAfter?: string }): string {
   switch (err.message) {
     case 'UNAUTHORIZED':
-      return '请先登录 (Please sign in to generate drafts).';
+      return t('filing.error.unauthorized');
     case 'RATE_LIMITED':
-      return `已超过今日生成上限 (10/day). 请在 ${err.retryAfter ?? '?'} 秒后重试.`;
+      return t('filing.error.rateLimited', { retryAfter: err.retryAfter ?? '?' });
     case 'SUBSCRIPTION_REQUIRED':
-      return '无水印 PDF 为 Pro 会员功能 (Watermark-free PDF is a Pro feature). 升级后解锁.';
+      return t('filing.error.subscriptionRequired');
     case 'FORM_NOT_FOUND':
-      return '未找到该表格映射 (Form mapping not found).';
+      return t('filing.error.formNotFound');
     case 'NO_ACTIVE_FIELDS':
-      return '该表格暂无可用字段 (No active fields for this form).';
+      return t('filing.error.noActiveFields');
     default:
       return err.message;
   }
@@ -114,9 +115,9 @@ function friendlyRenderError(err: Error & { retryAfter?: string }): string {
 function friendlyMetadataError(err: Error): string {
   switch (err.message) {
     case 'UNAUTHORIZED':
-      return '请先登录 (Please sign in to load form definitions).';
+      return t('filing.error.metadata.unauthorized');
     case 'FORM_NOT_FOUND':
-      return '未找到该表格映射 (Form mapping not found).';
+      return t('filing.error.metadata.formNotFound');
     default:
       return err.message;
   }
@@ -332,11 +333,9 @@ const FilingDraftView: Component = () => {
       {/* Header ────────────────────────────────────────────────────────── */}
       <header>
         <h2 style={{ margin: '0 0 0.25rem', 'font-size': '1.5rem', 'font-weight': 700 }}>
-          税务草稿生成 (Filing Draft)
+          {t('filing.title')}
         </h2>
-        <p style={{ margin: 0, color: '#6b7280', 'font-size': '0.9rem' }}>
-          Generate a fillable PDF draft of your tax filing.
-        </p>
+        <p style={{ margin: 0, color: '#6b7280', 'font-size': '0.9rem' }}>{t('filing.subtitle')}</p>
       </header>
 
       {/* Picker row ──────────────────────────────────────────────────── */}
@@ -344,7 +343,7 @@ const FilingDraftView: Component = () => {
         <div class="filing-picker-row">
           <div class="filing-picker-cell">
             <label for="filing-country" class="filing-label">
-              Country
+              {t('filing.picker.country')}
             </label>
             <select
               id="filing-country"
@@ -357,7 +356,7 @@ const FilingDraftView: Component = () => {
           </div>
           <div class="filing-picker-cell">
             <label for="filing-year" class="filing-label">
-              Year
+              {t('filing.picker.year')}
             </label>
             <select
               id="filing-year"
@@ -370,7 +369,7 @@ const FilingDraftView: Component = () => {
           </div>
           <div class="filing-picker-cell" style={{ flex: 2 }}>
             <label for="filing-form" class="filing-label">
-              Form
+              {t('filing.picker.form')}
             </label>
             <select
               id="filing-form"
@@ -388,7 +387,7 @@ const FilingDraftView: Component = () => {
               onClick={loadFields}
               disabled={metadataLoading()}
             >
-              {metadataLoading() ? '加载中…' : 'Load fields'}
+              {metadataLoading() ? t('filing.picker.loading') : t('filing.picker.loadFields')}
             </button>
           </div>
         </div>
@@ -415,21 +414,20 @@ const FilingDraftView: Component = () => {
               }}
             >
               <h3 style={{ margin: 0, 'font-size': '1.05rem', 'font-weight': 600 }}>
-                字段编辑 (Edit fields)
+                {t('filing.fields.title')}
               </h3>
               <span style={{ 'font-size': '0.75rem', color: '#6b7280' }}>
-                {meta().fields.length} field(s) · mapping v{meta().version} ·{' '}
-                {meta().contentHash.slice(0, 8)}
+                {t('filing.fields.count', {
+                  count: meta().fields.length,
+                  version: meta().version,
+                  hash: meta().contentHash.slice(0, 8),
+                })}
               </span>
             </div>
 
             <Show
               when={meta().fields.length > 0}
-              fallback={
-                <p style={{ color: '#6b7280', margin: 0 }}>
-                  该表格暂无字段定义 (No fields defined for this form).
-                </p>
-              }
+              fallback={<p style={{ color: '#6b7280', margin: 0 }}>{t('filing.fields.empty')}</p>}
             >
               <div class="filing-field-grid">
                 <For each={meta().fields}>{renderField}</For>
@@ -444,9 +442,7 @@ const FilingDraftView: Component = () => {
               <Show
                 when={hasProAccess()}
                 fallback={
-                  <span class="filing-watermark-disabled">
-                    Drafts are always watermarked — watermark-free PDFs are a Pro feature.
-                  </span>
+                  <span class="filing-watermark-disabled">{t('filing.watermark.disabled')}</span>
                 }
               >
                 <label class="filing-watermark-toggle">
@@ -455,7 +451,7 @@ const FilingDraftView: Component = () => {
                     checked={includeWatermark()}
                     onChange={(e) => setIncludeWatermark(e.currentTarget.checked)}
                   />
-                  Include DRAFT watermark
+                  {t('filing.watermark.toggle')}
                 </label>
               </Show>
               <button
@@ -464,7 +460,7 @@ const FilingDraftView: Component = () => {
                 onClick={generateDraft}
                 disabled={renderLoading() || meta().fields.length === 0}
               >
-                {renderLoading() ? '生成中…' : 'Generate Draft PDF'}
+                {renderLoading() ? t('filing.action.generating') : t('filing.action.generate')}
               </button>
             </div>
 
@@ -481,11 +477,11 @@ const FilingDraftView: Component = () => {
               <div class="filing-paywall-row">
                 <PaywallCard
                   me={me() ?? null}
-                  title="无水印 PDF 生成"
+                  title={t('filing.paywall.title')}
                   bullets={[
-                    '生成可直接提交的干净 PDF（无 DRAFT 水印）',
-                    '每日 10 次生成额度',
-                    '全部五国表格模板',
+                    t('filing.paywall.bullet1'),
+                    t('filing.paywall.bullet2'),
+                    t('filing.paywall.bullet3'),
                   ]}
                 />
               </div>
@@ -506,14 +502,14 @@ const FilingDraftView: Component = () => {
             }}
           >
             <h3 style={{ margin: 0, 'font-size': '1.05rem', 'font-weight': 600 }}>
-              预览 (Preview)
+              {t('filing.preview.title')}
             </h3>
             <button type="button" class="filing-btn-secondary" onClick={onDownload}>
-              Download PDF
+              {t('filing.action.download')}
             </button>
           </div>
           <iframe
-            title="Generated tax draft PDF"
+            title={t('filing.preview.iframeTitle')}
             src={previewUrl() ?? ''}
             style={{
               width: '100%',
@@ -533,8 +529,12 @@ const FilingDraftView: Component = () => {
                     color: '#6b7280',
                   }}
                 >
-                  Filled {r().filledFields} field(s) · {r().warnings} warning(s) · mapping v
-                  {r().mappingVersion} ({r().mappingHash.slice(0, 8)})
+                  {t('filing.preview.filled', {
+                    filled: r().filledFields,
+                    warnings: r().warnings,
+                    version: r().mappingVersion,
+                    hash: r().mappingHash.slice(0, 8),
+                  })}
                 </p>
                 {/* Oracle P1-4 (W4 review): per-warning detail panel — yellow border */}
                 <Show when={r().warningDetail && (r().warningDetail?.items.length ?? 0) > 0}>
@@ -555,8 +555,15 @@ const FilingDraftView: Component = () => {
                         }}
                       >
                         <div style={{ 'font-weight': 600, 'margin-bottom': '0.5rem' }}>
-                          {wd.total} field warning(s)
-                          {wd.truncated ? ` — showing first ${wd.items.length} of ${wd.total}` : ''}
+                          {t('filing.preview.warningDetail', {
+                            total: wd.total,
+                            truncated: wd.truncated
+                              ? t('filing.preview.warningTruncated', {
+                                  shown: wd.items.length,
+                                  total: wd.total,
+                                })
+                              : '',
+                          })}
                         </div>
                         <ul
                           style={{

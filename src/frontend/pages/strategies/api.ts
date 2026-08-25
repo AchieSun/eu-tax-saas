@@ -40,6 +40,9 @@ export interface StrategyCatalogItem {
   category: string;
   titleZh: string;
   descriptionZh: string;
+  /** Optional English pair (emitted once t4 lands); UI falls back to Zh. */
+  titleEn?: string;
+  descriptionEn?: string;
   eligibility: string;
   citation: string;
 }
@@ -70,10 +73,18 @@ export interface StrategyEvaluation {
   tier: string;
   category: string;
   titleZh: string;
+  /** Optional English pair (emitted once t4 lands); UI falls back to Zh. */
+  titleEn?: string;
+  /** Chinese description - doubles as the Pro guidance step (actionSteps[0]). */
+  descriptionZh?: string;
+  /** English parallel of descriptionZh (t4); UI falls back to Zh. */
+  descriptionEn?: string;
   /** Free view: `null` (server trims it). Pro view: full citation object. */
   citation: unknown;
   applicable: boolean;
   reason: string;
+  /** English parallel of reason (t4 contract: present on every row). */
+  reasonEn?: string;
   confidence: number;
   estimatedSavingsEur: number | null;
   /** Free view: `[]` (server trims). Pro view: guidance steps. */
@@ -153,6 +164,8 @@ export interface AiRecommendation {
   id: string;
   tier: string;
   titleZh: string;
+  /** Optional English pair (emitted once t4 lands); UI falls back to Zh. */
+  titleEn?: string;
   reasoning: string;
   confidence: number;
   estimatedSavingsEur: number | null;
@@ -173,8 +186,16 @@ export interface AiRecommendOk {
  * POST /api/strategies/ai-recommend — Pro-gated. Throws
  * SubscriptionRequiredError on 402 so the caller can show the paywall.
  */
-export async function aiRecommendStrategies(input: CalculatorInput): Promise<AiRecommendOk> {
-  const res = await fetch('/api/strategies/ai-recommend', {
+export async function aiRecommendStrategies(
+  input: CalculatorInput,
+  lang?: 'zh' | 'en',
+): Promise<AiRecommendOk> {
+  // t5 integration fix: `lang` mirrors the UI locale so the backend's
+  // single-string aiDisclaimer switches to English when 'en'. Omitted /
+  // 'zh' keeps the default zh disclaimer and the param-free URL.
+  const url =
+    lang === 'en' ? '/api/strategies/ai-recommend?lang=en' : '/api/strategies/ai-recommend';
+  const res = await fetch(url, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...XHR_HEADERS },

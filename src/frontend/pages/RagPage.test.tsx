@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLocale, t } from '../i18n';
 import RagPage from './RagPage';
 import { askQuestion } from './rag/api';
 
@@ -25,6 +26,18 @@ afterEach(() => {
 describe('RagPage component', () => {
   it('exports a default Solid component', () => {
     expect(typeof RagPage).toBe('function');
+  });
+});
+
+describe('RagPage i18n', () => {
+  it('switches copy between zh and en locales', () => {
+    setLocale('zh');
+    expect(t('rag.title')).toBe('税法问答 (RAG)');
+    expect(t('rag.option.DE')).toBe('德国 DE');
+
+    setLocale('en');
+    expect(t('rag.title')).toBe('Tax-law Q&A (RAG)');
+    expect(t('rag.option.DE')).toBe('Germany DE');
   });
 });
 

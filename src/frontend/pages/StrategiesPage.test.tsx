@@ -3,7 +3,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import StrategiesPage from './StrategiesPage';
+import { setLocale, t } from '../i18n';
+import StrategiesPage, { pickGuidanceSteps, pickReason } from './StrategiesPage';
 import {
   SubscriptionRequiredError,
   aiRecommendStrategies,
@@ -30,6 +31,54 @@ afterEach(() => {
 describe('StrategiesPage component', () => {
   it('exports a default Solid component', () => {
     expect(typeof StrategiesPage).toBe('function');
+  });
+});
+
+describe('StrategiesPage i18n', () => {
+  it('switches copy between zh and en locales', () => {
+    setLocale('zh');
+    expect(t('strategies.title')).toBe('节税策略 (Strategies)');
+    expect(t('strategies.eval.baseline.taxOwed')).toBe('应纳税额');
+
+    setLocale('en');
+    expect(t('strategies.title')).toBe('Tax-saving strategies');
+    expect(t('strategies.eval.baseline.taxOwed')).toBe('Tax owed');
+  });
+
+  it('interpolates estimated savings with the localized amount slot', () => {
+    setLocale('zh');
+    expect(t('strategies.eval.estimatedSavings', { amount: '€500' })).toBe('预计节税 €500');
+    setLocale('en');
+    expect(t('strategies.eval.estimatedSavings', { amount: '€500' })).toBe('Est. savings €500');
+  });
+});
+
+describe('bilingual evaluation pickers (t5 integration fixes A + B)', () => {
+  it('pickReason returns reasonEn in the en locale and falls back to zh', () => {
+    const row = {
+      reason: '可抵扣部分工作支出',
+      reasonEn: 'Some employment expenses are deductible',
+    };
+    expect(pickReason(row, 'en')).toBe('Some employment expenses are deductible');
+    expect(pickReason(row, 'zh')).toBe('可抵扣部分工作支出');
+    // Missing English pair (older backend / trimmed row) falls back to zh.
+    expect(pickReason({ reason: '只有中文理由' }, 'en')).toBe('只有中文理由');
+  });
+
+  it('pickGuidanceSteps swaps the descriptionZh guidance step for descriptionEn in en', () => {
+    const ev = {
+      actionSteps: ['德国工作支出扣除指引'],
+      descriptionZh: '德国工作支出扣除指引',
+      descriptionEn: 'German employment-expense deduction guidance',
+    };
+    expect(pickGuidanceSteps(ev, 'en')).toEqual(['German employment-expense deduction guidance']);
+    expect(pickGuidanceSteps(ev, 'zh')).toEqual(['德国工作支出扣除指引']);
+    // Steps that are NOT the description (AI recommendations) pass through.
+    const ai = { actionSteps: ['step1', 'step2'], descriptionZh: 'x', descriptionEn: 'y' };
+    expect(pickGuidanceSteps(ai, 'en')).toEqual(['step1', 'step2']);
+    // Missing descriptionEn falls back to the zh guidance untouched.
+    const noEn = { actionSteps: ['指引'], descriptionZh: '指引' };
+    expect(pickGuidanceSteps(noEn, 'en')).toEqual(['指引']);
   });
 });
 
@@ -181,6 +230,44 @@ describe('aiRecommendStrategies (F4 paywall client)', () => {
     });
     expect(result.recommendations).toHaveLength(1);
     expect(result.usage.cost).toBe(0.001);
+  });
+
+  // t5 integration fix D: the EN locale must ask for the English
+  // aiDisclaimer (single-string field, switched server-side by ?lang=en).
+  it('appends ?lang=en when called with the en locale', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        baseline: { country: 'DE', taxYear: 2025, taxOwed: 12000 },
+        recommendations: [],
+        warnings: [],
+        usage: { promptTokens: 0, completionTokens: 0, cost: 0 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await aiRecommendStrategies(input, 'en');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/strategies/ai-recommend?lang=en',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    // The zh default keeps the legacy param-free URL.
+    const fetchMockZh = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        baseline: { country: 'DE', taxYear: 2025, taxOwed: 12000 },
+        recommendations: [],
+        warnings: [],
+        usage: { promptTokens: 0, completionTokens: 0, cost: 0 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMockZh);
+    await aiRecommendStrategies(input, 'zh');
+    expect(fetchMockZh).toHaveBeenCalledWith(
+      '/api/strategies/ai-recommend',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('throws SubscriptionRequiredError with feature slug on 402', async () => {

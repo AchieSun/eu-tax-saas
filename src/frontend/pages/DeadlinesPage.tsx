@@ -13,7 +13,7 @@ import {
   type DeadlineCategory,
   type DeadlineStatus,
 } from '../../deadlines/types';
-import { COUNTRY_META } from '../calendar/types';
+import { t } from '../i18n';
 import {
   type Deadline,
   completeDeadline,
@@ -27,35 +27,21 @@ import {
 const COUNTRIES = ['DE', 'NL', 'PT', 'ES', 'UK'] as const;
 const YEARS = [2024, 2025, 2026];
 
-const STATUS_LABELS: Record<DeadlineStatus, string> = {
-  pending: '待办',
-  completed: '已完成',
-  snoozed: '已延后',
-  dismissed: '已忽略',
-};
+function fmtMonth(isoMonth: string): string {
+  const [y, m] = isoMonth.split('-');
+  return t('deadlines.month.format', { y, m });
+}
 
-const CATEGORY_LABELS: Record<DeadlineCategory, string> = {
-  tax_filing: '纳税申报',
-  payment: '缴款',
-  document: '资料',
-  milestone: '节点',
-  other: '其他',
-};
-
+/** Map an API error code to a locale-aware friendly message. */
 function friendlyError(err: Error): string {
   switch (err.message) {
     case 'UNAUTHORIZED':
-      return '请先登录 (Please sign in).';
+      return t('deadlines.error.unauthorized');
     case 'NOT_FOUND':
-      return '该事项不存在或已被删除。';
+      return t('deadlines.error.notFound');
     default:
       return err.message;
   }
-}
-
-function fmtMonth(isoMonth: string): string {
-  const [y, m] = isoMonth.split('-');
-  return `${y}年${m}月`;
 }
 
 function todayISO(): string {
@@ -76,12 +62,23 @@ function addDaysISO(date: string, days: number): string {
 }
 
 function statusLabel(s: string): string {
-  return STATUS_LABELS[s as DeadlineStatus] ?? s;
+  const key = `deadlines.status.${s}`;
+  const label = t(key);
+  return label === key ? s : label;
 }
 
 function categoryLabel(s: string): string {
-  return CATEGORY_LABELS[s as DeadlineCategory] ?? s;
+  const key = `deadlines.category.${s}`;
+  const label = t(key);
+  return label === key ? s : label;
 }
+
+/** Locale-aware country label ('德国 DE' / 'Germany DE'). */
+const countryLabel = (c: string) => {
+  const key = `calendar.country.${c}`;
+  const label = t(key);
+  return label === key ? c : label;
+};
 
 const DeadlinesPage: Component = () => {
   const [items, setItems] = createSignal<Deadline[]>([]);
@@ -171,7 +168,7 @@ const DeadlinesPage: Component = () => {
   }
 
   async function onDelete(id: string) {
-    if (!confirm('确定要删除这条事项吗？')) return;
+    if (!confirm(t('deadlines.confirm.delete'))) return;
     setError(null);
     try {
       await deleteDeadline(id);
@@ -189,7 +186,7 @@ const DeadlinesPage: Component = () => {
     setError(null);
     try {
       const count = await seedDeadlines(year, jurisdictions);
-      alert(`已生成 ${count} 条系统截止事项`);
+      alert(t('deadlines.alert.seeded', { count }));
       await loadItems();
     } catch (err) {
       setError(friendlyError(err instanceof Error ? err : new Error(String(err))));
@@ -215,8 +212,8 @@ const DeadlinesPage: Component = () => {
       <style>{styles}</style>
 
       <header class="dl-hero">
-        <h1 class="dl-h1">税务截止日 (Deadlines)</h1>
-        <p class="dl-sub">跟踪各国纳税申报、缴款与资料提交的截止日期。</p>
+        <h1 class="dl-h1">{t('deadlines.title')}</h1>
+        <p class="dl-sub">{t('deadlines.subtitle')}</p>
       </header>
 
       <Show when={error()}>
@@ -224,7 +221,7 @@ const DeadlinesPage: Component = () => {
           <div class="dl-error" role="alert">
             <span>⚠️ {msg()}</span>
             <button type="button" class="dl-btn dl-btn-ghost" onClick={() => setError(null)}>
-              清除
+              {t('deadlines.error.clear')}
             </button>
           </div>
         )}
@@ -233,23 +230,23 @@ const DeadlinesPage: Component = () => {
       {/* Filters */}
       <section class="dl-panel">
         <div class="dl-section-head">
-          <h2 class="dl-h2">筛选</h2>
+          <h2 class="dl-h2">{t('deadlines.filter.title')}</h2>
           <div class="dl-actions">
             <button
               type="button"
               class="dl-btn dl-btn-outline"
               onClick={() => setShowCreate((s) => !s)}
             >
-              {showCreate() ? '取消' : '新增事项'}
+              {showCreate() ? t('deadlines.action.cancel') : t('deadlines.action.create')}
             </button>
             <button type="button" class="dl-btn dl-btn-secondary" onClick={() => void onSeed()}>
-              生成系统截止日
+              {t('deadlines.action.seed')}
             </button>
           </div>
         </div>
         <div class="dl-filter-grid">
           <div class="dl-field">
-            <label for="dl-filter-year">年度</label>
+            <label for="dl-filter-year">{t('deadlines.filter.year')}</label>
             <select
               id="dl-filter-year"
               class="dl-input"
@@ -262,44 +259,42 @@ const DeadlinesPage: Component = () => {
             </select>
           </div>
           <div class="dl-field">
-            <label for="dl-filter-status">状态</label>
+            <label for="dl-filter-status">{t('deadlines.filter.status')}</label>
             <select
               id="dl-filter-status"
               class="dl-input"
               value={filterStatus()}
               onChange={(e) => setFilterStatus(e.currentTarget.value as DeadlineStatus | '')}
             >
-              <option value="">全部</option>
+              <option value="">{t('deadlines.filter.all')}</option>
               <For each={DEADLINE_STATUSES}>
-                {(s) => <option value={s}>{STATUS_LABELS[s]}</option>}
+                {(s) => <option value={s}>{statusLabel(s)}</option>}
               </For>
             </select>
           </div>
           <div class="dl-field">
-            <label for="dl-filter-jurisdiction">国家</label>
+            <label for="dl-filter-jurisdiction">{t('deadlines.filter.country')}</label>
             <select
               id="dl-filter-jurisdiction"
               class="dl-input"
               value={filterJurisdiction()}
               onChange={(e) => setFilterJurisdiction(e.currentTarget.value)}
             >
-              <option value="">全部</option>
-              <For each={COUNTRIES}>
-                {(c) => <option value={c}>{COUNTRY_META[c].label}</option>}
-              </For>
+              <option value="">{t('deadlines.filter.all')}</option>
+              <For each={COUNTRIES}>{(c) => <option value={c}>{countryLabel(c)}</option>}</For>
             </select>
           </div>
           <div class="dl-field">
-            <label for="dl-filter-category">类别</label>
+            <label for="dl-filter-category">{t('deadlines.filter.category')}</label>
             <select
               id="dl-filter-category"
               class="dl-input"
               value={filterCategory()}
               onChange={(e) => setFilterCategory(e.currentTarget.value as DeadlineCategory | '')}
             >
-              <option value="">全部</option>
+              <option value="">{t('deadlines.filter.all')}</option>
               <For each={DEADLINE_CATEGORIES}>
-                {(c) => <option value={c}>{CATEGORY_LABELS[c]}</option>}
+                {(c) => <option value={c}>{categoryLabel(c)}</option>}
               </For>
             </select>
           </div>
@@ -309,11 +304,11 @@ const DeadlinesPage: Component = () => {
       {/* Create form */}
       <Show when={showCreate()}>
         <section class="dl-panel">
-          <h2 class="dl-h2">新增事项</h2>
+          <h2 class="dl-h2">{t('deadlines.form.title')}</h2>
           <form onSubmit={onCreate}>
             <div class="dl-form-grid">
               <div class="dl-field">
-                <label for="dl-create-title">标题 *</label>
+                <label for="dl-create-title">{t('deadlines.form.itemTitle')} *</label>
                 <input
                   id="dl-create-title"
                   class="dl-input"
@@ -324,20 +319,18 @@ const DeadlinesPage: Component = () => {
                 />
               </div>
               <div class="dl-field">
-                <label for="dl-create-jurisdiction">国家 *</label>
+                <label for="dl-create-jurisdiction">{t('deadlines.form.jurisdiction')} *</label>
                 <select
                   id="dl-create-jurisdiction"
                   class="dl-input"
                   value={createJurisdiction()}
                   onChange={(e) => setCreateJurisdiction(e.currentTarget.value)}
                 >
-                  <For each={COUNTRIES}>
-                    {(c) => <option value={c}>{COUNTRY_META[c].label}</option>}
-                  </For>
+                  <For each={COUNTRIES}>{(c) => <option value={c}>{countryLabel(c)}</option>}</For>
                 </select>
               </div>
               <div class="dl-field">
-                <label for="dl-create-year">年度 *</label>
+                <label for="dl-create-year">{t('deadlines.form.year')} *</label>
                 <select
                   id="dl-create-year"
                   class="dl-input"
@@ -348,7 +341,7 @@ const DeadlinesPage: Component = () => {
                 </select>
               </div>
               <div class="dl-field">
-                <label for="dl-create-due">截止日 *</label>
+                <label for="dl-create-due">{t('deadlines.form.dueDate')} *</label>
                 <input
                   id="dl-create-due"
                   class="dl-input"
@@ -359,7 +352,7 @@ const DeadlinesPage: Component = () => {
                 />
               </div>
               <div class="dl-field">
-                <label for="dl-create-category">类别 *</label>
+                <label for="dl-create-category">{t('deadlines.form.category')} *</label>
                 <select
                   id="dl-create-category"
                   class="dl-input"
@@ -367,12 +360,12 @@ const DeadlinesPage: Component = () => {
                   onChange={(e) => setCreateCategory(e.currentTarget.value as DeadlineCategory)}
                 >
                   <For each={DEADLINE_CATEGORIES}>
-                    {(c) => <option value={c}>{CATEGORY_LABELS[c]}</option>}
+                    {(c) => <option value={c}>{categoryLabel(c)}</option>}
                   </For>
                 </select>
               </div>
               <div class="dl-field">
-                <label for="dl-create-reminder">提前提醒 (天)</label>
+                <label for="dl-create-reminder">{t('deadlines.form.reminderDays')}</label>
                 <input
                   id="dl-create-reminder"
                   class="dl-input"
@@ -384,7 +377,7 @@ const DeadlinesPage: Component = () => {
                 />
               </div>
               <div class="dl-field dl-field-wide">
-                <label for="dl-create-desc">说明</label>
+                <label for="dl-create-desc">{t('deadlines.form.description')}</label>
                 <input
                   id="dl-create-desc"
                   class="dl-input"
@@ -396,7 +389,7 @@ const DeadlinesPage: Component = () => {
             </div>
             <div class="dl-actions">
               <button type="submit" class="dl-btn dl-btn-primary">
-                保存
+                {t('deadlines.action.save')}
               </button>
             </div>
           </form>
@@ -406,18 +399,18 @@ const DeadlinesPage: Component = () => {
       {/* List */}
       <section class="dl-panel">
         <div class="dl-section-head">
-          <h2 class="dl-h2">事项列表</h2>
-          <span class="dl-count">{items().length} 条</span>
+          <h2 class="dl-h2">{t('deadlines.list.title')}</h2>
+          <span class="dl-count">{t('deadlines.list.count', { count: items().length })}</span>
         </div>
 
         <Show when={loading()}>
-          <div class="dl-skel-list" aria-busy="true" aria-label="加载中">
+          <div class="dl-skel-list" aria-busy="true" aria-label={t('deadlines.list.loading')}>
             <For each={[0, 1, 2]}>{() => <div class="dl-skel-row" />}</For>
           </div>
         </Show>
 
         <Show when={!loading() && items().length === 0}>
-          <p class="dl-empty">暂无匹配事项。可点击「生成系统截止日」或「新增事项」。</p>
+          <p class="dl-empty">{t('deadlines.list.empty')}</p>
         </Show>
 
         <Show when={!loading() && items().length > 0}>
@@ -479,8 +472,10 @@ function DeadlineItem(props: DeadlineItemProps) {
             <span class="dl-item-category">{categoryLabel(props.item.category)}</span>
           </div>
           <div class="dl-item-meta">
-            <span>截止: {props.item.dueDate}</span>
-            <Show when={props.item.snoozedUntil}>{(d) => <span>延后至: {d()}</span>}</Show>
+            <span>{t('deadlines.item.due', { date: props.item.dueDate })}</span>
+            <Show when={props.item.snoozedUntil}>
+              {(d) => <span>{t('deadlines.item.snoozedUntil', { date: d() })}</span>}
+            </Show>
             <Show when={props.item.description}>
               {(desc) => <span class="dl-item-desc">{desc()}</span>}
             </Show>
@@ -493,7 +488,7 @@ function DeadlineItem(props: DeadlineItemProps) {
               class="dl-btn dl-btn-small dl-btn-success"
               onClick={() => void props.onComplete(props.item.id)}
             >
-              完成
+              {t('deadlines.action.complete')}
             </button>
           </Show>
           <button
@@ -501,20 +496,20 @@ function DeadlineItem(props: DeadlineItemProps) {
             class="dl-btn dl-btn-small dl-btn-outline"
             onClick={() => setExpanded((e) => !e)}
           >
-            {expanded() ? '收起' : '延后'}
+            {expanded() ? t('deadlines.action.collapse') : t('deadlines.action.snooze')}
           </button>
           <button
             type="button"
             class="dl-btn dl-btn-small dl-btn-danger"
             onClick={() => props.onDelete(props.item.id)}
           >
-            删除
+            {t('deadlines.action.delete')}
           </button>
         </div>
       </div>
       <Show when={expanded()}>
         <div class="dl-snooze-row">
-          <label for={`dl-snooze-${props.item.id}`}>延后至:</label>
+          <label for={`dl-snooze-${props.item.id}`}>{t('deadlines.item.snoozeUntil')}</label>
           <input
             id={`dl-snooze-${props.item.id}`}
             class="dl-input"
@@ -527,7 +522,7 @@ function DeadlineItem(props: DeadlineItemProps) {
             class="dl-btn dl-btn-small dl-btn-primary"
             onClick={() => void props.onSnooze(props.item.id, snoozeDate())}
           >
-            确认延后
+            {t('deadlines.action.confirmSnooze')}
           </button>
         </div>
       </Show>

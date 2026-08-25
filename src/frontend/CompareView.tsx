@@ -19,6 +19,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import type { Country } from '../rules/common/types';
+import { t } from './i18n';
 
 // ───────────────────────── types ─────────────────────────
 
@@ -52,12 +53,12 @@ interface FetchKey {
   income: number;
 }
 
-const COUNTRY_META: Record<Country, { flag: string; label: string }> = {
-  DE: { flag: '🇩🇪', label: 'Germany' },
-  NL: { flag: '🇳🇱', label: 'Netherlands' },
-  PT: { flag: '🇵🇹', label: 'Portugal' },
-  ES: { flag: '🇪🇸', label: 'Spain (Madrid)' },
-  UK: { flag: '🇬🇧', label: 'United Kingdom (E/W/NI)' },
+const COUNTRY_META: Record<Country, { flag: string; labelKey: string }> = {
+  DE: { flag: '🇩🇪', labelKey: 'compare.country.DE' },
+  NL: { flag: '🇳🇱', labelKey: 'compare.country.NL' },
+  PT: { flag: '🇵🇹', labelKey: 'compare.country.PT' },
+  ES: { flag: '🇪🇸', labelKey: 'compare.country.ES' },
+  UK: { flag: '🇬🇧', labelKey: 'compare.country.UK' },
 };
 
 // ───────────────────────── helpers ─────────────────────────
@@ -162,9 +163,9 @@ const CompareView: Component = () => {
 
   const errorMessage = createMemo<string | null>(() => {
     const err = data.error as Error | undefined;
-    if (err) return err.message || 'Network error';
+    if (err) return err.message || t('compare.error.network');
     const d = data();
-    if (d && d.ok === false) return d.error || 'Calculation failed';
+    if (d && d.ok === false) return d.error || t('compare.error.calcFailed');
     return null;
   });
 
@@ -174,22 +175,17 @@ const CompareView: Component = () => {
 
       {/* Hero */}
       <header class="cv-hero">
-        <h1 class="cv-h1">Compare your tax across 5 European countries</h1>
-        <p class="cv-sub">
-          Side-by-side IRPF / IRS / EStG / Box 1 / Income Tax using official 2025 rates from AEAT,
-          AT, BMF, Belastingdienst and HMRC. Salary, single filer, no special regime.
-        </p>
+        <h1 class="cv-h1">{t('compare.title')}</h1>
+        <p class="cv-sub">{t('compare.subtitle')}</p>
         <p class="cv-disclaimer" role="note">
-          ⚖️ <strong>Estimate only — not tax advice.</strong> Figures are informational and may be
-          inaccurate for your situation. Always confirm with a qualified tax advisor before filing.
-          We don't store this calculation.
+          {t('compare.disclaimer')}
         </p>
       </header>
 
       {/* Income input */}
       <section class="cv-input-card">
         <label class="cv-label" for="cv-income">
-          Annual gross income (€)
+          {t('compare.input.label')}
         </label>
         <div class="cv-input-row">
           <input
@@ -215,13 +211,13 @@ const CompareView: Component = () => {
             class="cv-btn cv-btn-primary"
             onClick={onCompare}
             disabled={!incomeValid() || data.loading}
-            aria-label="Compare tax across all 5 countries"
+            aria-label={t('compare.input.ariaLabel')}
           >
-            {data.loading ? 'Calculating…' : 'Compare countries'}
+            {data.loading ? t('compare.button.calculating') : t('compare.button.compare')}
           </button>
         </div>
         <p id="cv-income-help" class="cv-help">
-          Enter a positive whole number. Default €60,000.
+          {t('compare.input.help')}
         </p>
       </section>
 
@@ -234,9 +230,9 @@ const CompareView: Component = () => {
               type="button"
               class="cv-btn cv-btn-ghost"
               onClick={onCompare}
-              aria-label="Retry comparison"
+              aria-label={t('compare.button.retryAria')}
             >
-              Retry
+              {t('compare.button.retry')}
             </button>
           </div>
         )}
@@ -244,7 +240,7 @@ const CompareView: Component = () => {
 
       {/* Loading skeletons */}
       <Show when={data.loading}>
-        <div class="cv-grid" aria-busy="true" aria-label="Loading results">
+        <div class="cv-grid" aria-busy="true" aria-label={t('compare.loading.ariaLabel')}>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
               <div class="cv-card cv-card-skel">
@@ -263,7 +259,7 @@ const CompareView: Component = () => {
       <Show when={!data.loading && !errorMessage() && trigger() === 0}>
         <div class="cv-empty">
           <span class="cv-empty-emoji">📊</span>
-          <p>Enter your income above to compare 5 European tax regimes side-by-side.</p>
+          <p>{t('compare.empty')}</p>
         </div>
       </Show>
 
@@ -271,54 +267,57 @@ const CompareView: Component = () => {
       <Show when={!data.loading && !errorMessage() && sortedResults().length > 0}>
         <section
           class="cv-grid"
-          aria-label={`Tax comparison for ${eur.format(income())} gross income`}
+          aria-label={t('compare.results.ariaLabel', { income: eur.format(income()) })}
         >
           <For each={sortedResults()}>
             {(r) => {
               const meta = COUNTRY_META[r.country];
               const tax = pickTax(r);
               const isCheapest = r.country === cheapestCountry();
+              const countryLabel = () => t(meta.labelKey);
               return (
                 <article
                   class={`cv-card ${isCheapest ? 'cv-card-best' : ''}`}
-                  aria-label={`${meta.label} tax result`}
+                  aria-label={t('compare.card.ariaLabel', { country: countryLabel() })}
                 >
                   <Show when={isCheapest}>
-                    <span class="cv-badge">Lowest tax</span>
+                    <span class="cv-badge">{t('compare.card.lowestTax')}</span>
                   </Show>
                   <header class="cv-card-head">
                     <span class="cv-flag" aria-hidden="true">
                       {meta.flag}
                     </span>
-                    <span class="cv-country">{meta.label}</span>
+                    <span class="cv-country">{countryLabel()}</span>
                   </header>
-                  <div class="cv-total" title="Total tax owed">
+                  <div class="cv-total" title={t('compare.panel.title.totalTax')}>
                     {eur.format(tax)}
                   </div>
-                  <div class="cv-net">Net: {eur.format(income() - tax)}</div>
+                  <div class="cv-net">
+                    {t('compare.card.net', { amount: eur.format(income() - tax) })}
+                  </div>
                   <dl class="cv-stats">
                     <div>
-                      <dt>Effective</dt>
+                      <dt>{t('compare.card.effective')}</dt>
                       <dd>{pct(r.effectiveRate)}</dd>
                     </div>
                     <div>
-                      <dt>Marginal</dt>
+                      <dt>{t('compare.card.marginal')}</dt>
                       <dd>{pct(r.marginalRate)}</dd>
                     </div>
                   </dl>
                   <Show when={r.provisional}>
-                    <p class="cv-prov" title="Provisional figures pending official publication">
-                      ⚠️ Provisional
+                    <p class="cv-prov" title={t('compare.card.provisionalTitle')}>
+                      {t('compare.card.provisional')}
                     </p>
                   </Show>
                   <button
                     type="button"
                     class="cv-btn cv-btn-outline cv-why"
                     onClick={(e) => onOpenPanel(r.country, e)}
-                    aria-label={`Show why for ${meta.label}`}
+                    aria-label={t('compare.card.whyAria', { country: countryLabel() })}
                     aria-haspopup="dialog"
                   >
-                    Why?
+                    {t('compare.card.why')}
                   </button>
                 </article>
               );
@@ -331,6 +330,7 @@ const CompareView: Component = () => {
       <Show when={selectedRow()}>
         {(row) => {
           const meta = COUNTRY_META[row().country];
+          const countryLabel = () => t(meta.labelKey);
           return (
             <>
               <div class="cv-backdrop" onClick={closePanel} aria-hidden="true" />
@@ -342,45 +342,45 @@ const CompareView: Component = () => {
               >
                 <header class="cv-panel-head">
                   <h2 id="cv-panel-title" class="cv-panel-title">
-                    <span aria-hidden="true">{meta.flag}</span> {meta.label}
+                    <span aria-hidden="true">{meta.flag}</span> {countryLabel()}
                   </h2>
                   <button
                     type="button"
                     class="cv-close"
                     ref={closeBtnEl}
                     onClick={closePanel}
-                    aria-label="Close details panel"
+                    aria-label={t('compare.panel.closeAria')}
                   >
                     ×
                   </button>
                 </header>
                 <div class="cv-panel-body">
                   <div class="cv-panel-stat">
-                    <span class="cv-panel-stat-label">Total tax</span>
+                    <span class="cv-panel-stat-label">{t('compare.panel.title.totalTax')}</span>
                     <span class="cv-panel-stat-val">{eur.format(pickTax(row()))}</span>
                   </div>
                   <div class="cv-panel-stat-row">
                     <div>
-                      <span class="cv-panel-stat-label">Effective</span>
+                      <span class="cv-panel-stat-label">{t('compare.panel.effective')}</span>
                       <span class="cv-panel-stat-sub">{pct(row().effectiveRate)}</span>
                     </div>
                     <div>
-                      <span class="cv-panel-stat-label">Marginal</span>
+                      <span class="cv-panel-stat-label">{t('compare.panel.marginal')}</span>
                       <span class="cv-panel-stat-sub">{pct(row().marginalRate)}</span>
                     </div>
                   </div>
 
-                  <h3 class="cv-panel-h3">Source</h3>
+                  <h3 class="cv-panel-h3">{t('compare.panel.title.source')}</h3>
                   <p class="cv-source">{row().source}</p>
 
                   <Show when={(row().warnings?.length ?? 0) > 0}>
-                    <h3 class="cv-panel-h3">Warnings</h3>
+                    <h3 class="cv-panel-h3">{t('compare.panel.title.warnings')}</h3>
                     <ul class="cv-warnings">
                       <For each={row().warnings}>{(w) => <li>{w}</li>}</For>
                     </ul>
                   </Show>
 
-                  <h3 class="cv-panel-h3">Breakdown</h3>
+                  <h3 class="cv-panel-h3">{t('compare.panel.title.breakdown')}</h3>
                   <pre class="cv-breakdown">{JSON.stringify(row().breakdown, null, 2)}</pre>
                 </div>
               </aside>

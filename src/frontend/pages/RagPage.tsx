@@ -5,28 +5,18 @@
  */
 
 import { type Component, For, Show, createSignal } from 'solid-js';
+import { useI18n } from '../i18n';
 import { type RagAnswer, type RagJurisdiction, askQuestion } from './rag/api';
 
-const JURISDICTIONS: { value: RagJurisdiction | ''; label: string }[] = [
-  { value: '', label: '自动' },
-  { value: 'DE', label: '德国 DE' },
-  { value: 'NL', label: '荷兰 NL' },
-  { value: 'PT', label: '葡萄牙 PT' },
-  { value: 'ES', label: '西班牙 ES' },
-  { value: 'UK', label: '英国 UK' },
-  { value: 'EU', label: '欧盟 EU' },
-];
+type RagOption = RagJurisdiction | '';
+
+/** Jurisdiction select options; labels resolved via t() at render time. */
+const JURISDICTIONS: RagOption[] = ['', 'DE', 'NL', 'PT', 'ES', 'UK', 'EU'];
 const YEARS = [2024, 2025, 2026];
 
-function friendlyError(err: Error): string {
-  switch (err.message) {
-    case 'UNAUTHORIZED':
-      return '请先登录 (Please sign in).';
-    case 'NO_CONTEXT':
-      return '知识库中未找到相关上下文，请换一种问法。';
-    default:
-      return err.message;
-  }
+function jurisdictionLabel(j: RagOption, t: (key: string) => string): string {
+  if (j === '') return t('rag.option.auto');
+  return t(`rag.option.${j}`);
 }
 
 function confidenceColor(c: 'high' | 'medium' | 'low'): string {
@@ -41,12 +31,25 @@ function confidenceColor(c: 'high' | 'medium' | 'low'): string {
 }
 
 const RagPage: Component = () => {
+  const { t } = useI18n();
   const [question, setQuestion] = createSignal('');
   const [jurisdiction, setJurisdiction] = createSignal<RagJurisdiction | ''>('');
   const [taxYear, setTaxYear] = createSignal<number | ''>('');
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [answer, setAnswer] = createSignal<RagAnswer | null>(null);
+
+  /** Map an API error code to a locale-aware friendly message. */
+  function friendlyError(err: Error): string {
+    switch (err.message) {
+      case 'UNAUTHORIZED':
+        return t('rag.error.unauthorized');
+      case 'NO_CONTEXT':
+        return t('rag.error.noContext');
+      default:
+        return err.message;
+    }
+  }
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
@@ -74,39 +77,39 @@ const RagPage: Component = () => {
       <style>{styles}</style>
 
       <header class="rag-hero">
-        <h1 class="rag-h1">税法问答 (RAG)</h1>
-        <p class="rag-sub">
-          基于检索增强生成 (RAG) 的欧洲税法问答。答案仅来自内部知识库，并标注置信度与来源。
-        </p>
+        <h1 class="rag-h1">{t('rag.title')}</h1>
+        <p class="rag-sub">{t('rag.subtitle')}</p>
       </header>
 
       <section class="rag-panel">
         <form onSubmit={onSubmit}>
           <div class="rag-field">
-            <label for="rag-question">问题</label>
+            <label for="rag-question">{t('rag.field.question')}</label>
             <textarea
               id="rag-question"
               class="rag-textarea"
               rows={3}
               value={question()}
               onInput={(e) => setQuestion(e.currentTarget.value)}
-              placeholder="例如：葡萄牙 NHR 2024 年股息收入如何征税？"
+              placeholder={t('rag.placeholder')}
             />
           </div>
           <div class="rag-options">
             <div class="rag-field-inline">
-              <label for="rag-jurisdiction">法域</label>
+              <label for="rag-jurisdiction">{t('rag.field.jurisdiction')}</label>
               <select
                 id="rag-jurisdiction"
                 class="rag-input"
                 value={jurisdiction()}
                 onChange={(e) => setJurisdiction(e.currentTarget.value as RagJurisdiction | '')}
               >
-                <For each={JURISDICTIONS}>{(j) => <option value={j.value}>{j.label}</option>}</For>
+                <For each={JURISDICTIONS}>
+                  {(j) => <option value={j}>{jurisdictionLabel(j, t)}</option>}
+                </For>
               </select>
             </div>
             <div class="rag-field-inline">
-              <label for="rag-year">年度</label>
+              <label for="rag-year">{t('rag.field.year')}</label>
               <select
                 id="rag-year"
                 class="rag-input"
@@ -115,7 +118,7 @@ const RagPage: Component = () => {
                   setTaxYear(e.currentTarget.value ? Number(e.currentTarget.value) : '')
                 }
               >
-                <option value="">自动</option>
+                <option value="">{t('rag.option.auto')}</option>
                 <For each={YEARS}>{(y) => <option value={String(y)}>{y}</option>}</For>
               </select>
             </div>
@@ -125,7 +128,7 @@ const RagPage: Component = () => {
                 class="rag-btn rag-btn-primary"
                 disabled={loading() || !question().trim()}
               >
-                {loading() ? '思考中…' : '提问'}
+                {loading() ? t('rag.action.thinking') : t('rag.action.ask')}
               </button>
             </div>
           </div>
@@ -142,12 +145,12 @@ const RagPage: Component = () => {
 
       <Show when={answer()}>
         {(a) => (
-          <section class="rag-answer" aria-label="回答">
+          <section class="rag-answer" aria-label={t('rag.answer.label')}>
             <div class="rag-answer-head">
               <span class="rag-confidence" style={{ color: confidenceColor(a().confidence) }}>
-                置信度: {a().confidence}
+                {t('rag.answer.confidence', { value: a().confidence })}
               </span>
-              <span class="rag-year">年度: {a().taxYear}</span>
+              <span class="rag-year">{t('rag.answer.year', { value: a().taxYear })}</span>
             </div>
             <div class="rag-answer-body">
               <p>{a().answer}</p>
@@ -155,14 +158,14 @@ const RagPage: Component = () => {
             <Show when={a().reasoning}>
               {(reason) => (
                 <div class="rag-reasoning">
-                  <h3>推理过程</h3>
+                  <h3>{t('rag.answer.reasoning')}</h3>
                   <p>{reason()}</p>
                 </div>
               )}
             </Show>
             <Show when={(a().warnings ?? []).length > 0}>
               <div class="rag-warnings">
-                <h3>⚠️ 注意</h3>
+                <h3>{t('rag.answer.warnings')}</h3>
                 <ul>
                   <For each={a().warnings ?? []}>{(w) => <li>{w}</li>}</For>
                 </ul>
@@ -170,7 +173,7 @@ const RagPage: Component = () => {
             </Show>
             <Show when={a().citations.length > 0}>
               <div class="rag-sources">
-                <h3>来源</h3>
+                <h3>{t('rag.answer.sources')}</h3>
                 <ul>
                   <For each={a().citations}>
                     {(c) => (
@@ -180,7 +183,8 @@ const RagPage: Component = () => {
                         </a>
                         <span class="rag-source-meta">
                           {' '}
-                          · {c.authority} · 相关度 {(c.score * 100).toFixed(0)}%
+                          · {c.authority} ·{' '}
+                          {t('rag.answer.relevance', { value: (c.score * 100).toFixed(0) })}
                         </span>
                       </li>
                     )}

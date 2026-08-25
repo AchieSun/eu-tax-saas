@@ -7,7 +7,7 @@
 
 import { type Component, For, Show, createSignal } from 'solid-js';
 import type { Country } from '../../rules/common/types';
-import { COUNTRY_META } from '../calendar/types';
+import { useI18n } from '../i18n';
 import {
   type ResidencyInput,
   type ResidencyResult,
@@ -54,6 +54,9 @@ function makeSingleInput(
 }
 
 const ResidencyPage: Component = () => {
+  const { t } = useI18n();
+  /** Locale-aware country label ('德国 DE' / 'Germany DE'). */
+  const countryLabel = (c: Country) => t(`calendar.country.${c}`);
   const [mode, setMode] = createSignal<'single' | 'multi'>('single');
 
   // Single-country form state
@@ -141,8 +144,8 @@ const ResidencyPage: Component = () => {
       <style>{styles}</style>
 
       <header class="res-hero">
-        <h1 class="res-h1">居留判定 (Residency)</h1>
-        <p class="res-sub">根据各国国内法与 OECD 税收协定第 4 条，评估单国或多国税收居民身份。</p>
+        <h1 class="res-h1">{t('residency.title')}</h1>
+        <p class="res-sub">{t('residency.subtitle')}</p>
       </header>
 
       <div class="res-mode-bar">
@@ -155,7 +158,7 @@ const ResidencyPage: Component = () => {
             resetResults();
           }}
         >
-          单国判定
+          {t('residency.mode.single')}
         </button>
         <button
           type="button"
@@ -166,7 +169,7 @@ const ResidencyPage: Component = () => {
             resetResults();
           }}
         >
-          多国冲突
+          {t('residency.mode.multi')}
         </button>
       </div>
 
@@ -175,7 +178,7 @@ const ResidencyPage: Component = () => {
           <div class="res-error" role="alert">
             <span>⚠️ {msg()}</span>
             <button type="button" class="res-btn res-btn-ghost" onClick={() => setError(null)}>
-              清除
+              {t('residency.error.clear')}
             </button>
           </div>
         )}
@@ -185,7 +188,7 @@ const ResidencyPage: Component = () => {
         <form class="res-panel" onSubmit={onAssessSingle}>
           <div class="res-grid">
             <div class="res-field">
-              <label for="res-country">国家</label>
+              <label for="res-country">{t('residency.field.country')}</label>
               <select
                 id="res-country"
                 class="res-input"
@@ -195,14 +198,14 @@ const ResidencyPage: Component = () => {
                 <For each={COUNTRIES}>
                   {(c) => (
                     <option value={c}>
-                      {COUNTRY_FLAGS[c]} {COUNTRY_META[c].label}
+                      {COUNTRY_FLAGS[c]} {countryLabel(c)}
                     </option>
                   )}
                 </For>
               </select>
             </div>
             <div class="res-field">
-              <label for="res-year">纳税年度</label>
+              <label for="res-year">{t('residency.field.taxYear')}</label>
               <select
                 id="res-year"
                 class="res-input"
@@ -213,7 +216,7 @@ const ResidencyPage: Component = () => {
               </select>
             </div>
             <div class="res-field">
-              <label for="res-days">当年在境内天数</label>
+              <label for="res-days">{t('residency.field.days')}</label>
               <input
                 id="res-days"
                 class="res-input"
@@ -225,7 +228,7 @@ const ResidencyPage: Component = () => {
               />
             </div>
             <div class="res-field">
-              <label for="res-home">永久住所</label>
+              <label for="res-home">{t('residency.field.home')}</label>
               <select
                 id="res-home"
                 class="res-input"
@@ -235,15 +238,15 @@ const ResidencyPage: Component = () => {
                   setHasPermanentHome(v === '' ? null : v === 'true');
                 }}
               >
-                <option value="">未知 / 未申报</option>
-                <option value="true">有</option>
-                <option value="false">无</option>
+                <option value="">{t('residency.field.home.unknown')}</option>
+                <option value="true">{t('residency.field.home.yes')}</option>
+                <option value="false">{t('residency.field.home.no')}</option>
               </select>
             </div>
           </div>
           <div class="res-actions">
             <button type="submit" class="res-btn res-btn-primary" disabled={loading()}>
-              {loading() ? '判定中…' : '判定居留身份'}
+              {loading() ? t('residency.action.assessing') : t('residency.action.assessSingle')}
             </button>
           </div>
         </form>
@@ -255,20 +258,20 @@ const ResidencyPage: Component = () => {
             {(r, idx) => (
               <div class="res-row">
                 <div class="res-row-head">
-                  <span class="res-row-title">国家 {idx() + 1}</span>
+                  <span class="res-row-title">{t('residency.row.countryN', { n: idx() + 1 })}</span>
                   <Show when={rows().length > 1}>
                     <button
                       type="button"
                       class="res-btn res-btn-ghost res-btn-small"
                       onClick={() => removeRow(r.id)}
                     >
-                      删除
+                      {t('residency.action.remove')}
                     </button>
                   </Show>
                 </div>
                 <div class="res-grid">
                   <div class="res-field">
-                    <label for={`res-m-country-${r.id}`}>国家</label>
+                    <label for={`res-m-country-${r.id}`}>{t('residency.field.country')}</label>
                     <select
                       id={`res-m-country-${r.id}`}
                       class="res-input"
@@ -280,14 +283,14 @@ const ResidencyPage: Component = () => {
                       <For each={COUNTRIES}>
                         {(c) => (
                           <option value={c}>
-                            {COUNTRY_FLAGS[c]} {COUNTRY_META[c].label}
+                            {COUNTRY_FLAGS[c]} {countryLabel(c)}
                           </option>
                         )}
                       </For>
                     </select>
                   </div>
                   <div class="res-field">
-                    <label for={`res-m-year-${r.id}`}>年度</label>
+                    <label for={`res-m-year-${r.id}`}>{t('residency.field.year')}</label>
                     <select
                       id={`res-m-year-${r.id}`}
                       class="res-input"
@@ -298,7 +301,7 @@ const ResidencyPage: Component = () => {
                     </select>
                   </div>
                   <div class="res-field">
-                    <label for={`res-m-days-${r.id}`}>天数</label>
+                    <label for={`res-m-days-${r.id}`}>{t('residency.field.daysShort')}</label>
                     <input
                       id={`res-m-days-${r.id}`}
                       class="res-input"
@@ -312,7 +315,7 @@ const ResidencyPage: Component = () => {
                     />
                   </div>
                   <div class="res-field">
-                    <label for={`res-m-home-${r.id}`}>永久住所</label>
+                    <label for={`res-m-home-${r.id}`}>{t('residency.field.home')}</label>
                     <select
                       id={`res-m-home-${r.id}`}
                       class="res-input"
@@ -321,8 +324,8 @@ const ResidencyPage: Component = () => {
                         updateRow(r.id, { hasPermanentHome: e.currentTarget.value === 'true' })
                       }
                     >
-                      <option value="false">无</option>
-                      <option value="true">有</option>
+                      <option value="false">{t('residency.field.home.no')}</option>
+                      <option value="true">{t('residency.field.home.yes')}</option>
                     </select>
                   </div>
                 </div>
@@ -336,10 +339,10 @@ const ResidencyPage: Component = () => {
               onClick={addRow}
               disabled={rows().length >= 5}
             >
-              添加国家
+              {t('residency.action.addCountry')}
             </button>
             <button type="submit" class="res-btn res-btn-primary" disabled={loading()}>
-              {loading() ? '判定中…' : '判定多国冲突'}
+              {loading() ? t('residency.action.assessing') : t('residency.action.assessMulti')}
             </button>
           </div>
         </form>
@@ -347,10 +350,10 @@ const ResidencyPage: Component = () => {
 
       <Show when={singleResult()}>
         {(r) => (
-          <section class="res-result" aria-label="单国判定结果">
+          <section class="res-result" aria-label={t('residency.result.single')}>
             <div class="res-result-head">
               <span class="res-result-flag">{COUNTRY_FLAGS[r().country]}</span>
-              <span class="res-result-country">{COUNTRY_META[r().country].label}</span>
+              <span class="res-result-country">{countryLabel(r().country)}</span>
               <span
                 class="res-badge"
                 classList={{
@@ -358,16 +361,18 @@ const ResidencyPage: Component = () => {
                   'res-badge-nonresident': !r().isResident,
                 }}
               >
-                {r().isResident ? '税收居民' : '非税收居民'}
+                {r().isResident
+                  ? t('residency.result.resident')
+                  : t('residency.result.nonResident')}
               </span>
               <span class={`res-confidence res-confidence-${r().confidence}`}>
-                置信度: {r().confidence}
+                {t('residency.result.confidence', { value: r().confidence })}
               </span>
             </div>
             <p class="res-reasoning">{r().reasoning}</p>
             <Show when={r().appliedRules.length > 0}>
               <div class="res-section">
-                <h3>适用规则</h3>
+                <h3>{t('residency.result.appliedRules')}</h3>
                 <ul>
                   <For each={r().appliedRules}>{(rule) => <li>{rule}</li>}</For>
                 </ul>
@@ -375,7 +380,7 @@ const ResidencyPage: Component = () => {
             </Show>
             <Show when={r().warnings.length > 0}>
               <div class="res-warnings">
-                <h3>注意事项</h3>
+                <h3>{t('residency.result.warnings')}</h3>
                 <ul>
                   <For each={r().warnings}>{(w) => <li>{w}</li>}</For>
                 </ul>
@@ -387,28 +392,28 @@ const ResidencyPage: Component = () => {
 
       <Show when={multiResult()}>
         {(m) => (
-          <section class="res-result" aria-label="多国判定结果">
+          <section class="res-result" aria-label={t('residency.result.multi')}>
             <div class="res-result-head">
-              <span class="res-result-title">有效税收居民</span>
+              <span class="res-result-title">{t('residency.result.effective')}</span>
               <span class="res-badge res-badge-resident">
-                <Show when={m().effectiveResidence.country} fallback="无">
-                  {(c) => `${COUNTRY_FLAGS[c()]} ${COUNTRY_META[c()].label}`}
+                <Show when={m().effectiveResidence.country} fallback={t('residency.result.none')}>
+                  {(c) => `${COUNTRY_FLAGS[c()]} ${countryLabel(c())}`}
                 </Show>
               </span>
             </div>
             <p class="res-reasoning">{m().effectiveResidence.reason}</p>
             <Show when={m().effectiveResidence.tiebreakerApplied}>
-              <p class="res-tiebreaker">已应用 OECD 协定第 4 条 tie-breaker。</p>
+              <p class="res-tiebreaker">{t('residency.result.tiebreaker')}</p>
             </Show>
             <div class="res-section">
-              <h3>各国判定</h3>
+              <h3>{t('residency.result.perCountry')}</h3>
               <div class="res-multi-grid">
                 <For each={m().perCountry}>
                   {(r) => (
                     <div class="res-multi-card">
                       <div class="res-multi-card-head">
                         <span>{COUNTRY_FLAGS[r.country]}</span>
-                        <strong>{COUNTRY_META[r.country].label}</strong>
+                        <strong>{countryLabel(r.country)}</strong>
                         <span
                           class="res-badge"
                           classList={{
@@ -416,12 +421,14 @@ const ResidencyPage: Component = () => {
                             'res-badge-nonresident': !r.isResident,
                           }}
                         >
-                          {r.isResident ? '居民' : '非居民'}
+                          {r.isResident
+                            ? t('residency.result.residentShort')
+                            : t('residency.result.nonResidentShort')}
                         </span>
                       </div>
                       <p>{r.reasoning}</p>
                       <span class={`res-confidence res-confidence-${r.confidence}`}>
-                        置信度: {r.confidence}
+                        {t('residency.result.confidence', { value: r.confidence })}
                       </span>
                     </div>
                   )}

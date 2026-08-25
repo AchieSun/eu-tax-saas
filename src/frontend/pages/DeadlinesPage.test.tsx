@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLocale, t } from '../i18n';
 import DeadlinesPage from './DeadlinesPage';
 import {
   completeDeadline,
@@ -59,6 +60,20 @@ afterEach(() => {
 describe('DeadlinesPage component', () => {
   it('exports a default Solid component', () => {
     expect(typeof DeadlinesPage).toBe('function');
+  });
+});
+
+describe('DeadlinesPage i18n', () => {
+  it('switches copy between zh and en locales', () => {
+    setLocale('zh');
+    expect(t('deadlines.title')).toBe('税务截止日 (Deadlines)');
+    expect(t('deadlines.status.pending')).toBe('待办');
+    expect(t('deadlines.month.format', { y: '2025', m: '07' })).toBe('2025年07月');
+
+    setLocale('en');
+    expect(t('deadlines.title')).toBe('Tax deadlines');
+    expect(t('deadlines.status.pending')).toBe('Pending');
+    expect(t('deadlines.month.format', { y: '2025', m: '07' })).toBe('2025-07');
   });
 });
 

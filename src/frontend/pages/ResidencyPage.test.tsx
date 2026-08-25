@@ -6,6 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLocale, t } from '../i18n';
 import ResidencyPage from './ResidencyPage';
 import { postAssess, postAssessMulti } from './residency/api';
 
@@ -28,6 +29,25 @@ afterEach(() => {
 describe('ResidencyPage component', () => {
   it('exports a default Solid component', () => {
     expect(typeof ResidencyPage).toBe('function');
+  });
+});
+
+describe('ResidencyPage i18n', () => {
+  it('switches copy between zh and en locales', () => {
+    setLocale('zh');
+    expect(t('residency.title')).toBe('居留判定 (Residency)');
+    expect(t('residency.mode.single')).toBe('单国判定');
+
+    setLocale('en');
+    expect(t('residency.title')).toBe('Residency assessment');
+    expect(t('residency.mode.single')).toBe('Single country');
+  });
+
+  it('interpolates per-country confidence labels', () => {
+    setLocale('zh');
+    expect(t('residency.result.confidence', { value: 'high' })).toBe('置信度: high');
+    setLocale('en');
+    expect(t('residency.result.confidence', { value: 'high' })).toBe('Confidence: high');
   });
 });
 

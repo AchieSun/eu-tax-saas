@@ -12,6 +12,7 @@
  */
 
 import { type Component, For, Show, createSignal } from 'solid-js';
+import { t } from '../i18n';
 import { type MeInfo, isPro, startCheckout } from './api';
 
 export interface PaywallCardProps {
@@ -43,8 +44,8 @@ const PaywallCard: Component<PaywallCardProps> = (props) => {
       const msg = err instanceof Error ? err.message : String(err);
       setError(
         msg === 'UNAUTHORIZED'
-          ? '请先登录后再升级 (Please sign in first).'
-          : `无法发起支付 (${msg}). 请稍后重试或联系支持.`,
+          ? t('paywall.error.unauthorized')
+          : t('paywall.error.checkoutFailed', { message: msg }),
       );
     } finally {
       setCheckingOut(false);
@@ -57,22 +58,22 @@ const PaywallCard: Component<PaywallCardProps> = (props) => {
   };
 
   return (
-    <div class="pw-card" role="region" aria-label="Pro feature locked">
+    <div class="pw-card" role="region" aria-label={t('paywall.card.ariaLabel')}>
       <div class="pw-badge">PRO</div>
       <h3 class="pw-title">{props.title}</h3>
       <Show
         when={props.me !== null}
         fallback={
           <>
-            <p class="pw-sub">登录后即可升级解锁此功能。</p>
+            <p class="pw-sub">{t('paywall.signedOut.sub')}</p>
             <button type="button" class="pw-btn" onClick={() => onLogin()}>
-              登录 / 注册
+              {t('paywall.signedOut.button')}
             </button>
           </>
         }
       >
         <p class="pw-sub">
-          此功能为 <strong>Taxmora Pro</strong> 会员专属。升级后解锁：
+          {t('paywall.pro.subPrefix')} <strong>Taxmora Pro</strong> {t('paywall.pro.subSuffix')}
         </p>
         <ul class="pw-list">
           <For each={props.bullets}>{(b) => <li>{b}</li>}</For>
@@ -84,9 +85,9 @@ const PaywallCard: Component<PaywallCardProps> = (props) => {
             onClick={() => void onUpgrade()}
             disabled={checkingOut()}
           >
-            {checkingOut() ? '正在跳转支付…' : '升级到 Pro'}
+            {checkingOut() ? t('paywall.pro.checkingOut') : t('paywall.pro.upgrade')}
           </button>
-          <p class="pw-note">由 Creem 安全处理支付 · 可随时在账户页取消</p>
+          <p class="pw-note">{t('paywall.pro.note')}</p>
         </Show>
       </Show>
       <Show when={error()}>

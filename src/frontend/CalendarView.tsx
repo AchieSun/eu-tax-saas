@@ -31,6 +31,15 @@ import CountryPalette from './calendar/CountryPalette';
 import MonthGrid, { type PaintMap } from './calendar/MonthGrid';
 import { bulkSaveDays, deleteDay, fetchDays } from './calendar/api';
 import { COUNTRIES, COUNTRY_META, type Country, ERASE, type PaintTool } from './calendar/types';
+import { t } from './i18n';
+
+/**
+ * Static accent colors per country (locale-independent half of COUNTRY_META;
+ * the label half is locale-aware and lives in the i18n dictionary).
+ */
+const COUNTRY_BG: Record<Country, string> = Object.fromEntries(
+  COUNTRIES.map((c) => [c, COUNTRY_META[c].bg]),
+) as Record<Country, string>;
 
 // ── Date helpers (local-timezone YYYY-MM-DD, no UTC drift) ───────────────────
 
@@ -57,20 +66,13 @@ function daysInMonth(d: Date): number {
   return endOfMonth(d).getDate();
 }
 
-const MONTH_LABELS_ZH = [
-  '一月',
-  '二月',
-  '三月',
-  '四月',
-  '五月',
-  '六月',
-  '七月',
-  '八月',
-  '九月',
-  '十月',
-  '十一月',
-  '十二月',
-];
+/** Locale-aware month label ('2025 年 一月' / 'January 2025'). */
+function monthLabel(anchor: Date): string {
+  return t(`calendar.month.${anchor.getMonth()}`);
+}
+
+/** Locale-aware country label ('德国 DE' / 'Germany DE'). */
+const countryLabel = (c: Country) => t(`calendar.country.${c}`);
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -166,7 +168,7 @@ const CalendarView: Component = () => {
     } catch (err) {
       setSavingState({
         kind: 'error',
-        message: err instanceof Error ? err.message : '保存失败',
+        message: err instanceof Error ? err.message : t('calendar.error.saveFailedFallback'),
       });
     }
   }
@@ -222,7 +224,7 @@ const CalendarView: Component = () => {
     const err = daysResource.error as Error | undefined;
     if (!err) return null;
     if (err.message === 'UNAUTHORIZED') return null; // handled separately
-    return err.message || '加载失败';
+    return err.message || t('calendar.error.loadFailedFallback');
   });
 
   // Keyboard shortcut: Ctrl/Cmd+S to save.
@@ -241,11 +243,8 @@ const CalendarView: Component = () => {
       <style>{styles}</style>
 
       <header class="cal-hero">
-        <h1 class="cal-h1">居留日历 · 标记每日所在国家</h1>
-        <p class="cal-sub">
-          按下并拖动鼠标，把多个日期一次性标记为同一国家。本表是 F2 居留判定与 183 天计算的
-          <strong>唯一原始输入</strong>。
-        </p>
+        <h1 class="cal-h1">{t('calendar.title')}</h1>
+        <p class="cal-sub">{t('calendar.subtitle')}</p>
       </header>
 
       {/* Top bar: month nav + counters + save controls */}
@@ -255,37 +254,40 @@ const CalendarView: Component = () => {
             type="button"
             class="cal-btn cal-btn-ghost"
             onClick={() => setMonthAnchor((d) => addMonths(d, -1))}
-            aria-label="上一月"
+            aria-label={t('calendar.nav.prevAria')}
           >
-            ← 上月
+            {t('calendar.nav.prev')}
           </button>
           <span class="cal-month-label">
-            {monthAnchor().getFullYear()} 年 {MONTH_LABELS_ZH[monthAnchor().getMonth()]}
+            {monthAnchor().getFullYear()} {monthLabel(monthAnchor())}
           </span>
           <button
             type="button"
             class="cal-btn cal-btn-ghost"
             onClick={() => setMonthAnchor((d) => addMonths(d, 1))}
-            aria-label="下一月"
+            aria-label={t('calendar.nav.nextAria')}
           >
-            下月 →
+            {t('calendar.nav.next')}
           </button>
           <button
             type="button"
             class="cal-btn cal-btn-outline cal-btn-today"
             onClick={() => setMonthAnchor(startOfMonth(new Date()))}
           >
-            今天
+            {t('calendar.nav.today')}
           </button>
         </div>
 
         <div class="cal-meta">
           <span class="cal-counter">
-            已标记 <strong>{markedInMonth()}</strong> 天 / 共 {totalDaysInMonth()} 天
+            {t('calendar.counter', {
+              marked: markedInMonth(),
+              total: totalDaysInMonth(),
+            })}
           </span>
           <Show when={pendingChanges().size > 0}>
-            <span class="cal-pending-badge" title="尚未保存的修改">
-              ● 未保存 {pendingChanges().size} 项
+            <span class="cal-pending-badge" title={t('calendar.pendingTitle')}>
+              {t('calendar.pending', { count: pendingChanges().size })}
             </span>
           </Show>
           <button
@@ -293,9 +295,11 @@ const CalendarView: Component = () => {
             class="cal-btn cal-btn-primary"
             disabled={pendingChanges().size === 0 || savingState().kind === 'saving'}
             onClick={() => void onSave()}
-            title="保存修改 (Ctrl/Cmd+S)"
+            title={t('calendar.action.saveTitle')}
           >
-            {savingState().kind === 'saving' ? '保存中…' : '保存'}
+            {savingState().kind === 'saving'
+              ? t('calendar.action.saving')
+              : t('calendar.action.save')}
           </button>
           <button
             type="button"
@@ -303,14 +307,14 @@ const CalendarView: Component = () => {
             disabled={pendingChanges().size === 0}
             onClick={onUndo}
           >
-            撤销
+            {t('calendar.action.undo')}
           </button>
         </div>
       </section>
 
       {/* Palette */}
       <section class="cal-palette-row">
-        <span class="cal-palette-label">画笔：</span>
+        <span class="cal-palette-label">{t('calendar.palette.label')}</span>
         <CountryPalette current={currentTool()} onChange={setCurrentTool} />
       </section>
 
@@ -318,13 +322,15 @@ const CalendarView: Component = () => {
       <Show when={savingState().kind === 'error'}>
         <div class="cal-error" role="alert">
           <span>
-            ⚠️ 保存失败：
-            {savingState().kind === 'error'
-              ? (savingState() as { kind: 'error'; message: string }).message
-              : ''}
+            {t('calendar.error.saveFailed', {
+              message:
+                savingState().kind === 'error'
+                  ? (savingState() as { kind: 'error'; message: string }).message
+                  : '',
+            })}
           </span>
           <button type="button" class="cal-btn cal-btn-ghost" onClick={() => void onSave()}>
-            重试
+            {t('calendar.error.retry')}
           </button>
         </div>
       </Show>
@@ -332,9 +338,9 @@ const CalendarView: Component = () => {
       {/* Auth error */}
       <Show when={isUnauthorized()}>
         <div class="cal-error" role="alert">
-          <span>⚠️ 请先登录后再使用居留日历。</span>
+          <span>{t('calendar.error.unauthorized')}</span>
           <a class="cal-btn cal-btn-outline" href="/login">
-            前往登录
+            {t('calendar.error.login')}
           </a>
         </div>
       </Show>
@@ -343,9 +349,9 @@ const CalendarView: Component = () => {
       <Show when={fetchErrorMsg()}>
         {(msg) => (
           <div class="cal-error" role="alert">
-            <span>⚠️ 加载失败：{msg()}</span>
+            <span>{t('calendar.error.loadFailed', { message: msg() })}</span>
             <button type="button" class="cal-btn cal-btn-ghost" onClick={onRetry}>
-              重试
+              {t('calendar.error.retry')}
             </button>
           </div>
         )}
@@ -353,10 +359,10 @@ const CalendarView: Component = () => {
 
       {/* Skeleton while initial fetch is in flight */}
       <Show when={daysResource.loading && serverDays().size === 0}>
-        <div class="cal-grid-wrap" aria-busy="true" aria-label="加载中">
+        <div class="cal-grid-wrap" aria-busy="true" aria-label={t('calendar.grid.loading')}>
           <div class="cal-grid-head" aria-hidden="true">
-            <For each={['一', '二', '三', '四', '五', '六', '日']}>
-              {(w) => <div class="cal-grid-head-cell">{w}</div>}
+            <For each={[0, 1, 2, 3, 4, 5, 6]}>
+              {(i) => <div class="cal-grid-head-cell">{t(`calendar.weekday.${i}`)}</div>}
             </For>
           </div>
           <div class="cal-grid">
@@ -382,28 +388,29 @@ const CalendarView: Component = () => {
 
       {/* Footer: per-country counts */}
       <Show when={!isUnauthorized()}>
-        <section class="cal-stats" aria-label="本月各国天数统计">
+        <section class="cal-stats" aria-label={t('calendar.stats.ariaLabel')}>
           <For each={COUNTRIES}>
             {(c) => {
-              const meta = COUNTRY_META[c];
               const count = () => monthCounts()[c];
               const pctOfMonth = () => {
-                const t = totalDaysInMonth();
-                return t > 0 ? Math.round((count() / t) * 100) : 0;
+                const total = totalDaysInMonth();
+                return total > 0 ? Math.round((count() / total) * 100) : 0;
               };
               return (
                 <div class="cal-stat">
                   <div class="cal-stat-head">
-                    <span class="cal-stat-dot" style={{ 'background-color': meta.bg }} />
-                    <span class="cal-stat-label">{meta.label}</span>
-                    <span class="cal-stat-count">{count()} 天</span>
+                    <span class="cal-stat-dot" style={{ 'background-color': COUNTRY_BG[c] }} />
+                    <span class="cal-stat-label">{countryLabel(c)}</span>
+                    <span class="cal-stat-count">
+                      {t('calendar.stats.days', { count: count() })}
+                    </span>
                   </div>
                   <div class="cal-stat-bar">
                     <div
                       class="cal-stat-bar-fill"
                       style={{
                         width: `${pctOfMonth()}%`,
-                        'background-color': meta.bg,
+                        'background-color': COUNTRY_BG[c],
                       }}
                     />
                   </div>
@@ -422,13 +429,10 @@ const CalendarView: Component = () => {
           !daysResource.loading
         }
       >
-        <p class="cal-empty">尚未标记任何日 —— 点选上方画笔，拖动日期格开始。</p>
+        <p class="cal-empty">{t('calendar.empty')}</p>
       </Show>
 
-      <p class="cal-legal">
-        ⚠️ 此日历用于辅助估算居留天数，<strong>不构成正式税务记录</strong>。
-        最终申报请以护照入境章、机票登机牌、出行账单为准。各国税务机关可能要求实物证据。
-      </p>
+      <p class="cal-legal">{t('calendar.legal')}</p>
     </div>
   );
 };
