@@ -170,7 +170,7 @@ export const homePage = (): string =>
           <li>The UK residence test covers 8 of 17 outcomes.</li>
           <li>The Spanish foral regimes (Basque Country, Navarra) are partially implemented.</li>
           <li>The Dutch Box 3 model predates the 2023 Supreme Court ruling.</li>
-          <li>The app UI is currently Chinese-only. English is on the list.</li>
+          <li>The deterministic parts of the app are bilingual, but AI-generated strategy notes may still come back in Chinese.</li>
         </ul>
         <p>
           That's why it's €29 and not €99. When those three are done, the price

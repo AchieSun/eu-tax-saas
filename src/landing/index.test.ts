@@ -105,8 +105,10 @@ describe('home page: five-screen landing (marketing/landing-page-spec.md)', () =
     expect(body).toContain('The UK residence test covers 8 of 17 outcomes.');
     expect(body).toContain('(Basque Country, Navarra) are partially implemented');
     expect(body).toContain('predates the 2023 Supreme Court ruling');
-    // Captain addition: honest admission that the UI is Chinese-only.
-    expect(body).toContain('The app UI is currently Chinese-only. English is on the list.');
+    // Updated post-bilingual-wave: honest note that AI strategy notes may still be Chinese.
+    expect(body).toContain(
+      'AI-generated strategy notes may still come back in Chinese',
+    );
     expect(body).toContain("That's why it's €29 and not €99");
     expect(body).toContain('keep €29 for as long as the product');
     expect(body).toContain("We'd rather tell you now than surprise you later.");
