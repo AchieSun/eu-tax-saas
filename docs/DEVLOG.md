@@ -10,6 +10,47 @@
 
 ---
 
+## 2026-08-25 · 双语改造波：€29 创始价落地页 + 全站中英双语 ✅
+
+**这波发生了什么**：按更新后的营销 spec（定价从"Beta 免费"改为 **€29/年创始价**）交付英文落地页 + waitlist 邮箱捕获，同时完成全站中英双语改造（i18n 基建 + 全部 SPA 页面 + 22 策略双语数据 + /compare 双语）。多智能体团队（landing-eng / i18n-core / i18n-pages / strategy-i18n / reviewer）并行开发，中途全员切换模型路由（tengxun-tokenhub -> volcano-plan）零工作损失。
+
+### 1. 英文落地页（spec 五屏，€29 创始价叙事）
+
+- **重写** `src/landing/pages.ts` homePage()：Hero（"€29/year while it's in this state, €99 when it's finished"）/ 五国法条卡 / 功能四卡（"in code, not vibes"）/ 诚实声明（UK 8/17、西班牙 foral、荷兰 Box 3、AI 建议可能中文）/ waitlist / 966 tests 自嘲页脚；语气红线（零感叹号、无黑话）测试锁定
+- **已登录 302**：GET / 检测 session 跳 /app
+- **pricing 页整卡重写**：单一创始价卡（€29 现价 + €99 未来价 + 三涨价条件 + 锁价永久），旧 €10/€190 移除
+
+### 2. waitlist 邮箱捕获（新增变现资产）
+
+- `waitlist` 表 + 迁移 0009；`POST /api/waitlist`：201 新 / 200 重复 / 422 非法 / 429 每日 5 次/IP 限流；防邮箱枚举
+- commit `a8b8e1c`
+
+### 3. 全站中英双语（i18n 零依赖方案）
+
+- **基建** `src/frontend/i18n/`：locale signal + t() 插值/回退 + localStorage 持久化 + ZH/EN 切换器（App 头部）+ `<html lang>` 同步
+- **全部页面**：App 外壳 10 tab + Dashboard/Account/Onboarding + Strategies/Residency/RAG/Deadlines/FilingDraft/Calendar/Compare/PaywallCard，聚合字典 414+ key，切换响应式无需刷新
+- **策略库**：22 策略 titleEn/descriptionEn/reasonEn（法条级英语，非机翻），注册守卫 + 22×5×6 矩阵测试强制完整性；`/evaluate` 双语对并行输出，服务端不感知 locale
+- **/compare?lang=en** 整页英文（MESSAGES 字典），无 JS 提交保持语言
+- commit `1d39e8c` / `8167cb9` / `5dccae0`
+
+### 4. Beta 付费豁免开关（BETA_ALL_PRO）
+
+- `subscription.ts` 新增 `isBetaAllPro(env)`：true = 登录用户全免 Pro 费（促销用）；**默认 false**（Beta 正常收 €29）
+- `/api/me` 回显 betaAllPro，前端 isPro() OR 闭环（开关切换前后端同步生效）
+
+### 5. 质量与验证
+
+- 测试基线 84 文件/896 -> **89 文件/972 全绿**（+76 用例）；四件套（typecheck/lint/test/build:app）全绿
+- 本地运行时验证：落地页五屏渲染、waitlist 四分支、BETA_ALL_PRO=false 下 free 用户 402、/compare 双语、语言切换 + 持久化全部通过
+- commit：`a8b8e1c` / `1d39e8c` / `8167cb9` / `5dccae0` / `30fd7b1`（诚实声明更新）
+
+### 待办
+- [ ] **Creem 后台配置**：创建 €29/年创始价产品，更新 `CREEM_YEARLY_PRODUCT_ID` 生产 secret（当前 pricing CTA 依赖它；未配置时 checkout 会 500）
+- [ ] 确认生产 `CREEM_API_KEY` 等 secrets 已就位（`wrangler secret list` 验证）
+- [ ] push 后线上验证 + DEV.to 文章发布（文章承诺 €29 创始价，与落地页已一致）
+
+---
+
 ## 2026-08-24 · 免费五国计算器落地页 + 订阅付费墙上线 ✅
 
 **今天发生了什么**：产品从「功能完备的内部系统」转变为「可获客、可收费的产品」。两个核心商业模块同日部署到生产。多智能体团队（landing-engineer / paywall-engineer / reviewer）并行开发，文件范围隔离（landing 收敛在 `src/landing/**`，paywall 动 API 中间件与前端页面），reviewer 统一评审提交。
