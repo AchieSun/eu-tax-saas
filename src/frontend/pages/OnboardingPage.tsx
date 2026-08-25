@@ -1,4 +1,5 @@
 import { type Component, Show, createEffect, createResource, createSignal } from 'solid-js';
+import { t } from '../i18n';
 import { OnboardingStepPanel } from './onboarding/StepPanel';
 import {
   type OnboardingCountry,
@@ -158,11 +159,12 @@ const OnboardingPage: Component = () => {
       <style>{onboardingStyles}</style>
       <header class="ob-hero">
         <p class="ob-kicker">W7 Onboarding</p>
-        <h1 class="ob-h1">开始使用 (Onboarding)</h1>
-        <p class="ob-sub">
-          用 5 步建立你的跨境税务画像：隐私授权、国家范围、收入、特殊身份与停留天数。
-        </p>
-        <div class="ob-progress" aria-label={`步骤 ${step()} / ${STEP_COUNT}`}>
+        <h1 class="ob-h1">{t('onboarding.title')}</h1>
+        <p class="ob-sub">{t('onboarding.subtitle')}</p>
+        <div
+          class="ob-progress"
+          aria-label={t('onboarding.progress.aria', { current: step(), total: STEP_COUNT })}
+        >
           <div class="ob-progress-fill" style={{ width: progress() }} />
         </div>
       </header>
@@ -175,12 +177,10 @@ const OnboardingPage: Component = () => {
         )}
       </Show>
       <Show when={state.loading}>
-        <section class="ob-panel">加载 onboarding 状态…</section>
+        <section class="ob-panel">{t('onboarding.loading')}</section>
       </Show>
       <Show when={done()}>
-        <section class="ob-panel ob-success">
-          已完成初始化。你可以继续进入居民身份判定与税负测算。
-        </section>
+        <section class="ob-panel ob-success">{t('onboarding.done')}</section>
       </Show>
 
       <section class="ob-panel">
@@ -215,7 +215,7 @@ const OnboardingPage: Component = () => {
             disabled={saving() || step() <= 1}
             onClick={() => setStep((s) => Math.max(1, s - 1))}
           >
-            Back
+            {t('onboarding.actions.back')}
           </button>
           <button
             type="button"
@@ -223,7 +223,7 @@ const OnboardingPage: Component = () => {
             disabled={saving() || step() >= STEP_COUNT}
             onClick={() => void skipCurrent()}
           >
-            Skip
+            {t('onboarding.actions.skip')}
           </button>
           <button
             type="button"
@@ -231,7 +231,11 @@ const OnboardingPage: Component = () => {
             disabled={saving() || (step() === 1 && !privacy())}
             onClick={() => void saveCurrent()}
           >
-            {saving() ? 'Saving…' : step() === STEP_COUNT ? 'Save & Complete' : 'Save'}
+            {saving()
+              ? t('onboarding.actions.saving')
+              : step() === STEP_COUNT
+                ? t('onboarding.actions.saveComplete')
+                : t('onboarding.actions.save')}
           </button>
         </footer>
       </Show>

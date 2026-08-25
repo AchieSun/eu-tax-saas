@@ -1,4 +1,5 @@
 import { type Component, Show, createResource, createSignal } from 'solid-js';
+import { t } from '../i18n';
 import { type SubscriptionPlan, startCheckout } from '../paywall/api';
 
 interface AccountInfo {
@@ -20,8 +21,8 @@ interface CancelResult {
 
 async function fetchAccount(): Promise<AccountInfo> {
   const res = await fetch('/api/account', { credentials: 'include' });
-  if (res.status === 401) throw new Error('请先登录');
-  if (!res.ok) throw new Error(`获取账户信息失败: ${res.status}`);
+  if (res.status === 401) throw new Error(t('account.errors.loginRequired'));
+  if (!res.ok) throw new Error(t('account.errors.fetchFailed', { status: res.status }));
   const body = (await res.json()) as { ok: boolean; user: AccountInfo };
   return body.user;
 }
@@ -32,21 +33,17 @@ async function cancelSubscription(): Promise<CancelResult> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
   });
-  if (res.status === 401) throw new Error('请先登录');
+  if (res.status === 401) throw new Error(t('account.errors.loginRequired'));
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `取消失败: ${res.status}`);
+    throw new Error(body.error ?? t('account.errors.cancelFailed', { status: res.status }));
   }
   const body = (await res.json()) as { ok: boolean; subscription: CancelResult };
   return body.subscription;
 }
 
-const STATUS_LABELS: Record<AccountInfo['subscriptionStatus'], string> = {
-  free: '免费版',
-  active: '订阅中',
-  cancelled: '已取消',
-  past_due: '支付逾期',
-};
+const statusLabel = (status: AccountInfo['subscriptionStatus']): string =>
+  t(`account.status.${status}`);
 
 const AccountPage: Component = () => {
   const [account, { refetch }] = createResource(fetchAccount);
@@ -66,8 +63,8 @@ const AccountPage: Component = () => {
       const msg = err instanceof Error ? err.message : String(err);
       setUpgradeError(
         msg === 'UNAUTHORIZED'
-          ? '请先登录后再升级 (Please sign in first).'
-          : `无法发起支付 (${msg}). 请稍后重试或联系支持.`,
+          ? t('account.upgrade.errorLogin')
+          : t('account.upgrade.errorGeneric', { message: msg }),
       );
     } finally {
       setUpgradingPlan(null);
@@ -75,7 +72,7 @@ const AccountPage: Component = () => {
   };
 
   const onCancel = async () => {
-    if (!confirm('确定要取消订阅吗？取消后将在当前计费周期结束时停止扣费。')) return;
+    if (!confirm(t('account.cancel.confirm'))) return;
     setCancelling(true);
     setCancelError(null);
     setCancelSuccess(null);
@@ -95,12 +92,12 @@ const AccountPage: Component = () => {
       <style>{styles}</style>
 
       <header class="acct-hero">
-        <h1 class="acct-h1">账户设置</h1>
-        <p class="acct-sub">查看你的订阅状态并管理付款方式。</p>
+        <h1 class="acct-h1">{t('account.title')}</h1>
+        <p class="acct-sub">{t('account.subtitle')}</p>
       </header>
 
       <Show when={account.loading}>
-        <p class="acct-muted">加载中…</p>
+        <p class="acct-muted">{t('common.loading')}</p>
       </Show>
 
       <Show when={account.error}>
@@ -110,26 +107,28 @@ const AccountPage: Component = () => {
       <Show when={account()}>
         {(acc) => (
           <section class="acct-panel">
-            <h2 class="acct-h2">订阅信息</h2>
+            <h2 class="acct-h2">{t('account.subscription.title')}</h2>
 
             <div class="acct-grid">
               <div class="acct-field">
-                <span class="acct-label">邮箱</span>
+                <span class="acct-label">{t('account.field.email')}</span>
                 <span class="acct-value">{acc().email}</span>
               </div>
               <div class="acct-field">
-                <span class="acct-label">订阅状态</span>
+                <span class="acct-label">{t('account.field.status')}</span>
                 <span class={`acct-badge acct-badge-${acc().subscriptionStatus}`}>
-                  {STATUS_LABELS[acc().subscriptionStatus]}
+                  {statusLabel(acc().subscriptionStatus)}
                 </span>
               </div>
               <div class="acct-field">
-                <span class="acct-label">支付服务商</span>
-                <span class="acct-value">{acc().paymentProvider ?? '无'}</span>
+                <span class="acct-label">{t('account.field.provider')}</span>
+                <span class="acct-value">{acc().paymentProvider ?? t('account.none')}</span>
               </div>
               <div class="acct-field">
-                <span class="acct-label">订阅 ID</span>
-                <span class="acct-value acct-mono">{acc().paymentSubscriptionId ?? '无'}</span>
+                <span class="acct-label">{t('account.field.subscriptionId')}</span>
+                <span class="acct-value acct-mono">
+                  {acc().paymentSubscriptionId ?? t('account.none')}
+                </span>
               </div>
             </div>
 
@@ -141,7 +140,7 @@ const AccountPage: Component = () => {
                   disabled={cancelling()}
                   onClick={() => void onCancel()}
                 >
-                  {cancelling() ? '取消中…' : '取消订阅'}
+                  {cancelling() ? t('account.cancel.inProgress') : t('account.cancel.button')}
                 </button>
               </div>
             </Show>
@@ -152,8 +151,8 @@ const AccountPage: Component = () => {
               }
             >
               <div class="acct-upgrade">
-                <h3 class="acct-h3">升级到 Taxmora Pro</h3>
-                <p class="acct-upgrade-sub">解锁无水印 PDF 税表生成与完整 AI 策略报告。</p>
+                <h3 class="acct-h3">{t('account.upgrade.title')}</h3>
+                <p class="acct-upgrade-sub">{t('account.upgrade.subtitle')}</p>
                 <div class="acct-upgrade-actions">
                   <button
                     type="button"
@@ -161,7 +160,9 @@ const AccountPage: Component = () => {
                     disabled={upgradingPlan() !== null}
                     onClick={() => void onUpgrade('monthly')}
                   >
-                    {upgradingPlan() === 'monthly' ? '跳转中…' : '月付订阅'}
+                    {upgradingPlan() === 'monthly'
+                      ? t('account.upgrade.redirecting')
+                      : t('account.upgrade.monthly')}
                   </button>
                   <button
                     type="button"
@@ -169,7 +170,9 @@ const AccountPage: Component = () => {
                     disabled={upgradingPlan() !== null}
                     onClick={() => void onUpgrade('annual')}
                   >
-                    {upgradingPlan() === 'annual' ? '跳转中…' : '年付订阅（更优惠）'}
+                    {upgradingPlan() === 'annual'
+                      ? t('account.upgrade.redirecting')
+                      : t('account.upgrade.annual')}
                   </button>
                 </div>
                 <Show when={upgradeError()}>
@@ -186,10 +189,12 @@ const AccountPage: Component = () => {
 
             <Show when={cancelSuccess()}>
               <div class="acct-success">
-                <p>✅ 订阅已取消。</p>
+                <p>{t('account.cancel.success.title')}</p>
                 <p>
-                  你的服务将持续到当前计费周期结束：
-                  {cancelSuccess()?.currentPeriodEnd ?? '未知'}
+                  {t('account.cancel.success.until', {
+                    date:
+                      cancelSuccess()?.currentPeriodEnd ?? t('account.cancel.success.unknownDate'),
+                  })}
                 </p>
               </div>
             </Show>

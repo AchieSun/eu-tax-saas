@@ -1,0 +1,78 @@
+/**
+ * FilingDraftView 字典 — 税务草稿 PDF 生成（W4）。
+ *
+ * 键为扁平点分命名空间，值支持 {name} 插值（见 ../index.ts）。
+ * en 缺失的 key 自动回退 zh。
+ */
+import type { BilingualDictionary } from './index';
+
+export const filingDict: BilingualDictionary = {
+  zh: {
+    'filing.title': '税务草稿生成 (Filing Draft)',
+    'filing.subtitle': '生成可填写的税务申报 PDF 草稿。',
+    'filing.picker.country': '国家',
+    'filing.picker.year': '年度',
+    'filing.picker.form': '表格',
+    'filing.picker.loading': '加载中…',
+    'filing.picker.loadFields': '加载字段',
+    'filing.fields.title': '字段编辑',
+    'filing.fields.empty': '该表格暂无字段定义。',
+    'filing.fields.count': '{count} 个字段 · 映射 v{version} · {hash}',
+    'filing.action.generating': '生成中…',
+    'filing.action.generate': '生成草稿 PDF',
+    'filing.action.download': '下载 PDF',
+    'filing.preview.title': '预览',
+    'filing.preview.iframeTitle': '已生成的税务草稿 PDF',
+    'filing.preview.filled': '已填 {filled} 个字段 · {warnings} 个警告 · 映射 v{version} ({hash})',
+    'filing.preview.warningDetail': '{total} 个字段警告{truncated}',
+    'filing.preview.warningTruncated': ' — 显示前 {shown} / 共 {total} 条',
+    'filing.watermark.disabled': '草稿默认带水印——无水印 PDF 为 Pro 会员功能。',
+    'filing.watermark.toggle': '包含 DRAFT 水印',
+    'filing.error.unauthorized': '请先登录。',
+    'filing.error.rateLimited': '已超过今日生成上限 (10/天)。请在 {retryAfter} 秒后重试。',
+    'filing.error.subscriptionRequired': '无水印 PDF 为 Pro 会员功能。升级后解锁。',
+    'filing.error.formNotFound': '未找到该表格映射。',
+    'filing.error.noActiveFields': '该表格暂无可用字段。',
+    'filing.error.metadata.unauthorized': '请先登录。',
+    'filing.error.metadata.formNotFound': '未找到该表格映射。',
+    'filing.paywall.title': '无水印 PDF 生成',
+    'filing.paywall.bullet1': '生成可直接提交的干净 PDF（无 DRAFT 水印）',
+    'filing.paywall.bullet2': '每日 10 次生成额度',
+    'filing.paywall.bullet3': '全部五国表格模板',
+  },
+  en: {
+    'filing.title': 'Filing draft (PDF)',
+    'filing.subtitle': 'Generate a fillable PDF draft of your tax filing.',
+    'filing.picker.country': 'Country',
+    'filing.picker.year': 'Year',
+    'filing.picker.form': 'Form',
+    'filing.picker.loading': 'Loading…',
+    'filing.picker.loadFields': 'Load fields',
+    'filing.fields.title': 'Edit fields',
+    'filing.fields.empty': 'No fields defined for this form.',
+    'filing.fields.count': '{count} field(s) · mapping v{version} · {hash}',
+    'filing.action.generating': 'Generating…',
+    'filing.action.generate': 'Generate Draft PDF',
+    'filing.action.download': 'Download PDF',
+    'filing.preview.title': 'Preview',
+    'filing.preview.iframeTitle': 'Generated tax draft PDF',
+    'filing.preview.filled':
+      'Filled {filled} field(s) · {warnings} warning(s) · mapping v{version} ({hash})',
+    'filing.preview.warningDetail': '{total} field warning(s){truncated}',
+    'filing.preview.warningTruncated': ' — showing first {shown} of {total}',
+    'filing.watermark.disabled':
+      'Drafts are always watermarked — watermark-free PDFs are a Pro feature.',
+    'filing.watermark.toggle': 'Include DRAFT watermark',
+    'filing.error.unauthorized': 'Please sign in first.',
+    'filing.error.rateLimited': 'Daily generation limit reached (10/day). Retry in {retryAfter}s.',
+    'filing.error.subscriptionRequired': 'Watermark-free PDF is a Pro feature — upgrade to unlock.',
+    'filing.error.formNotFound': 'Form mapping not found.',
+    'filing.error.noActiveFields': 'No active fields for this form.',
+    'filing.error.metadata.unauthorized': 'Please sign in first.',
+    'filing.error.metadata.formNotFound': 'Form mapping not found.',
+    'filing.paywall.title': 'Watermark-free PDF generation',
+    'filing.paywall.bullet1': 'Clean, submission-ready PDFs with no DRAFT watermark',
+    'filing.paywall.bullet2': '10 generations per day',
+    'filing.paywall.bullet3': 'All five-country form templates',
+  },
+};

@@ -4,9 +4,13 @@
  * Mobile-first card layout that stitches together residency, tax estimate,
  * top strategies, days tracker, filing draft and upcoming deadlines.
  * All data comes from a single GET /api/dashboard call.
+ *
+ * i18n: every label goes through t() so the card grid flips between
+ * zh/en reactively with the global locale signal.
  */
 
 import { type Component, For, Show, createResource, createSignal } from 'solid-js';
+import { t } from '../i18n';
 
 interface DashboardResidency {
   country: string;
@@ -81,16 +85,7 @@ async function fetchDashboard(taxYear: number): Promise<DashboardResponse> {
   return r.json() as Promise<DashboardResponse>;
 }
 
-const countryName = (code: string): string => {
-  const map: Record<string, string> = {
-    ES: '西班牙',
-    PT: '葡萄牙',
-    DE: '德国',
-    NL: '荷兰',
-    UK: '英国',
-  };
-  return map[code] ?? code;
-};
+const countryName = (code: string): string => t(`country.${code}`) ?? code;
 
 const DashboardPage: Component = () => {
   const [taxYear, setTaxYear] = createSignal<number>(2025);
@@ -149,8 +144,8 @@ const DashboardPage: Component = () => {
         }}
       >
         <h1 style={{ 'font-size': '1.5rem', 'font-weight': 700, color: '#111827', margin: 0 }}>
-          <Show when={data()} fallback="欢迎回来">
-            欢迎回来，{data()?.user.firstName}
+          <Show when={data()} fallback={t('dashboard.welcome')}>
+            {t('dashboard.welcomeName', { name: data()?.user.firstName ?? '' })}
           </Show>
         </h1>
         <label
@@ -162,7 +157,7 @@ const DashboardPage: Component = () => {
             color: '#374151',
           }}
         >
-          税务年度
+          {t('dashboard.taxYear')}
           <select
             value={taxYear()}
             onChange={(e) => setTaxYear(Number.parseInt(e.currentTarget.value, 10))}
@@ -187,12 +182,16 @@ const DashboardPage: Component = () => {
             'font-size': '0.875rem',
           }}
         >
-          加载仪表盘失败：{data.error?.message ?? '未知错误'}
+          {t('dashboard.error', {
+            message: data.error?.message ?? t('common.unknownError'),
+          })}
         </div>
       </Show>
 
       <Show when={data.loading}>
-        <div style={{ ...cardStyle, color: '#6b7280', 'font-size': '0.875rem' }}>加载中…</div>
+        <div style={{ ...cardStyle, color: '#6b7280', 'font-size': '0.875rem' }}>
+          {t('common.loading')}
+        </div>
       </Show>
 
       <Show when={data()}>
@@ -200,9 +199,11 @@ const DashboardPage: Component = () => {
           <div class="dashboard-grid">
             <Show when={!d().onboarding.complete}>
               <div style={cardStyle}>
-                <div style={cardTitleStyle}>📋 完成入门信息</div>
+                <div style={cardTitleStyle}>{t('dashboard.onboarding.title')}</div>
                 <div style={valueStyle}>
-                  {Math.round((d().onboarding.currentStep / 5) * 100)}% 完成
+                  {t('dashboard.percentComplete', {
+                    value: Math.round((d().onboarding.currentStep / 5) * 100),
+                  })}
                 </div>
                 <div
                   style={{
@@ -222,21 +223,21 @@ const DashboardPage: Component = () => {
                   />
                 </div>
                 <a href="#onboarding" style={ctaStyle}>
-                  继续入门 →
+                  {t('dashboard.onboarding.cta')}
                 </a>
               </div>
             </Show>
 
             {/* Residency */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>📍 你的税务居民身份</div>
+              <div style={cardTitleStyle}>{t('dashboard.residency.title')}</div>
               <Show
                 when={d().residency}
                 fallback={
                   <div style={emptyStyle}>
-                    尚未完成居民身份判定。
+                    {t('dashboard.residency.empty')}
                     <a href="#residency" style={ctaStyle}>
-                      开始判定 →
+                      {t('dashboard.residency.start')}
                     </a>
                   </div>
                 }
@@ -249,7 +250,12 @@ const DashboardPage: Component = () => {
                     <div
                       style={{ 'font-size': '0.875rem', color: '#374151', 'margin-top': '0.25rem' }}
                     >
-                      {r().isResident ? '疑似税务居民' : '疑似非税务居民'} · 置信度 {r().confidence}
+                      {t('dashboard.residency.statusLine', {
+                        status: r().isResident
+                          ? t('dashboard.residency.resident')
+                          : t('dashboard.residency.nonResident'),
+                        confidence: r().confidence,
+                      })}
                     </div>
                     <Show when={r().hasConflict}>
                       <div
@@ -263,14 +269,15 @@ const DashboardPage: Component = () => {
                           display: 'inline-block',
                         }}
                       >
-                        ⚠️ 与 {(() => {
-                          const conflict = r().conflictWith;
-                          return conflict ? countryName(conflict) : '其它国家';
-                        })()} 存在居民身份冲突
+                        {t('dashboard.residency.conflict', {
+                          country: r().conflictWith
+                            ? countryName(r().conflictWith as string)
+                            : t('dashboard.residency.conflictOther'),
+                        })}
                       </div>
                     </Show>
                     <a href="#residency" style={ctaStyle}>
-                      查看详情 →
+                      {t('dashboard.residency.details')}
                     </a>
                   </>
                 )}
@@ -279,29 +286,31 @@ const DashboardPage: Component = () => {
 
             {/* Tax estimate */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>💶 估算税负</div>
+              <div style={cardTitleStyle}>{t('dashboard.tax.title')}</div>
               <Show
                 when={d().taxEstimate}
                 fallback={
                   <div style={emptyStyle}>
-                    输入收入后即可估算 5 国税负。
+                    {t('dashboard.tax.empty')}
                     <a href="#compare" style={ctaStyle}>
-                      5 国对比 →
+                      {t('dashboard.tax.compare')}
                     </a>
                   </div>
                 }
               >
-                {(t) => (
+                {(est) => (
                   <>
-                    <div style={valueStyle}>€{Math.round(t().taxOwed).toLocaleString()}</div>
+                    <div style={valueStyle}>€{Math.round(est().taxOwed).toLocaleString()}</div>
                     <div
                       style={{ 'font-size': '0.875rem', color: '#374151', 'margin-top': '0.25rem' }}
                     >
-                      有效税率 {(t().effectiveRate * 100).toFixed(1)}% · 基于{' '}
-                      {countryName(t().country)}
+                      {t('dashboard.tax.effectiveRate', {
+                        rate: (est().effectiveRate * 100).toFixed(1),
+                        country: countryName(est().country),
+                      })}
                     </div>
                     <a href="#compare" style={ctaStyle}>
-                      重新计算 →
+                      {t('dashboard.tax.recalculate')}
                     </a>
                   </>
                 )}
@@ -310,14 +319,14 @@ const DashboardPage: Component = () => {
 
             {/* Strategies */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>💡 前 3 条节税策略</div>
+              <div style={cardTitleStyle}>{t('dashboard.strategies.title')}</div>
               <Show
                 when={d().strategies.length > 0}
                 fallback={
                   <div style={emptyStyle}>
-                    保存策略评估后此处将显示 Top 3。
+                    {t('dashboard.strategies.empty')}
                     <a href="#strategies" style={ctaStyle}>
-                      查看策略库 →
+                      {t('dashboard.strategies.library')}
                     </a>
                   </div>
                 }
@@ -331,7 +340,9 @@ const DashboardPage: Component = () => {
                           <span style={{ 'font-weight': 600 }}>{s.title}</span>
                           <Show when={savings != null}>
                             <span style={{ color: '#059669', 'margin-left': '0.5rem' }}>
-                              → 省 €{Math.round(savings as number).toLocaleString()}
+                              {t('dashboard.strategies.savings', {
+                                amount: Math.round(savings as number).toLocaleString(),
+                              })}
                             </span>
                           </Show>
                         </li>
@@ -340,14 +351,14 @@ const DashboardPage: Component = () => {
                   </For>
                 </ol>
                 <a href="#strategies" style={ctaStyle}>
-                  查看全部 →
+                  {t('dashboard.strategies.viewAll')}
                 </a>
               </Show>
             </div>
 
             {/* Days tracker */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>📅 本年度停留天数</div>
+              <div style={cardTitleStyle}>{t('dashboard.days.title')}</div>
               <div
                 style={{
                   display: 'grid',
@@ -372,31 +383,35 @@ const DashboardPage: Component = () => {
                       >
                         {dc.days}
                       </div>
-                      <div style={{ 'font-size': '0.75rem', color: '#6b7280' }}>天</div>
+                      <div style={{ 'font-size': '0.75rem', color: '#6b7280' }}>
+                        {t('dashboard.days.unit')}
+                      </div>
                     </div>
                   )}
                 </For>
               </div>
               <a href="#calendar" style={ctaStyle}>
-                打开日历 →
+                {t('dashboard.days.openCalendar')}
               </a>
             </div>
 
             {/* Filing draft */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>📋 税务草稿</div>
+              <div style={cardTitleStyle}>{t('dashboard.filing.title')}</div>
               <Show
                 when={d().filing.completeness > 0}
                 fallback={
                   <div style={emptyStyle}>
                     {d().filing.nextStep}
                     <a href={d().onboarding.complete ? '#filing' : '#onboarding'} style={ctaStyle}>
-                      开始填写 →
+                      {t('dashboard.filing.start')}
                     </a>
                   </div>
                 }
               >
-                <div style={valueStyle}>{d().filing.completeness}% 完成</div>
+                <div style={valueStyle}>
+                  {t('dashboard.percentComplete', { value: d().filing.completeness })}
+                </div>
                 <div
                   style={{
                     'margin-top': '0.5rem',
@@ -415,21 +430,21 @@ const DashboardPage: Component = () => {
                   />
                 </div>
                 <a href="#filing" style={ctaStyle}>
-                  继续 →
+                  {t('dashboard.filing.continue')}
                 </a>
               </Show>
             </div>
 
             {/* Upcoming deadlines */}
             <div style={cardStyle}>
-              <div style={cardTitleStyle}>⏰ 即将到来的截止日</div>
+              <div style={cardTitleStyle}>{t('dashboard.deadlines.title')}</div>
               <Show
                 when={d().deadlines.length > 0}
                 fallback={
                   <div style={emptyStyle}>
-                    暂无待办截止日。
+                    {t('dashboard.deadlines.empty')}
                     <a href="#deadlines" style={ctaStyle}>
-                      管理截止日 →
+                      {t('dashboard.deadlines.manage')}
                     </a>
                   </div>
                 }
@@ -446,14 +461,18 @@ const DashboardPage: Component = () => {
                       >
                         <div style={{ 'font-weight': 600, color: '#111827' }}>{dl.title}</div>
                         <div style={{ 'font-size': '0.8rem', color: '#6b7280' }}>
-                          {dl.dueDate} · 还剩 {dl.daysRemaining} 天 · {countryName(dl.jurisdiction)}
+                          {t('dashboard.deadlines.meta', {
+                            date: dl.dueDate,
+                            days: dl.daysRemaining,
+                            country: countryName(dl.jurisdiction),
+                          })}
                         </div>
                       </li>
                     )}
                   </For>
                 </ul>
                 <a href="#deadlines" style={ctaStyle}>
-                  查看全部 →
+                  {t('dashboard.deadlines.viewAll')}
                 </a>
               </Show>
             </div>

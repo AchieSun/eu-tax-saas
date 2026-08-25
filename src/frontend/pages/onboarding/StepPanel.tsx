@@ -1,15 +1,11 @@
 import { For, Match, type Setter, Switch } from 'solid-js';
+import { t } from '../../i18n';
 import { IncomeRow } from './IncomeRow';
 import { type OnboardingCountry, SUPPORTED_ONBOARDING_COUNTRIES } from './api';
 import { type Step3DraftRow, numericField, parseCountry } from './helpers';
 
-const COUNTRY_LABELS: Record<OnboardingCountry, string> = {
-  DE: '德国 DE',
-  NL: '荷兰 NL',
-  PT: '葡萄牙 PT',
-  ES: '西班牙 ES',
-  UK: '英国 UK',
-};
+const countryLabel = (country: OnboardingCountry): string =>
+  `${t(`country.${country}`)} ${country}`;
 
 const YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030] as const;
 
@@ -39,21 +35,21 @@ export function OnboardingStepPanel(props: StepPanelProps) {
   return (
     <Switch>
       <Match when={props.step === 1}>
-        <h2 class="ob-h2">1. 隐私与数据使用</h2>
+        <h2 class="ob-h2">{t('onboarding.step1.title')}</h2>
         <label class="ob-check">
           <input
             type="checkbox"
             checked={props.privacy}
             onChange={(e) => props.setPrivacy(e.currentTarget.checked)}
           />{' '}
-          我同意仅为税务测算与申报准备使用这些资料。
+          {t('onboarding.step1.consent')}
         </label>
       </Match>
       <Match when={props.step === 2}>
-        <h2 class="ob-h2">2. 国家范围</h2>
+        <h2 class="ob-h2">{t('onboarding.step2.title')}</h2>
         <div class="ob-grid">
           <label class="ob-field" for="ob-nationality">
-            国籍
+            {t('onboarding.step2.nationality')}
             <input
               id="ob-nationality"
               class="ob-input"
@@ -63,7 +59,7 @@ export function OnboardingStepPanel(props: StepPanelProps) {
             />
           </label>
           <label class="ob-field" for="ob-primary">
-            主要国家
+            {t('onboarding.step2.primaryCountry')}
             <select
               id="ob-primary"
               class="ob-input"
@@ -71,7 +67,7 @@ export function OnboardingStepPanel(props: StepPanelProps) {
               onChange={(e) => props.setPrimaryCountry(parseCountry(e.currentTarget.value) ?? 'DE')}
             >
               <For each={SUPPORTED_ONBOARDING_COUNTRIES}>
-                {(country) => <option value={country}>{COUNTRY_LABELS[country]}</option>}
+                {(country) => <option value={country}>{countryLabel(country)}</option>}
               </For>
             </select>
           </label>
@@ -85,16 +81,16 @@ export function OnboardingStepPanel(props: StepPanelProps) {
                   checked={props.countries.includes(country)}
                   onChange={(e) => props.toggleCountry(country, e.currentTarget.checked)}
                 />{' '}
-                {COUNTRY_LABELS[country]}
+                {countryLabel(country)}
               </label>
             )}
           </For>
         </div>
       </Match>
       <Match when={props.step === 3}>
-        <h2 class="ob-h2">3. 收入概览</h2>
+        <h2 class="ob-h2">{t('onboarding.step3.title')}</h2>
         <label class="ob-field ob-year" for="ob-year">
-          纳税年度
+          {t('onboarding.step3.taxYear')}
           <select
             id="ob-year"
             class="ob-input"
@@ -114,20 +110,20 @@ export function OnboardingStepPanel(props: StepPanelProps) {
           )}
         </For>
         <button type="button" class="ob-btn ob-btn-outline" onClick={props.addIncome}>
-          添加收入
+          {t('onboarding.step3.addIncome')}
         </button>
       </Match>
       <Match when={props.step === 4}>
-        <h2 class="ob-h2">4. 特殊身份</h2>
+        <h2 class="ob-h2">{t('onboarding.step4.title')}</h2>
         <div class="ob-grid">
           <For each={props.visibleCountries()}>
             {(country) => (
               <label class="ob-field" for={`ob-status-${country}`}>
-                {COUNTRY_LABELS[country]}
+                {countryLabel(country)}
                 <input
                   id={`ob-status-${country}`}
                   class="ob-input"
-                  placeholder="如 NHR、30% ruling"
+                  placeholder={t('onboarding.step4.placeholder')}
                   value={props.specialStatus[country] ?? ''}
                   onInput={(e) =>
                     props.setSpecialStatus((prev) => ({
@@ -142,12 +138,12 @@ export function OnboardingStepPanel(props: StepPanelProps) {
         </div>
       </Match>
       <Match when={props.step === 5}>
-        <h2 class="ob-h2">5. 预计停留天数</h2>
+        <h2 class="ob-h2">{t('onboarding.step5.title')}</h2>
         <div class="ob-grid">
           <For each={props.visibleCountries()}>
             {(country) => (
               <label class="ob-field" for={`ob-days-${country}`}>
-                {COUNTRY_LABELS[country]}
+                {countryLabel(country)}
                 <input
                   id={`ob-days-${country}`}
                   class="ob-input"

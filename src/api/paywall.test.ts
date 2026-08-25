@@ -47,6 +47,23 @@ describe('isPro (client)', () => {
     expect(isPro(null)).toBe(false);
     expect(isPro(undefined)).toBe(false);
   });
+
+  // t5 integration fix: BETA_ALL_PRO mirror - while /api/me echoes the
+  // override every signed-in user resolves as Pro, in lockstep with the
+  // server-side gates (subscription.ts isBetaAllPro).
+  it('treats every signed-in user as Pro while betaAllPro is on', () => {
+    expect(
+      isPro({ userId: 'u1', role: 'user', subscriptionStatus: 'free', betaAllPro: true }),
+    ).toBe(true);
+    // past_due is admitted too: the server override short-circuits before
+    // the D1 lookup, so the UI mirror must not be stricter than the gate.
+    expect(
+      isPro({ userId: 'u1', role: 'user', subscriptionStatus: 'past_due', betaAllPro: true }),
+    ).toBe(true);
+    expect(
+      isPro({ userId: 'u1', role: 'user', subscriptionStatus: 'free', betaAllPro: false }),
+    ).toBe(false);
+  });
 });
 
 // ── fetchMe mapping ──────────────────────────────────────────────────────────
@@ -56,7 +73,30 @@ describe('fetchMe', () => {
     vi.unstubAllGlobals();
   });
 
-  it('maps 200 body to MeInfo (role + subscriptionStatus)', async () => {
+  it('maps 200 body to MeInfo (role + subscriptionStatus + betaAllPro)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          userId: 'u1',
+          role: 'user',
+          subscriptionStatus: 'active',
+          betaAllPro: true,
+        }),
+      ),
+    );
+    const me = await fetchMe();
+    expect(me).toEqual({
+      userId: 'u1',
+      role: 'user',
+      subscriptionStatus: 'active',
+      betaAllPro: true,
+    });
+  });
+
+  // t5 integration fix: an older /api/me without the field must normalize
+  // to betaAllPro: false (never undefined-truthy), keeping the override off.
+  it('normalizes a missing betaAllPro field to false', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -66,7 +106,7 @@ describe('fetchMe', () => {
         ),
     );
     const me = await fetchMe();
-    expect(me).toEqual({ userId: 'u1', role: 'user', subscriptionStatus: 'active' });
+    expect(me?.betaAllPro).toBe(false);
   });
 
   it('returns null on 401 (signed out)', async () => {

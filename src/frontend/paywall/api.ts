@@ -9,7 +9,9 @@
  *   - POST /api/payment/checkout { plan } → { checkoutUrl } (Creem hosted flow)
  *
  * Wire contract mirrors src/api/middleware/subscription.ts:
- *   Pro = role==='admin' || subscriptionStatus==='active'
+ *   Pro = betaAllPro || role==='admin' || subscriptionStatus==='active'
+ *   (betaAllPro echoes the backend BETA_ALL_PRO override - while that var
+ *   is on every signed-in user is treated as Pro)
  *   402 { error:'subscription_required', feature, subscriptionStatus }
  */
 
@@ -19,6 +21,8 @@ export interface MeInfo {
   userId: string;
   role: string;
   subscriptionStatus: 'free' | 'active' | 'cancelled' | 'past_due' | string;
+  /** Echo of the backend BETA_ALL_PRO var - true means everyone is Pro. */
+  betaAllPro?: boolean;
 }
 
 export type SubscriptionPlan = 'monthly' | 'annual';
@@ -41,12 +45,14 @@ export async function fetchMe(): Promise<MeInfo | null> {
       userId?: string;
       role?: string;
       subscriptionStatus?: string;
+      betaAllPro?: boolean;
     };
     if (!body.userId) return null;
     return {
       userId: body.userId,
       role: body.role ?? 'user',
       subscriptionStatus: body.subscriptionStatus ?? 'free',
+      betaAllPro: body.betaAllPro === true,
     };
   } catch {
     return null;
@@ -56,6 +62,10 @@ export async function fetchMe(): Promise<MeInfo | null> {
 /** Mirror of the backend isPro() — single source of truth is the users row. */
 export function isPro(me: MeInfo | null | undefined): boolean {
   if (!me) return false;
+  // t5 integration fix: mirror the backend BETA_ALL_PRO override - while the
+  // var is on every signed-in user is Pro, so the UI paywall hides itself in
+  // lockstep with the server-side gates (see isBetaAllPro).
+  if (me.betaAllPro === true) return true;
   return me.role === 'admin' || me.subscriptionStatus === 'active';
 }
 

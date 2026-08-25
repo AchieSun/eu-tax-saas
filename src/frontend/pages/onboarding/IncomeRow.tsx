@@ -1,25 +1,13 @@
 import { For } from 'solid-js';
+import { t } from '../../i18n';
 import { ONBOARDING_INCOME_TYPES, type OnboardingCountry, type OnboardingIncomeType } from './api';
 import type { Step3DraftRow } from './helpers';
 
-const COUNTRY_LABELS: Record<OnboardingCountry, string> = {
-  DE: '德国 DE',
-  NL: '荷兰 NL',
-  PT: '葡萄牙 PT',
-  ES: '西班牙 ES',
-  UK: '英国 UK',
-};
+const countryLabel = (country: OnboardingCountry): string =>
+  `${t(`country.${country}`)} ${country}`;
 
-const INCOME_LABELS: Record<OnboardingIncomeType, string> = {
-  salary: '工资薪金',
-  self_employed: '自由职业',
-  dividends: '股息',
-  interest: '利息',
-  rental: '租金',
-  capital_gains: '资本利得',
-  crypto: '加密资产',
-  other: '其他',
-};
+const incomeLabel = (incomeType: OnboardingIncomeType): string =>
+  t(`onboarding.income.${incomeType}`);
 
 interface IncomeRowProps {
   readonly row: Step3DraftRow;
@@ -40,20 +28,20 @@ export function IncomeRow(props: IncomeRowProps) {
         <TextInput
           row={props.row}
           field="amountAnnual"
-          label="年收入"
+          label={t('onboarding.income.amountAnnual')}
           updateIncome={props.updateIncome}
         />
         <TextInput
           row={props.row}
           field="currency"
-          label="币种"
+          label={t('onboarding.income.currency')}
           maxLength={3}
           updateIncome={props.updateIncome}
         />
         <TextInput
           row={props.row}
           field="withholdingTax"
-          label="已预扣税"
+          label={t('onboarding.income.withholdingTax')}
           updateIncome={props.updateIncome}
         />
       </div>
@@ -73,7 +61,7 @@ function rowId(row: Step3DraftRow): string {
 function IncomeSelect(props: RowProps) {
   return (
     <label class="ob-field" for={`ob-type-${props.row.id}`}>
-      收入类型
+      {t('onboarding.income.type')}
       <select
         id={`ob-type-${props.row.id}`}
         class="ob-input"
@@ -83,7 +71,7 @@ function IncomeSelect(props: RowProps) {
         }
       >
         <For each={ONBOARDING_INCOME_TYPES}>
-          {(incomeType) => <option value={incomeType}>{INCOME_LABELS[incomeType]}</option>}
+          {(incomeType) => <option value={incomeType}>{incomeLabel(incomeType)}</option>}
         </For>
       </select>
     </label>
@@ -97,7 +85,7 @@ interface CountrySelectProps extends RowProps {
 function CountrySelect(props: CountrySelectProps) {
   return (
     <label class="ob-field" for={`ob-country-${props.row.id}`}>
-      国家
+      {t('onboarding.income.country')}
       <select
         id={`ob-country-${props.row.id}`}
         class="ob-input"
@@ -105,7 +93,7 @@ function CountrySelect(props: CountrySelectProps) {
         onChange={(e) => props.updateIncome(rowId(props.row), { country: e.currentTarget.value })}
       >
         <For each={props.countries}>
-          {(country) => <option value={country}>{COUNTRY_LABELS[country]}</option>}
+          {(country) => <option value={country}>{countryLabel(country)}</option>}
         </For>
       </select>
     </label>

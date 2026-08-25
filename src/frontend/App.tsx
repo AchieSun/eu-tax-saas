@@ -4,10 +4,16 @@
  * W3: adds a tab switcher between the 5-country compare (W2) and the new
  * F6 residency calendar (W3 T3). Tab state lives in a local signal — no
  * router is necessary for two top-level views.
+ *
+ * i18n: the shell is bilingual (zh/en). Tab labels, the health pill and the
+ * implementation-status table all resolve through t(); a ZH/EN switcher sits
+ * next to the health pill. Because t() reads the module-level locale signal,
+ * every label updates reactively without a refresh.
  */
 
 import {
   type Component,
+  For,
   Show,
   Suspense,
   createResource,
@@ -18,6 +24,7 @@ import {
 } from 'solid-js';
 import CalendarView from './CalendarView';
 import CompareView from './CompareView';
+import { LOCALES, type Locale, locale, setLocale, t } from './i18n';
 import AccountPage from './pages/AccountPage';
 import DashboardPage from './pages/DashboardPage';
 import DeadlinesPage from './pages/DeadlinesPage';
@@ -54,7 +61,7 @@ type Tab =
   | 'deadlines'
   | 'account';
 
-const TABS = [
+const TABS: readonly Tab[] = [
   'onboarding',
   'dashboard',
   'compare',
@@ -65,7 +72,7 @@ const TABS = [
   'rag',
   'deadlines',
   'account',
-] as const;
+];
 
 function isTab(value: string): value is Tab {
   return TABS.includes(value as Tab);
@@ -90,7 +97,7 @@ const App: Component = () => {
     window.location.hash = id;
   };
 
-  const tabBtn = (id: Tab, label: string) => (
+  const tabBtn = (id: Tab) => (
     <button
       type="button"
       class="app-tab"
@@ -98,7 +105,21 @@ const App: Component = () => {
       onClick={() => selectTab(id)}
       aria-pressed={tab() === id}
     >
-      {label}
+      {t(`app.tab.${id}`)}
+    </button>
+  );
+
+  const langBtn = (id: Locale) => (
+    <button
+      type="button"
+      class="lang-btn"
+      classList={{ 'lang-btn-active': locale() === id }}
+      onClick={() => setLocale(id)}
+      aria-pressed={locale() === id}
+      aria-label={t(`app.language.${id}`)}
+      title={t(`app.language.${id}`)}
+    >
+      {id.toUpperCase()}
     </button>
   );
 
@@ -114,14 +135,19 @@ const App: Component = () => {
     >
       <style>{appStyles}</style>
 
-      {/* Health pill (top-right) */}
+      {/* Health pill (top-right) + language switcher */}
       <div
         style={{
           display: 'flex',
           'justify-content': 'flex-end',
+          'align-items': 'center',
+          gap: '0.75rem',
           'margin-bottom': '0.75rem',
         }}
       >
+        <div class="lang-switcher" role="group" aria-label={t('app.language.aria')}>
+          <For each={LOCALES}>{(id) => langBtn(id)}</For>
+        </div>
         <Show
           when={health()}
           fallback={
@@ -135,7 +161,7 @@ const App: Component = () => {
                 border: '1px solid #e5e7eb',
               }}
             >
-              ● API: connecting…
+              {t('app.health.connecting')}
             </span>
           }
         >
@@ -159,17 +185,8 @@ const App: Component = () => {
       </div>
 
       {/* Top-level tab bar */}
-      <nav class="app-tabs" aria-label="主导航">
-        {tabBtn('onboarding', '开始使用')}
-        {tabBtn('dashboard', '仪表盘')}
-        {tabBtn('compare', '5 国对比')}
-        {tabBtn('calendar', '居留日历')}
-        {tabBtn('filing', '税务草稿')}
-        {tabBtn('residency', '居留判定')}
-        {tabBtn('strategies', '节税策略')}
-        {tabBtn('rag', '税法问答')}
-        {tabBtn('deadlines', '截止日')}
-        {tabBtn('account', '账户设置')}
+      <nav class="app-tabs" aria-label={t('app.nav.aria')}>
+        <For each={TABS}>{(id) => tabBtn(id)}</For>
       </nav>
 
       {/* Active view */}
@@ -188,7 +205,7 @@ const App: Component = () => {
       <Show when={tab() === 'filing'}>
         <Suspense
           fallback={
-            <p style={{ color: '#6b7280', 'font-size': '0.875rem' }}>Loading filing draft view…</p>
+            <p style={{ color: '#6b7280', 'font-size': '0.875rem' }}>{t('app.filing.loading')}</p>
           }
         >
           <FilingDraftView />
@@ -228,7 +245,7 @@ const App: Component = () => {
             'font-size': '0.95rem',
           }}
         >
-          Implementation status (W1–W7)
+          {t('app.status.heading')}
         </summary>
         <table
           style={{
@@ -240,9 +257,9 @@ const App: Component = () => {
         >
           <thead>
             <tr style={{ 'text-align': 'left', color: '#6b7280' }}>
-              <th style={{ padding: '0.5rem 0' }}>Feature</th>
-              <th style={{ padding: '0.5rem 0' }}>Status</th>
-              <th style={{ padding: '0.5rem 0' }}>Source</th>
+              <th style={{ padding: '0.5rem 0' }}>{t('app.status.feature')}</th>
+              <th style={{ padding: '0.5rem 0' }}>{t('app.status.status')}</th>
+              <th style={{ padding: '0.5rem 0' }}>{t('app.status.source')}</th>
             </tr>
           </thead>
           <tbody>
@@ -355,5 +372,32 @@ const appStyles = `
 .app-tab-active {
   color: #2563eb;
   border-bottom-color: #2563eb;
+}
+.lang-switcher {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.125rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.lang-btn {
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  min-height: 0;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 150ms, background-color 150ms;
+}
+.lang-btn:hover { color: #111827; }
+.lang-btn-active {
+  color: #2563eb;
+  background: #eff6ff;
 }
 `;
