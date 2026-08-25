@@ -17,6 +17,19 @@
  * business decision we don't want to encode silently. When dunning is
  * designed, flip the check here in ONE place.
  *
+ * Beta override (`BETA_ALL_PRO` var, see isBetaAllPro below): an opt-in
+ * lever that treats every SIGNED-IN user as Pro while it is on. The
+ * product normally charges the €29/year founding price (the var defaults
+ * to "false"), so this switch exists for promo windows or launch-week
+ * "everyone is Pro" moments, not as the default state. Anonymous callers
+ * still get 401/402 exactly as before (signing up is the whole point of
+ * the funnel). The override short-circuits BEFORE the D1 lookup, so while
+ * it is on a signed-in user is admitted even when D1 is down - fail-open
+ * here is intentional (nobody is being charged; the alternative would 503
+ * the entire product on a DB hiccup). Set BETA_ALL_PRO = "true" in
+ * wrangler.toml to enable it; the fail-closed isPro logic below takes
+ * over again as soon as it is off.
+ *
  * Failure mode: the access lookup is fail-closed — if D1 throws we return
  * 503 `subscription_check_unavailable` instead of default-allowing. Both
  * gated surfaces are the paid product; fail-open would hand out Pro for
@@ -42,6 +55,24 @@ import type { Bindings, Variables } from '../index';
 export const CHECKOUT_HINT = '/app#account';
 /** Uniform human-readable message on every paywall 402. */
 export const SUBSCRIPTION_MESSAGE = '订阅后解锁完整功能';
+
+// ─── Beta override ───────────────────────────────────────────────────────────
+
+/**
+ * True while the open-beta "everyone is Pro" switch is on.
+ *
+ * Reads the `BETA_ALL_PRO` wrangler var ('true' or '1' = on, anything
+ * else / unset = off). Checked BEFORE the D1 access lookup in both
+ * paywall middlewares so overridden traffic never touches the billing
+ * query - and so the product stays usable even when D1 hiccups
+ * (deliberate fail-open, see the module header). Defaults to off;
+ * flip wrangler.toml to "true" for a promo window, no code change
+ * needed.
+ */
+export function isBetaAllPro(env: Pick<Bindings, 'BETA_ALL_PRO'>): boolean {
+  const flag = env?.BETA_ALL_PRO;
+  return flag === 'true' || flag === '1';
+}
 
 // ─── Shared access lookup ───────────────────────────────────────────────────
 
@@ -94,6 +125,12 @@ export function requireActiveSubscription(opts: RequireSubscriptionOptions) {
     const userId = c.get('session')?.user?.id;
     if (!userId) {
       return c.json({ ok: false, error: 'unauthorized' }, 401);
+    }
+
+    // Beta override: every signed-in user is Pro while BETA_ALL_PRO is on.
+    // Runs before the D1 lookup (see isBetaAllPro) - anon stays 401 above.
+    if (isBetaAllPro(c.env)) {
+      return next();
     }
 
     let access: UserAccess | null;
@@ -200,6 +237,11 @@ export function requireProIfWatermarkOff() {
         },
         402,
       );
+    }
+    // Beta override: every signed-in user is Pro while BETA_ALL_PRO is on.
+    // Runs before the D1 lookup (see isBetaAllPro); anon still 402 above.
+    if (isBetaAllPro(c.env)) {
+      return next();
     }
     let access: UserAccess | null;
     try {

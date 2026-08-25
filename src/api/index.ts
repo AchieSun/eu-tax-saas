@@ -31,6 +31,7 @@ import { users } from '../db/schema';
 import { registerLandingRoutes } from '../landing';
 import { auditMiddleware } from './middleware/audit';
 import { rateLimitD1 } from './middleware/rate-limit-d1';
+import { isBetaAllPro } from './middleware/subscription';
 import { accountRoutes } from './routes/account';
 import adminRoutes from './routes/admin';
 import { calculateRoutes } from './routes/calculate';
@@ -44,6 +45,7 @@ import { ragRoutes } from './routes/rag';
 import { ragAdminRoutes } from './routes/rag-admin';
 import { residencyRoutes } from './routes/residency';
 import { strategiesRoutes } from './routes/strategies';
+import { waitlistRoutes } from './routes/waitlist';
 
 export interface Bindings {
   DB: D1Database;
@@ -54,6 +56,12 @@ export interface Bindings {
   QUEUE: Queue;
   ENVIRONMENT: string;
   APP_URL: string;
+  /**
+   * Open-beta paywall bypass: 'true'/'1' treats every signed-in user as
+   * Pro (see src/api/middleware/subscription.ts isBetaAllPro). Flip to
+   * "false" in wrangler.toml when real billing starts.
+   */
+  BETA_ALL_PRO?: string;
   BETTER_AUTH_SECRET: string;
   EU_TAX_SAAS_BOT_CONTACT?: string;
   PADDLE_API_KEY?: string;
@@ -155,6 +163,9 @@ app.get('/api/health', (c) =>
 // Pro-gated UI (F3 watermark-free PDF, F4 full strategy report) off the
 // same row the backend gates on — single source of truth is users.role +
 // users.subscription_status.
+// t5 integration fix: also echoes `betaAllPro` (the BETA_ALL_PRO override)
+// so the frontend isPro() mirror hides the paywall UI in lockstep with the
+// server-side gates while that var is on.
 app.get('/api/me', async (c) => {
   const session = c.get('session');
   if (!session?.user?.id) return c.json({ error: 'unauthorized' }, 401);
@@ -168,6 +179,7 @@ app.get('/api/me', async (c) => {
     userId: session.user.id,
     role: row?.role ?? 'user',
     subscriptionStatus: row?.subscriptionStatus ?? 'free',
+    betaAllPro: isBetaAllPro(c.env),
   });
 });
 
@@ -224,6 +236,7 @@ app.route('/api/admin/rag', ragAdminRoutes);
 app.route('/api/rag', ragRoutes);
 app.route('/api/residency', residencyRoutes);
 app.route('/api/strategies', strategiesRoutes);
+app.route('/api/waitlist', waitlistRoutes);
 
 // ── 404 fallback ────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

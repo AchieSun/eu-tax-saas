@@ -296,7 +296,7 @@ export function renderPage(options: PageOptions): string {
       <a class="brand" href="/">Tax<span>mora</span></a>
       <nav>
         ${navLink('/', 'Home', path)}
-        ${navLink('/compare', '五国对比', path)}
+        ${navLink('/compare', 'Compare', path)}
         ${navLink('/pricing', 'Pricing', path)}
         ${navLink('/terms', 'Terms', path)}
         ${navLink('/privacy', 'Privacy', path)}

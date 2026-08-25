@@ -10,60 +10,253 @@
 import { COMPANY_ADDRESS, SITE_NAME, SUPPORT_EMAIL, renderPage } from './layout';
 
 const META_HOME =
-  'Taxmora helps European cross-border workers and digital nomads estimate tax outcomes across Spain, Portugal, Germany, the Netherlands and the UK.';
+  'Tax estimates for cross-border developers in Germany, the Netherlands, Portugal, Spain and the UK. Legal-cited rates, 2025 and 2026 tax years. Founding price €29/year.';
 const META_PRICING =
-  'Simple, transparent pricing for Taxmora. Monthly and annual plans with no hidden fees.';
+  'One plan for Taxmora: €29/year founding price while the engine is in this state, €99 once it is finished. Founding members keep €29 for as long as the product exists.';
 const META_LEGAL =
   'Legal information, terms of service, privacy policy, refund policy and cookie policy for Taxmora.';
 
 const CURRENT_DATE = '14 July 2026';
 
+/**
+ * Landing home page - the five-screen structure from
+ * marketing/landing-page-spec.md, written to catch the DEV.to article
+ * traffic (marketing/content/devto/07-v6.md is the tone reference:
+ * developer-to-developer, zero exclamation marks, no marketing
+ * buzzwords, defects listed up front).
+ *
+ * Screen map: 1 hero / 2 coverage / 3 features / 4 "What's not done
+ * yet" / 5 waitlist email capture + footer self-deprecation.
+ *
+ * Tone red lines (spec): no exclamation marks anywhere, no
+ * revolutionize/seamless/empower-style buzzwords, no social proof,
+ * no "complete/all-in-one" claims. Specific numbers and honest gaps
+ * are the pitch.
+ */
 export const homePage = (): string =>
   renderPage({
     title: SITE_NAME,
     path: '/',
     metaDescription: META_HOME,
     body: `
+      <style>
+        /* Home-page-local styles; shared tokens live in layout.ts. */
+        .country-grid, .feature-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+          gap: var(--space-sm);
+          margin-block: var(--space-md);
+        }
+        .feature-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+        .country-card h3, .feature-card h3 { margin: 0 0 var(--space-xs); }
+        .country-card p, .feature-card p { margin: 0; font-size: 0.95rem; }
+        .country-card .flag { font-size: 1.6rem; display: block; margin-bottom: var(--space-xs); }
+        .honest-section {
+          background: #f1f5f9;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius);
+          padding: var(--space-lg);
+          margin-block: var(--space-lg);
+        }
+        .honest-section h2 { margin-top: 0; }
+        .honest-section ul { margin-bottom: var(--space-md); }
+        .waitlist-input {
+          flex: 1 1 240px;
+          padding: 0.75rem 0.875rem;
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          font-size: 1rem;
+          font-family: inherit;
+        }
+        .waitlist-input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+        .waitlist-form { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-block: var(--space-md); }
+        .waitlist-message { margin: 0; }
+        .landing-footnote {
+          text-align: center;
+          font-size: 0.85rem;
+          color: var(--color-muted);
+          opacity: 0.75;
+          margin-block: var(--space-xl);
+        }
+      </style>
+
       <section class="hero">
-        <h1>Tax clarity for cross-border life in Europe</h1>
+        <h1>${SITE_NAME}</h1>
+        <p>Tax estimates for cross-border developers.</p>
         <p>
-          ${SITE_NAME} helps freelancers, remote workers and digital nomads estimate tax outcomes
-          across Spain, Portugal, Germany, the Netherlands and the UK — without spreadsheets or guesswork.
+          Five countries. One engine. €29/year while it's in this state, €99
+          when it's finished.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="/pricing">View pricing</a>
-          <a class="btn btn-secondary" href="mailto:${SUPPORT_EMAIL}">Contact support</a>
+          <a class="btn btn-primary" href="/sign-up">Get the founding price - €29/year</a>
+          <a class="btn btn-secondary" href="#waitlist">Get launch updates</a>
         </div>
       </section>
 
-      <section class="card">
-        <h2>What you get</h2>
-        <ul class="feature-list">
-          <li>Multi-country tax estimates for ES, PT, DE, NL and the UK</li>
-          <li>Residency-day calendar and presence-test checks</li>
-          <li>Personalised strategy suggestions with legal citations</li>
-          <li>Deadline reminders and draft form helpers</li>
-          <li>Plain-language answers from curated tax-law sources</li>
+      <section>
+        <h2>Five countries, legal-cited rates</h2>
+        <p>
+          Every rate and threshold in our calculators traces back to the law that
+          defines it - §32a EStG for Germany, the Belastingdienst tariff for the
+          Netherlands, IRS code for Portugal, IRPF for Spain, and HMRC rules for
+          the UK. 2025 and 2026 tax years.
+        </p>
+        <div class="country-grid">
+          <div class="card country-card">
+            <span class="flag" aria-hidden="true">🇩🇪</span>
+            <h3>Germany</h3>
+            <p>Cubic-spline tariff, §32a EStG</p>
+          </div>
+          <div class="card country-card">
+            <span class="flag" aria-hidden="true">🇳🇱</span>
+            <h3>Netherlands</h3>
+            <p>Box 1 rates and the 30% ruling</p>
+          </div>
+          <div class="card country-card">
+            <span class="flag" aria-hidden="true">🇵🇹</span>
+            <h3>Portugal</h3>
+            <p>IRS brackets and IFICI status</p>
+          </div>
+          <div class="card country-card">
+            <span class="flag" aria-hidden="true">🇪🇸</span>
+            <h3>Spain</h3>
+            <p>State + regional IRPF, Beckham regime</p>
+          </div>
+          <div class="card country-card">
+            <span class="flag" aria-hidden="true">🇬🇧</span>
+            <h3>UK</h3>
+            <p>HMRC rules, Statutory Residence Test</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>What it does</h2>
+        <div class="feature-grid">
+          <div class="card feature-card">
+            <h3>Tax calculator</h3>
+            <p>
+              Income tax for 5 countries, 2025/2026, with legal citations on
+              every threshold.
+            </p>
+          </div>
+          <div class="card feature-card">
+            <h3>Residency check</h3>
+            <p>
+              Decision-tree assessment incl. the UK Statutory Residence Test.
+              See where you'd count as resident.
+            </p>
+          </div>
+          <div class="card feature-card">
+            <h3>22 tax strategies</h3>
+            <p>
+              From the NL 30% ruling to Portugal's IFICI to Spain's Beckham
+              regime - with eligibility rules in code, not vibes.
+            </p>
+          </div>
+          <div class="card feature-card">
+            <h3>Ask the docs</h3>
+            <p>
+              RAG-powered Q&amp;A over the actual tax law sources. Answers cite
+              their sources.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="honest-section">
+        <h2>What's not done yet</h2>
+        <ul>
+          <li>The UK residence test covers 8 of 17 outcomes.</li>
+          <li>The Spanish foral regimes (Basque Country, Navarra) are partially implemented.</li>
+          <li>The Dutch Box 3 model predates the 2023 Supreme Court ruling.</li>
+          <li>The app UI is currently Chinese-only. English is on the list.</li>
         </ul>
+        <p>
+          That's why it's €29 and not €99. When those three are done, the price
+          goes up. If you sign up now, you keep €29 for as long as the product
+          exists.
+        </p>
+        <p>We'd rather tell you now than surprise you later.</p>
       </section>
 
-      <section class="card">
-        <h2>Who it is for</h2>
+      <section id="waitlist">
+        <h2>Not ready to pay for a half-finished tax engine? Fair.</h2>
         <p>
-          If you earn in one country while living in another — or split your year between several
-          EU jurisdictions — ${SITE_NAME} gives you a single place to model scenarios, compare
-          regimes and stay on top of filing deadlines.
+          Leave your email and I'll tell you when the Box 3 fix, the UK
+          residence test, and the Spanish foral regimes are done - and the price
+          is about to go from €29 to €99.
         </p>
+        <form class="waitlist-form" id="waitlist-form" novalidate>
+          <input
+            class="waitlist-input"
+            type="email"
+            id="waitlist-email"
+            name="email"
+            required
+            autocomplete="email"
+            placeholder="your@email.com"
+            aria-label="Email address"
+          >
+          <button class="btn btn-primary" type="submit">Notify me</button>
+        </form>
+        <p class="auth-error" id="waitlist-error" hidden></p>
+        <p class="waitlist-message" id="waitlist-ok" hidden></p>
+        <p>One email at launch. Nothing else. No newsletter, no drip campaign.</p>
       </section>
 
-      <section class="card">
-        <h2>Important notice</h2>
-        <p>
-          ${SITE_NAME} provides software-assisted calculations and general information. It does
-          <strong>not</strong> constitute legal, tax or accounting advice. Always consult a qualified
-          professional before filing a return or making a financial decision.
-        </p>
-      </section>
+      <p class="landing-footnote">
+        ${SITE_NAME} - built by one developer who filed cross-border taxes wrong
+        for two years and got annoyed enough to write 966 tests about it.
+      </p>
+
+      <script>
+        (function () {
+          var form = document.getElementById('waitlist-form');
+          var errorEl = document.getElementById('waitlist-error');
+          var okEl = document.getElementById('waitlist-ok');
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var email = document.getElementById('waitlist-email').value;
+            var button = form.querySelector('button[type="submit"]');
+            var original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Adding you...';
+            fetch('/api/waitlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ email: email }),
+            })
+              .then(function (res) {
+                return res.json().then(function (data) { return { res: res, data: data }; });
+              })
+              .then(function (result) {
+                if (result.res.ok) {
+                  form.hidden = true;
+                  okEl.textContent = result.data.status === 'already_registered'
+                    ? "You're already on the list."
+                    : "You're on the list. One email when it ships.";
+                  okEl.hidden = false;
+                } else if (result.res.status === 429) {
+                  errorEl.textContent = 'Too many attempts from your address. Try again tomorrow.';
+                  errorEl.hidden = false;
+                } else {
+                  errorEl.textContent = 'Enter a valid email address.';
+                  errorEl.hidden = false;
+                }
+              })
+              .catch(function () {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.hidden = false;
+              })
+              .finally(function () {
+                button.disabled = false;
+                button.textContent = original;
+              });
+          });
+        })();
+      </script>
     `,
   });
 
@@ -73,51 +266,50 @@ export const pricingPage = (): string =>
     path: '/pricing',
     metaDescription: META_PRICING,
     body: `
-      <h1>Simple pricing</h1>
+      <h1>Pricing</h1>
       <p>
-        One plan, every feature. Cancel anytime from your account settings or by emailing
-        <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.
+        One plan, every feature. The price is a function of how finished the
+        engine is, not of a tier list.
       </p>
 
       <div class="pricing-grid">
         <div class="card">
-          <h2>Monthly</h2>
-          <div class="price">€10 <span>/ month</span></div>
-          <p>Billed monthly. VAT included where applicable.</p>
+          <h2>Founding price</h2>
+          <div class="price">€29 <span>/ year</span></div>
+          <p>While the engine is in its current state. Everything included:</p>
           <ul class="feature-list">
-            <li>Unlimited tax estimates</li>
-            <li>All 5 supported countries</li>
-            <li>Residency calendar</li>
-            <li>Strategy suggestions</li>
-            <li>Deadline reminders</li>
-            <li>Email support</li>
+            <li>Tax calculator for all 5 countries, 2025 and 2026 tax years</li>
+            <li>Residency check incl. the UK Statutory Residence Test</li>
+            <li>All 22 tax strategies, eligibility rules included</li>
+            <li>Ask the docs - RAG Q&amp;A over the actual law sources</li>
+            <li>Deadline reminders and email support</li>
           </ul>
-          <button class="btn btn-primary js-subscribe" data-plan="monthly" type="button">
-            Subscribe monthly
-          </button>
-        </div>
-
-        <div class="card">
-          <h2>Annual</h2>
-          <div class="price">€190 <span>/ year</span></div>
-          <p>Billed annually. Save vs monthly billing. VAT included where applicable.</p>
-          <ul class="feature-list">
-            <li>Everything in Monthly</li>
-            <li>Priority email support</li>
-            <li>Early access to new country guides</li>
-          </ul>
-          <button class="btn btn-primary js-subscribe" data-plan="annual" type="button">
-            Subscribe annually
-          </button>
+          <a class="btn btn-primary" href="/sign-up">Get the founding price - €29/year</a>
+          <p>
+            When the Box 3 fix, the UK residence test and the Spanish foral
+            regimes are done, the price becomes €99/year. Founding members keep
+            €29 for as long as the product exists.
+          </p>
         </div>
       </div>
 
       <section class="card">
+        <h2>Why €29 and not €99?</h2>
+        <p>The engine is upfront about what it does not do yet:</p>
+        <ul class="feature-list">
+          <li>The UK residence test covers 8 of 17 outcomes.</li>
+          <li>The Spanish foral regimes (Basque Country, Navarra) are partially implemented.</li>
+          <li>The Dutch Box 3 model predates the 2023 Supreme Court ruling.</li>
+        </ul>
+        <p>When those three are done, the price goes up. That is the whole pricing model.</p>
+      </section>
+
+      <section class="card">
         <h2>Common questions</h2>
-        <h3>Can I change or cancel my plan?</h3>
+        <h3>Can I cancel?</h3>
         <p>
-          Yes. You can upgrade, downgrade or cancel at any time. Changes take effect at the next
-          billing cycle.
+          Yes, any time from your account settings or by emailing
+          <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.
         </p>
         <h3>What payment methods are accepted?</h3>
         <p>
@@ -134,46 +326,6 @@ export const pricingPage = (): string =>
           Yes. See our <a href="/refund">Refund Policy</a> for details.
         </p>
       </section>
-
-      <script>
-        (function () {
-          document.querySelectorAll('.js-subscribe').forEach(function (button) {
-            var originalText = button.textContent || '';
-            button.addEventListener('click', function () {
-              var plan = button.getAttribute('data-plan');
-              button.disabled = true;
-              button.textContent = 'Loading...';
-              fetch('/api/payment/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ plan: plan }),
-              })
-                .then(function (res) {
-                  return res.json().then(function (data) {
-                    return { res: res, data: data };
-                  });
-                })
-                .then(function (result) {
-                  if (result.res.ok && result.data.checkoutUrl) {
-                    window.location.href = result.data.checkoutUrl;
-                  } else if (result.res.status === 401) {
-                    alert('Please sign in first to subscribe.');
-                  } else {
-                    alert(result.data.error || 'Unable to start checkout. Please try again.');
-                  }
-                })
-                .catch(function () {
-                  alert('Network error. Please try again.');
-                })
-                .finally(function () {
-                  button.disabled = false;
-                  button.textContent = originalText;
-                });
-            });
-          });
-        })();
-      </script>
     `,
   });
 

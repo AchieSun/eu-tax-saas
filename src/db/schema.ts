@@ -413,6 +413,22 @@ export const deadlines = sqliteTable(
   }),
 );
 
+// ────────────────────────────────────────────────────────────────────────────
+// Waitlist - landing-page email capture (DEV.to article funnel).
+//
+// Pure email sink: capture is the end of the flow for now; sending the
+// launch notification is a separate future task (spec: "捕获即止").
+// `source` marks the acquisition channel for later multi-channel
+// attribution ('devto-article' is the only channel today).
+// ────────────────────────────────────────────────────────────────────────────
+
+export const waitlist = sqliteTable('waitlist', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(), // normalized (trim + lowercase) by the route before insert
+  createdAt: integer('created_at').notNull(), // Unix ms - set by route code, no DB default (matches audit_log convention)
+  source: text('source').notNull().default('devto-article'),
+});
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type UserOnboarding = typeof userOnboarding.$inferSelect;
@@ -426,3 +442,5 @@ export type FormMappingVersion = typeof formMappingVersions.$inferSelect;
 export type NewFormMappingVersion = typeof formMappingVersions.$inferInsert;
 export type Deadline = typeof deadlines.$inferSelect;
 export type NewDeadline = typeof deadlines.$inferInsert;
+export type Waitlist = typeof waitlist.$inferSelect;
+export type NewWaitlist = typeof waitlist.$inferInsert;

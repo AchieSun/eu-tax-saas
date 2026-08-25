@@ -55,7 +55,7 @@ const baseEnv = {
   BETTER_AUTH_SECRET: 'test-secret',
 };
 
-function makeEnv(overrides: Partial<typeof baseEnv> = {}): Bindings {
+function makeEnv(overrides: Partial<Bindings> = {}): Bindings {
   return { ...baseEnv, ...overrides } as unknown as Bindings;
 }
 
@@ -115,6 +115,39 @@ describe('Oracle P0-1: GET /api/me', () => {
     const body = (await res.json()) as { userId?: string; role?: string };
     expect(body.role).toBe('user');
     spy.mockRestore();
+  });
+
+  // t5 integration fix: /api/me echoes the BETA_ALL_PRO override so the
+  // frontend isPro() mirror can hide the paywall UI in lockstep with the
+  // server-side gates.
+  it('echoes betaAllPro alongside the user row (on/off states)', async () => {
+    const auth = await import('../auth/auth');
+    const spy = vi.spyOn(auth, 'createAuth').mockReturnValue({
+      api: { getSession: async () => ({ user: { id: 'beta-user-1' } }) },
+      handler: () => new Response('not used', { status: 200 }),
+    } as unknown as ReturnType<typeof auth.createAuth>);
+    mockRoleForId = 'user';
+    try {
+      const onRes = await app.request('/api/me', {}, makeEnv({ BETA_ALL_PRO: 'true' }));
+      expect(onRes.status).toBe(200);
+      const onBody = (await onRes.json()) as {
+        betaAllPro?: boolean;
+        subscriptionStatus?: string;
+      };
+      expect(onBody.betaAllPro).toBe(true);
+      expect(onBody.subscriptionStatus).toBe('free');
+
+      // Default (unset) and explicit "false" both report betaAllPro: false -
+      // the product charges the €29 founding price normally.
+      const offRes = await app.request('/api/me', {}, makeEnv({ BETA_ALL_PRO: 'false' }));
+      const offBody = (await offRes.json()) as { betaAllPro?: boolean };
+      expect(offBody.betaAllPro).toBe(false);
+      const unsetRes = await app.request('/api/me', {}, makeEnv());
+      const unsetBody = (await unsetRes.json()) as { betaAllPro?: boolean };
+      expect(unsetBody.betaAllPro).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

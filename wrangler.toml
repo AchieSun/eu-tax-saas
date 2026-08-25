@@ -51,6 +51,10 @@ queue = "eu-tax-saas-jobs"
 [vars]
 ENVIRONMENT = "development"
 APP_URL = "http://localhost:8787"
+# 促销开关（付费墙豁免，见 src/api/middleware/subscription.ts 的 isBetaAllPro）：
+# "false" = 正常收费（Beta 期即按 €29/年创始价收费，默认值）；
+# "true" = 促销期，所有登录用户免 Pro 费（全员 Pro）。仅促销活动时临时打开。
+BETA_ALL_PRO = "false"
 
 # Observability
 [observability]
@@ -68,6 +72,8 @@ name = "eu-tax-saas-staging"
 [env.staging.vars]
 ENVIRONMENT = "staging"
 APP_URL = "https://staging.eu-tax-saas.com"
+# 促销开关：默认 false 正常收费（€29/年创始价）；true = 促销期登录用户全免 Pro 费。
+BETA_ALL_PRO = "false"
 
 # === Production environment ===
 [env.production]
@@ -76,6 +82,8 @@ name = "eu-tax-saas-prod"
 [env.production.vars]
 ENVIRONMENT = "production"
 APP_URL = "https://taxmora.com"
+# 促销开关：默认 false 正常收费（€29/年创始价）；true = 促销期登录用户全免 Pro 费。
+BETA_ALL_PRO = "false"
 
 [[env.production.routes]]
 pattern = "taxmora.com"
