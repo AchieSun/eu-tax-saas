@@ -45,9 +45,9 @@
 - commit：`a8b8e1c` / `1d39e8c` / `8167cb9` / `5dccae0` / `30fd7b1`（诚实声明更新）
 
 ### 待办
-- [ ] **Creem 后台配置**：创建 €29/年创始价产品，更新 `CREEM_YEARLY_PRODUCT_ID` 生产 secret（当前 pricing CTA 依赖它；未配置时 checkout 会 500）
-- [ ] 确认生产 `CREEM_API_KEY` 等 secrets 已就位（`wrangler secret list` 验证）
-- [ ] push 后线上验证 + DEV.to 文章发布（文章承诺 €29 创始价，与落地页已一致）
+- [x] **Creem 后台配置**：✅ 已完成（2026-08-25）——test + live 环境均创建 €29/年创始价产品；生产 `CREEM_YEARLY_PRODUCT_ID` 已指向 live 产品 `prod_78Xrr8jY0rVMk6DhNwMzbo`，checkout 实测返回 €29 收银台
+- [x] 生产 secrets 就位：✅ 已完成（2026-08-25）——`CREEM_API_KEY`（live）/ `CREEM_YEARLY_PRODUCT_ID` / `CREEM_WEBHOOK_SECRET` 均已写入生产，`wrangler secret list` 确认
+- [ ] push 后线上验证已完成 ✅（落地页/定价/双语/waitlist/checkout 全链路通过）；**DEV.to 文章发布仍待办**（文案就绪：`marketing/content/devto/07-v6.md`）
 
 ---
 
