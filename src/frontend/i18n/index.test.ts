@@ -18,11 +18,11 @@ describe('detectInitialLocale', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns zh when window is undefined (SSR-safe)', async () => {
+  it('returns en when window is undefined (SSR-safe)', async () => {
     vi.stubGlobal('window', undefined);
     const { detectInitialLocale } = await import('./index');
 
-    expect(detectInitialLocale()).toBe('zh');
+    expect(detectInitialLocale()).toBe('en');
   });
 
   it('returns stored locale from localStorage', async () => {
@@ -38,7 +38,7 @@ describe('detectInitialLocale', () => {
     expect(detectInitialLocale()).toBe('en');
   });
 
-  it('falls back to navigator.language detection', async () => {
+  it('defaults to en when nothing is stored (no navigator sniffing)', async () => {
     const storage = new Map<string, string>();
     vi.stubGlobal('window', {
       localStorage: {
@@ -49,7 +49,7 @@ describe('detectInitialLocale', () => {
     vi.stubGlobal('navigator', { language: 'zh-CN' });
     const { detectInitialLocale } = await import('./index');
 
-    expect(detectInitialLocale()).toBe('zh');
+    expect(detectInitialLocale()).toBe('en');
 
     vi.resetModules();
     vi.stubGlobal('navigator', { language: 'en-US' });
@@ -58,7 +58,7 @@ describe('detectInitialLocale', () => {
     expect(fresh.detectInitialLocale()).toBe('en');
   });
 
-  it('returns zh when localStorage throws (private mode)', async () => {
+  it('returns en when localStorage throws (private mode)', async () => {
     vi.stubGlobal('navigator', { language: 'zh-CN' });
     vi.stubGlobal('window', {
       localStorage: {
@@ -72,7 +72,7 @@ describe('detectInitialLocale', () => {
     });
     const { detectInitialLocale } = await import('./index');
 
-    expect(detectInitialLocale()).toBe('zh');
+    expect(detectInitialLocale()).toBe('en');
   });
 });
 
@@ -135,9 +135,12 @@ describe('t() translation + fallback', () => {
   });
 
   it('keeps interpolation params untouched when a placeholder has no value', async () => {
-    const { t } = await import('./index');
+    const { setLocale, t } = await import('./index');
+    // Default locale is now 'en'; pin 'zh' so this asserts the zh template itself.
+    setLocale('zh');
 
     expect(t('dashboard.welcomeName')).toBe('欢迎回来，{name}');
+    setLocale('en');
   });
 });
 

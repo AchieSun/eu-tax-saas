@@ -207,7 +207,7 @@ export const homePage = (): string =>
 
       <p class="landing-footnote">
         ${SITE_NAME} - built by one developer who filed cross-border taxes wrong
-        for two years and got annoyed enough to write 966 tests about it.
+        for two years and got annoyed enough to write 977 tests about it.
       </p>
 
       <script>

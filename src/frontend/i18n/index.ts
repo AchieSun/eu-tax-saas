@@ -29,20 +29,19 @@ function isLocale(value: unknown): value is Locale {
   return value === 'zh' || value === 'en';
 }
 
-/** SSR 安全的持久化 locale 读取（localStorage / navigator 均可能不存在）。 */
+/**
+ * SSR 安全的持久化 locale 读取（localStorage / navigator 均可能不存在）。
+ * 优先级：localStorage 用户选择 → 默认 'en'（英文流量为主，中文用户手动切换）。
+ */
 export function detectInitialLocale(): Locale {
-  if (typeof window === 'undefined') return 'zh';
+  if (typeof window === 'undefined') return 'en';
   try {
     const stored = window.localStorage?.getItem(LOCALE_STORAGE_KEY);
     if (isLocale(stored)) return stored;
   } catch {
-    // localStorage 不可用（隐私模式等）— 落到 navigator 检测
+    // localStorage 不可用（隐私模式等）— 回退默认 'en'
   }
-  const language =
-    typeof navigator !== 'undefined' && typeof navigator.language === 'string'
-      ? navigator.language
-      : '';
-  return language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  return 'en';
 }
 
 /** 模块级全局 locale signal — 整个 SPA 共享一个实例。 */

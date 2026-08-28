@@ -120,7 +120,7 @@ describe('home page: five-screen landing (marketing/landing-page-spec.md)', () =
     expect(body).toContain('One email at launch. Nothing else.');
 
     // Footer self-deprecation (test count tracks the live suite).
-    expect(body).toContain('write 966 tests about it');
+    expect(body).toContain('write 977 tests about it');
   });
 
   it('tone red lines: zero exclamation marks in visible copy, no marketing buzzwords', async () => {
