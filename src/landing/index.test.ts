@@ -77,6 +77,10 @@ describe('home page: five-screen landing (marketing/landing-page-spec.md)', () =
     expect(body).toContain('href="/sign-up"');
     expect(body).toContain('Get launch updates');
     expect(body).toContain('href="#waitlist"');
+    // Free-calculator CTA (conversion fix): low-friction entry for hesitant
+    // visitors, pointed at the English compare page.
+    expect(body).toContain('Try the free calculator');
+    expect(body).toContain('href="/compare?lang=en"');
 
     // Screen 2 - coverage: legal citations + five country cards.
     expect(body).toContain('Five countries, legal-cited rates');

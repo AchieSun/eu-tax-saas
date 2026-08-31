@@ -84,33 +84,33 @@ describe('GET /compare page', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/html');
     const body = await res.text();
-    expect(body).toContain('<title>五国税后收入对比计算器');
+    // Default language is English (matches the landing-page strategy).
+    expect(body).toContain('<html lang="en">');
+    expect(body).toContain('<title>Five-Country Take-Home Pay Calculator');
     expect(body).toContain('id="cmp-form"');
     expect(body).toContain('method="get"');
     expect(body).toContain('name="grossIncome"');
     expect(body).toContain('href="/app"');
     expect(body).toContain('href="/app#strategies"');
-    expect(body).toContain('免费注册，生成我的申报草稿');
-    expect(body).toContain('查看完整节税策略');
-    expect(body).toContain(
-      '本工具提供的计算结果仅供参考，不构成税务建议；重大决策请咨询持牌税务顾问。',
-    );
+    expect(body).toContain('Sign up free - draft my tax filings');
+    expect(body).toContain('See all tax-saving strategies');
+    expect(body).toContain('do not constitute tax advice');
   });
 
   it('200: server-renders results for valid query (no-JS path)', async () => {
     const res = await request('/compare?grossIncome=60000&taxYear=2025');
     expect(res.status).toBe(200);
     const body = await res.text();
-    // Title stays the canonical SEO title even with results.
-    expect(body).toContain('<title>五国税后收入对比计算器');
+    // Default language is English.
+    expect(body).toContain('<title>Five-Country Take-Home Pay Calculator');
     expect(body).toContain('cmp-top');
-    expect(body).toContain('到手最高');
-    // All five country names present.
-    expect(body).toContain('德国');
-    expect(body).toContain('荷兰');
-    expect(body).toContain('葡萄牙');
-    expect(body).toContain('西班牙');
-    expect(body).toContain('英国');
+    expect(body).toContain('Highest net');
+    // All five country names present (English).
+    expect(body).toContain('Germany');
+    expect(body).toContain('Netherlands');
+    expect(body).toContain('Portugal');
+    expect(body).toContain('Spain');
+    expect(body).toContain('United Kingdom');
     // European-style formatted net income (€ prefix + thousands separator).
     expect(body).toMatch(/€[0-9,]+/);
   });
@@ -121,7 +121,7 @@ describe('GET /compare page', () => {
     const body = await res.text();
     expect(body).toContain('#fef2f2');
     expect(body).toContain('#991b1b');
-    expect(body).toContain('税前年收入必须大于 0');
+    expect(body).toContain('Annual gross income must be greater than 0');
   });
 });
 
@@ -194,7 +194,7 @@ describe('GET /compare?lang=en (English mode, t4)', () => {
     expect(body.message).toBe('税前年收入必须大于 0');
   });
 
-  it('API 200 with lang=en still returns Chinese countryName + English countryNameEn pair', async () => {
+  it('API 200 with lang=en returns English countryName + English countryNameEn pair', async () => {
     const res = await request('/api/public/compare?grossIncome=60000&taxYear=2025&lang=en');
     expect(res.status).toBe(200);
     const data = (await res.json()) as {
@@ -202,23 +202,23 @@ describe('GET /compare?lang=en (English mode, t4)', () => {
     };
     expect(data.results).toHaveLength(5);
     for (const row of data.results) {
-      // API default language stays zh; the English pair rides along so the
-      // EN page script can render English names without a second request.
-      expect(row.countryName).toMatch(/德国|荷兰|葡萄牙|西班牙|英国/);
+      // API countryName follows the lang param; countryNameEn rides along
+      // for consumers that need both display names.
+      expect(row.countryName).toMatch(/Germany|Netherlands|Portugal|Spain|United Kingdom/);
       expect(row.countryNameEn.length).toBeGreaterThan(0);
       expect(row.countryNameEn).toMatch(/^[A-Za-z ]+$/);
     }
   });
 
-  it('?lang=zh keeps Chinese; an invalid lang value falls back to Chinese', async () => {
+  it('?lang=zh keeps Chinese; an invalid lang value falls back to English', async () => {
     const zh = await request('/compare?lang=zh');
     const zhBody = await zh.text();
     expect(zhBody).toContain('<html lang="zh-CN">');
     expect(zhBody).toContain('立即对比五国到手');
     const bogus = await request('/compare?lang=fr');
     const bogusBody = await bogus.text();
-    expect(bogusBody).toContain('<html lang="zh-CN">');
-    expect(bogusBody).toContain('五国税后收入对比计算器');
+    expect(bogusBody).toContain('<html lang="en">');
+    expect(bogusBody).toContain('<title>Five-Country Take-Home Pay Calculator');
   });
 });
 

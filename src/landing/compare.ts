@@ -33,9 +33,9 @@ type App = Hono<{ Bindings: Bindings; Variables: Variables }>;
 
 export type CompareLang = 'zh' | 'en';
 
-/** ?lang= 只接受 zh / en；缺省/非法值回落 zh（产品默认语言）。 */
+/** ?lang= 只接受 zh / en；缺省/非法值回落 en（与落地页英文优先策略一致，?lang=zh 显式切中文）。 */
 export function resolveCompareLang(raw: string | null | undefined): CompareLang {
-  return (raw ?? '').toLowerCase() === 'en' ? 'en' : 'zh';
+  return (raw ?? '').toLowerCase() === 'zh' ? 'zh' : 'en';
 }
 
 // ─── 国家展示元数据 ──────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ function summarizeBreakdown(raw: unknown): Array<{ label: string; amount: number
 
 export function runPublicCompare(
   input: PublicCompareInput,
-  lang: CompareLang = 'zh',
+  lang: CompareLang = 'en',
 ): {
   rows: CompareRow[];
   countryErrors: Array<{ country: Country; error: string }>;

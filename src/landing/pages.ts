@@ -89,6 +89,7 @@ export const homePage = (): string =>
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="/sign-up">Get the founding price - €29/year</a>
+          <a class="btn btn-secondary" href="/compare?lang=en">Try the free calculator</a>
           <a class="btn btn-secondary" href="#waitlist">Get launch updates</a>
         </div>
       </section>
@@ -218,6 +219,9 @@ export const homePage = (): string =>
           form.addEventListener('submit', function (event) {
             event.preventDefault();
             var email = document.getElementById('waitlist-email').value;
+            // Attribution: pass ?ref=<source> from the landing URL to the API,
+            // which whitelists it server-side (see waitlist.ts).
+            var ref = new URLSearchParams(window.location.search).get('ref') || 'landing';
             var button = form.querySelector('button[type="submit"]');
             var original = button.textContent;
             button.disabled = true;
@@ -226,7 +230,7 @@ export const homePage = (): string =>
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'same-origin',
-              body: JSON.stringify({ email: email }),
+              body: JSON.stringify({ email: email, source: ref }),
             })
               .then(function (res) {
                 return res.json().then(function (data) { return { res: res, data: data }; });
@@ -378,7 +382,8 @@ export const signInPage = (): string =>
               })
               .then(function (result) {
                 if (result.res.ok && result.data.token) {
-                  window.location.href = '/app';
+                  var next = new URLSearchParams(window.location.search).get('next');
+                  window.location.href = next && next.startsWith('/') ? next : '/app';
                 } else if (result.res.status === 429) {
                   errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
                   errorEl.hidden = false;
@@ -455,7 +460,8 @@ export const signUpPage = (): string =>
               })
               .then(function (result) {
                 if (result.res.ok && result.data.token) {
-                  window.location.href = '/app';
+                  var next = new URLSearchParams(window.location.search).get('next');
+                  window.location.href = next && next.startsWith('/') ? next : '/app';
                 } else if (result.res.status === 429) {
                   errorEl.textContent = 'Too many attempts. Please wait a minute and try again.';
                   errorEl.hidden = false;
