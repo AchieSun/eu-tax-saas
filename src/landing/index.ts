@@ -67,5 +67,21 @@ export function registerLandingRoutes(app: App): void {
   app.get('/refund', (c) => c.html(refundPage(), 200, { 'Content-Type': HTML }));
   app.get('/cookie-policy', (c) => c.html(cookiePage(), 200, { 'Content-Type': HTML }));
   app.get('/impressum', (c) => c.html(impressumPage(), 200, { 'Content-Type': HTML }));
+  // RFC 9116 security.txt — public disclosure channel for security
+  // researchers. Plain text, no HTML shell.
+  app.get('/.well-known/security.txt', (c) => {
+    const body = [
+      'Contact: mailto:support@taxmora.com',
+      'Expires: 2027-08-31T00:00:00.000Z',
+      'Preferred-Languages: en, zh',
+      'Canonical: https://taxmora.com/.well-known/security.txt',
+      '',
+      'Security researchers are welcome. We operate a small cross-border',
+      'tax SaaS; if you find a vulnerability, report it by email and we',
+      "will acknowledge it. We don't run a paid bug bounty program.",
+      '',
+    ].join('\n');
+    return c.body(body, 200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  });
   registerCompareRoutes(app);
 }

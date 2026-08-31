@@ -46,6 +46,16 @@ describe('landing pages', () => {
     });
   }
 
+  it('GET /.well-known/security.txt serves the RFC 9116 disclosure file', async () => {
+    const res = await app.request('/.well-known/security.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    const body = await res.text();
+    expect(body).toContain('Contact: mailto:support@taxmora.com');
+    expect(body).toContain('Expires: 2027-08-31');
+    expect(body).toContain('Canonical: https://taxmora.com/.well-known/security.txt');
+  });
+
   it('GET /compare renders nav back to home and pricing (bidirectional reachability)', async () => {
     const res = await app.request('/compare');
     expect(res.status).toBe(200);
