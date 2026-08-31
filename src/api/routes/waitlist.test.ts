@@ -112,6 +112,34 @@ describe('POST /api/waitlist', () => {
     expect(res.headers.get('X-RateLimit-Limit')).toBe('5');
   });
 
+  it('attribution: a whitelisted ref tags the inserted row', async () => {
+    const app = createTestApp();
+    const res = await postEmail(app, {
+      email: 'nomad@example.com',
+      source: 'producthunt',
+    });
+
+    expect(res.status).toBe(201);
+    expect(lastInsertValues()).toMatchObject({
+      email: 'nomad@example.com',
+      source: 'producthunt',
+    });
+  });
+
+  it('attribution: an unwhitelisted ref falls back to the default funnel', async () => {
+    const app = createTestApp();
+    const res = await postEmail(app, {
+      email: 'sneaky@example.com',
+      source: 'garbage-ref',
+    });
+
+    expect(res.status).toBe(201);
+    expect(lastInsertValues()).toMatchObject({
+      email: 'sneaky@example.com',
+      source: 'devto-article',
+    });
+  });
+
   it('duplicate email -> 200 already_registered (no second insert)', async () => {
     mockExistingEmail = true;
     const app = createTestApp();

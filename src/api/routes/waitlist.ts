@@ -39,14 +39,30 @@ import { waitlist } from '../../db/schema';
 import type { Bindings, Variables } from '../index';
 import { rateLimitD1 } from '../middleware/rate-limit-d1';
 
+const WAITLIST_SOURCES = ['devto-article', 'nomadgate', 'producthunt', 'landing'] as const;
+type WaitlistSource = (typeof WAITLIST_SOURCES)[number];
+
 const WaitlistBodySchema = z.object({
   email: z.string().trim().toLowerCase().min(3).max(254).email(),
+  // Optional traffic-source tag (e.g. ?ref=nomadgate / ?ref=ph). Kept loose
+  // (string) so a garbage ref does NOT fail the whole registration — it is
+  // whitelisted server-side below and anything unknown falls back to the
+  // default funnel. Never trust the client blindly.
+  source: z.string().max(32).optional(),
 });
 
 /** Uniform error copy - identical for every invalid submission (anti-enumeration). */
 const INVALID_EMAIL_MESSAGE = 'Enter a valid email address.';
-/** Hardcoded for now - the landing page is the only funnel (see schema comment). */
-const WAITLIST_SOURCE = 'devto-article';
+/** Default funnel when no (or unverified) ref is provided. */
+const WAITLIST_SOURCE_DEFAULT: WaitlistSource = 'devto-article';
+
+/** Server-side whitelist — unknown refs are dropped to the default funnel. */
+function resolveSource(raw: string | undefined): WaitlistSource {
+  if (raw === undefined) return WAITLIST_SOURCE_DEFAULT;
+  return (WAITLIST_SOURCES as readonly string[]).includes(raw)
+    ? (raw as WaitlistSource)
+    : WAITLIST_SOURCE_DEFAULT;
+}
 
 /**
  * Per-IP pseudo-session so rateLimitD1 (which keys on session user id)
@@ -75,6 +91,7 @@ waitlistRoutes.post('/', async (c) => {
     return c.json({ error: 'validation', message: INVALID_EMAIL_MESSAGE }, 422);
   }
   const email = parsed.data.email;
+  const source = resolveSource(parsed.data.source);
 
   const db = createDb(c.env.DB);
   try {
@@ -97,7 +114,7 @@ waitlistRoutes.post('/', async (c) => {
         id: crypto.randomUUID(),
         email,
         createdAt: Date.now(),
-        source: WAITLIST_SOURCE,
+        source,
       })
       .onConflictDoNothing({ target: waitlist.email })
       .returning({ id: waitlist.id });
