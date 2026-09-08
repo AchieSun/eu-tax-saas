@@ -11,6 +11,8 @@ import type { Context, Hono } from 'hono';
 import type { Bindings, Variables } from '../api';
 import { createAuth } from '../auth/auth';
 import { registerCompareRoutes } from './compare';
+import { learnArticles } from './learn/content';
+import { learnArticlePage, learnHubPage, learnNotFoundPage } from './learn/render';
 import {
   cookiePage,
   homePage,
@@ -22,10 +24,13 @@ import {
   signUpPage,
   termsPage,
 } from './pages';
+import { robotsTxt, sitemapXml } from './seo';
 
 type App = Hono<{ Bindings: Bindings; Variables: Variables }>;
 
 const HTML = 'text/html; charset=utf-8';
+const LEARN_CACHE = 'public, max-age=300, s-maxage=86400'; // knowledge pages are static per deploy
+const SEO_FILE_CACHE = 'public, max-age=600, s-maxage=3600';
 
 /**
  * Landing pages are registered BEFORE the auth-setting middleware in
@@ -67,6 +72,34 @@ export function registerLandingRoutes(app: App): void {
   app.get('/refund', (c) => c.html(refundPage(), 200, { 'Content-Type': HTML }));
   app.get('/cookie-policy', (c) => c.html(cookiePage(), 200, { 'Content-Type': HTML }));
   app.get('/impressum', (c) => c.html(impressumPage(), 200, { 'Content-Type': HTML }));
+
+  // ── Knowledge platform (learn) + SEO plumbing ──────────────────────────
+  app.get('/learn', (c) =>
+    c.html(learnHubPage(), 200, { 'Content-Type': HTML, 'Cache-Control': LEARN_CACHE }),
+  );
+  app.get('/learn/:slug{[a-z0-9-]+}', (c) => {
+    const slug = c.req.param('slug');
+    const article = learnArticles.find((a) => a.slug === slug);
+    if (!article) {
+      return c.html(learnNotFoundPage(slug), 404, { 'Content-Type': HTML });
+    }
+    return c.html(learnArticlePage(article), 200, {
+      'Content-Type': HTML,
+      'Cache-Control': LEARN_CACHE,
+    });
+  });
+  app.get('/robots.txt', (c) =>
+    c.body(robotsTxt(), 200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': SEO_FILE_CACHE,
+    }),
+  );
+  app.get('/sitemap.xml', (c) =>
+    c.body(sitemapXml(), 200, {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': SEO_FILE_CACHE,
+    }),
+  );
   // RFC 9116 security.txt — public disclosure channel for security
   // researchers. Plain text, no HTML shell.
   app.get('/.well-known/security.txt', (c) => {

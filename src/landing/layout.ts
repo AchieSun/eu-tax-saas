@@ -11,6 +11,8 @@ export const SITE_NAME = 'Taxmora';
 export const SUPPORT_EMAIL = 'support@taxmora.com';
 export const COMPANY_ADDRESS = 'Operated by a sole proprietor registered in China.';
 
+export const SITE_ORIGIN = 'https://taxmora.com';
+
 interface PageOptions {
   title: string;
   path: string;
@@ -18,6 +20,20 @@ interface PageOptions {
   body: string;
   /** HTML lang attribute; defaults to 'en'. Chinese-first pages pass 'zh-CN'. */
   lang?: string;
+  /** Open Graph object type; defaults to 'website'. */
+  ogType?: 'website' | 'article';
+  /** Absolute OG image URL; omitted when not provided. */
+  ogImage?: string;
+  /**
+   * hreflang alternates for pages that genuinely serve per-language variants
+   * (e.g. /compare?lang=zh). Pages without language variants must NOT claim
+   * alternates - a hreflang pointing at identical content is worse than none.
+   */
+  locales?: Array<{ hreflang: string; href: string }>;
+  /** Visible breadcrumb trail; rendered above the body content. */
+  breadcrumbs?: Array<{ name: string; path?: string }>;
+  /** Extra JSON-LD objects (Article, BreadcrumbList, FAQPage, ...). */
+  jsonLd?: Array<Record<string, unknown>>;
 }
 
 const escapeHtml = (value: string): string =>
@@ -33,9 +49,69 @@ const navLink = (path: string, label: string, currentPath: string): string => {
   return `<a href="${path}" class="nav-link${active ? ' nav-link-active' : ''}"${active}>${escapeHtml(label)}</a>`;
 };
 
+/** JSON-LD payload: escape "<" so "</script>" can never terminate the tag. */
+const jsonLdScript = (data: Record<string, unknown>): string =>
+  `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
+
+/** Site-wide structured data injected on every landing page. */
+const siteJsonLd = (): string =>
+  [
+    jsonLdScript({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: `${SITE_ORIGIN}/`,
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: SUPPORT_EMAIL,
+        contactType: 'customer support',
+      },
+    }),
+    jsonLdScript({
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: SITE_NAME,
+      url: `${SITE_ORIGIN}/`,
+      inLanguage: ['en', 'zh'],
+    }),
+  ].join('\n  ');
+
+const seoHeadTags = (options: PageOptions, fullTitle: string, canonical: string): string => {
+  const parts: string[] = [
+    `<meta property="og:title" content="${escapeHtml(fullTitle)}">`,
+    `<meta property="og:type" content="${options.ogType ?? 'website'}">`,
+    `<meta property="og:url" content="${escapeHtml(canonical)}">`,
+    `<meta property="og:site_name" content="${SITE_NAME}">`,
+    `<meta property="og:description" content="${escapeHtml(options.metaDescription)}">`,
+  ];
+  if (options.ogImage) {
+    parts.push(`<meta property="og:image" content="${escapeHtml(options.ogImage)}">`);
+  }
+  for (const locale of options.locales ?? []) {
+    parts.push(
+      `<link rel="alternate" hreflang="${escapeHtml(locale.hreflang)}" href="${escapeHtml(locale.href)}">`,
+    );
+  }
+  return parts.join('\n  ');
+};
+
+const breadcrumbHtml = (crumbs: Array<{ name: string; path?: string }>): string => {
+  const items = crumbs.map((c, idx) => {
+    const last = idx === crumbs.length - 1;
+    const label = escapeHtml(c.name);
+    return last
+      ? `<span aria-current="page">${label}</span>`
+      : `<a href="${escapeHtml(c.path ?? '/')}">${label}</a>`;
+  });
+  return `<nav class="breadcrumb" aria-label="Breadcrumb">${items.join(
+    ' <span class="breadcrumb-sep" aria-hidden="true">/</span> ',
+  )}</nav>`;
+};
+
 export function renderPage(options: PageOptions): string {
   const { title, path, metaDescription, body } = options;
   const fullTitle = title === SITE_NAME ? title : `${title} · ${SITE_NAME}`;
+  const canonical = `${SITE_ORIGIN}${path}`;
   return `<!doctype html>
 <html lang="${escapeHtml(options.lang ?? 'en')}">
 <head>
@@ -43,7 +119,10 @@ export function renderPage(options: PageOptions): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(fullTitle)}</title>
   <meta name="description" content="${escapeHtml(metaDescription)}">
-  <link rel="canonical" href="https://taxmora.com${path}">
+  <link rel="canonical" href="${escapeHtml(canonical)}">
+  ${seoHeadTags(options, fullTitle, canonical)}
+  ${siteJsonLd()}
+  ${options.jsonLd?.map(jsonLdScript).join('\n  ') ?? ''}
   <style>
     :root {
       --color-bg: #ffffff;
@@ -231,6 +310,42 @@ export function renderPage(options: PageOptions): string {
     .footer-col a { display: block; color: var(--color-muted); text-decoration: none; margin-bottom: 0.25rem; }
     .footer-col a:hover { color: var(--color-primary); }
     .legal-date { color: var(--color-muted); font-size: 0.9rem; margin-bottom: var(--space-lg); }
+    .breadcrumb { font-size: 0.85rem; color: var(--color-muted); margin-bottom: var(--space-md); }
+    .breadcrumb a { color: var(--color-muted); }
+    .breadcrumb a:hover { color: var(--color-primary); }
+    .breadcrumb-sep { margin-inline: 0.35rem; }
+    .learn-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--space-md) 0 var(--space-lg);
+      font-size: 0.92rem;
+    }
+    .learn-table caption {
+      caption-side: bottom;
+      text-align: left;
+      color: var(--color-muted);
+      font-size: 0.85rem;
+      padding-top: var(--space-xs);
+    }
+    .learn-table th, .learn-table td {
+      border: 1px solid var(--color-border);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    .learn-table th { background: var(--color-surface); color: var(--color-text); }
+    .learn-note {
+      border-left: 4px solid var(--color-primary);
+      background: #eff6ff;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: var(--space-sm) var(--space-md);
+      margin: var(--space-md) 0 var(--space-lg);
+    }
+    .learn-note p { margin: 0; }
+    .learn-faq dt { font-weight: 600; color: var(--color-text); margin-top: var(--space-sm); }
+    .learn-faq dd { margin: 0 0 var(--space-sm); }
+    .learn-updated { font-size: 0.88rem; color: var(--color-muted); }
+    .learn-cta { margin-top: var(--space-lg); }
     .cookie-banner {
       position: fixed;
       bottom: 0;
@@ -297,6 +412,7 @@ export function renderPage(options: PageOptions): string {
       <nav>
         ${navLink('/', 'Home', path)}
         ${navLink('/compare', 'Compare', path)}
+        ${navLink('/learn', 'Learn', path)}
         ${navLink('/pricing', 'Pricing', path)}
         ${navLink('/terms', 'Terms', path)}
         ${navLink('/privacy', 'Privacy', path)}
@@ -306,6 +422,7 @@ export function renderPage(options: PageOptions): string {
   </header>
   <main>
     <div class="container">
+      ${options.breadcrumbs ? breadcrumbHtml(options.breadcrumbs) : ''}
       ${body}
     </div>
   </main>
@@ -315,6 +432,7 @@ export function renderPage(options: PageOptions): string {
         <strong>Product</strong>
         <a href="/">Home</a>
         <a href="/compare">五国税后收入对比计算器</a>
+        <a href="/learn">Learn: cross-border tax guides</a>
         <a href="/pricing">Pricing</a>
       </div>
       <div class="footer-col">

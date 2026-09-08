@@ -27,6 +27,7 @@ import { rateLimitD1 } from '../api/middleware/rate-limit-d1';
 import { compareCountriesDetailed } from '../rules';
 import { FILING_STATUSES, INCOME_TYPES } from '../rules/common/types';
 import type { Country, FilingStatus, IncomeType } from '../rules/common/types';
+import { recordCompareUsage } from './compare-usage';
 import { renderPage } from './layout';
 
 type App = Hono<{ Bindings: Bindings; Variables: Variables }>;
@@ -764,7 +765,7 @@ export function registerCompareRoutes(app: App): void {
     rateLimitD1({ keyPrefix: 'public-compare', windowSeconds: 60, max: 10 }),
   );
 
-  app.get('/api/public/compare', (c) => {
+  app.get('/api/public/compare', async (c) => {
     const parsed = publicCompareQuerySchema.safeParse(
       queryToObject(new URL(c.req.url).searchParams),
     );
@@ -783,6 +784,15 @@ export function registerCompareRoutes(app: App): void {
         },
         500,
       );
+    }
+    // Funnel telemetry (fire-and-forget): record the successful computation
+    // so usage is countable even before anyone signs up. Failures are
+    // swallowed inside recordCompareUsage - they must never affect the calc.
+    try {
+      c.executionCtx.waitUntil(recordCompareUsage(c.env, parsed.data));
+    } catch {
+      // Runtimes without an ExecutionContext (unit tests) run inline instead.
+      await recordCompareUsage(c.env, parsed.data);
     }
     return c.json({
       ok: true,

@@ -429,6 +429,26 @@ export const waitlist = sqliteTable('waitlist', {
   source: text('source').notNull().default('devto-article'),
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// compare_usage — anonymous /compare calculator funnel telemetry.
+//
+// The public calculator (GET /api/public/compare) is the acquisition funnel's
+// mid-stage: it computes results without any login and previously left NO
+// server-side trace, making the funnel unmeasurable. Each successful
+// computation records one row (input params only - no IP, no user id) so
+// usage can be counted even before any visitor signs up. Inserts are
+// fire-and-forget: a telemetry failure must never fail the calculation.
+// ────────────────────────────────────────────────────────────────────────────
+
+export const compareUsage = sqliteTable('compare_usage', {
+  id: text('id').primaryKey(),
+  createdAt: integer('created_at').notNull(), // Unix ms - set by route code
+  grossIncome: real('gross_income').notNull(),
+  taxYear: integer('tax_year').notNull(),
+  incomeType: text('income_type').notNull(),
+  filingStatus: text('filing_status').notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type UserOnboarding = typeof userOnboarding.$inferSelect;
