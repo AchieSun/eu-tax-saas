@@ -206,3 +206,32 @@
 | 2026-08-01 | 5 | DeepSeek 迁移 + CI 调通 |
 | 2026-08-09 | 2 | SPA 上线 /app |
 | 2026-08-24 | 3 | 落地页 + 付费墙 + 本日志 |
+
+---
+
+## 2026-09-08 · 波次：40-跨境合规知识平台 Phase 1（SEO 基建）+ 漏斗遥测
+
+背景：全部营销渠道（DEV.to / PH / Reddit / HN / Nomad Gate）零产出、waitlist 0 真实注册，
+决定开建自有 SEO 通道（知识平台）。本次交付"40-跨境合规知识平台"第一阶段工程改造：
+
+- **/learn 知识平台（SSR，类型化内容，无 markdown 解析器依赖）**：/learn hub + /learn/:slug
+  区块渲染器（p/h2/ul/table/note/faq/cta）；种子文章 methodology（《How Taxmora
+  calculates your take-home pay》：五国规则表 + included/NOT included + 法条来源 +
+  免责 + FAQ）——YMYL 领域的 E-E-A-T 锚点
+- **SEO 管道**：robots.txt（allow-all，禁 /api/ /app /sign-*，sitemap 指针）；
+  sitemap.xml（单一 URL 注册表，文章带独立 lastmod，XML 转义，边缘缓存）；
+  layout.ts 全站 head 增强（Organization + WebSite JSON-LD、og:* 基础标签、
+  可选 hreflang/breadcrumbs/Article/FAQPage）；导航与页脚增加 Learn 入口；
+  learn 页 Cache-Control s-maxage=86400
+- **漏斗遥测（本次最重要的补课）**：GET /api/public/compare 此前计算零持久化，
+  漏斗中段不可测量。新增 compare_usage 表（迁移 0010：输入参数四元组，无 IP/UA/
+  user id），成功计算经 waitUntil 异步落一行，失败全吞不影响计算
+- **生产事故与修复**（84e2c1e）：首版把 `c.env` 整个传给了 `createDb()`（应传
+  `c.env.DB`），drizzle 抛错被吞 → 单测 mock 掩盖、生产静默丢数据。修复后经
+  `wrangler dev --local` 真 D1 验证 + 生产 D1 REST 验证，遥测闭环
+- **测试**：94 文件 / 1001 用例全绿（+24）；新增 tests/workers 集成测试（注意：
+  本机 workers pool 因 Vectorize wrapped-binding 解析问题无法启动，系遗留环境
+  问题，CI 亦不跑 test:workers）
+
+遗留：Search Console 注册 + sitemap 提交（需用户 Google 账号）；Phase 2 内容
+（5 国 hub + 10-15 篇主题文）；Phase 3 程序化对比页（/take-home/...）。
