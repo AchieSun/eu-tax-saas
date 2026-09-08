@@ -27,11 +27,15 @@ export interface CompareUsageInput {
 }
 
 export async function recordCompareUsage(
-  dbBinding: unknown,
+  d1Binding: unknown,
   input: CompareUsageInput,
 ): Promise<void> {
   try {
-    const db = createDb(dbBinding as Parameters<typeof createDb>[0]);
+    // NOTE: callers pass the D1 BINDING (env.DB), not the whole env - the
+    // production incident this comment guards against: passing `env` itself
+    // made drizzle throw inside the swallowed try/catch and telemetry
+    // silently recorded nothing.
+    const db = createDb(d1Binding as Parameters<typeof createDb>[0]);
     await db.insert(compareUsage).values({
       id: crypto.randomUUID(),
       createdAt: Date.now(),

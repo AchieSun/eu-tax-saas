@@ -788,11 +788,13 @@ export function registerCompareRoutes(app: App): void {
     // Funnel telemetry (fire-and-forget): record the successful computation
     // so usage is countable even before anyone signs up. Failures are
     // swallowed inside recordCompareUsage - they must never affect the calc.
+    // NOTE: pass the D1 BINDING (c.env.DB), not the whole env - see
+    // recordCompareUsage's guard comment for the production incident.
     try {
-      c.executionCtx.waitUntil(recordCompareUsage(c.env, parsed.data));
+      c.executionCtx.waitUntil(recordCompareUsage(c.env.DB, parsed.data));
     } catch {
       // Runtimes without an ExecutionContext (unit tests) run inline instead.
-      await recordCompareUsage(c.env, parsed.data);
+      await recordCompareUsage(c.env.DB, parsed.data);
     }
     return c.json({
       ok: true,
