@@ -156,5 +156,438 @@ export const methodologyArticle: LearnArticle = {
   ],
 };
 
+// ─── Phase 2 seed articles — one "money keyword" per country ────────────────
+// Numbers in the worked-example tables are engine output (tools/
+// seo-worked-examples.ts). Countries whose 2026 parameters are provisional
+// carry that note in the table caption; UK and ES use their latest fully
+// implemented year (2025-26 / 2025) and say so.
+
+const netherlands30Ruling: LearnArticle = {
+  slug: 'netherlands-30-percent-ruling',
+  title: 'The Netherlands 30% ruling (2026): who qualifies and what it actually saves',
+  metaDescription:
+    'How the Dutch 30% ruling works in 2026: eligibility criteria, the salary threshold, what it means for take-home pay, and the honest limits of any online calculation.',
+  updated: '2026-09-10',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'The 30% ruling (30%-regeling) is the Netherlands’ flagship regime for inbound expats: for a limited period, up to 30% of your salary can be paid tax-free. It exists to compensate international hires for the real costs of moving to the Netherlands — and it is the single biggest swing factor in a Dutch take-home calculation.',
+    },
+    { kind: 'h2', text: 'The core eligibility criteria' },
+    {
+      kind: 'ul',
+      items: [
+        'You were recruited (or transferred) from abroad and the Dutch employer considers your expertise scarce in the Dutch labour market.',
+        'You lived more than 150 km from the Dutch border for most of the 24 months before your first Dutch workday.',
+        'Your salary meets a minimum threshold that changes every year (roughly €46,000-47,000 excluding the allowance in 2025; lower for applicants under 30 with a master’s degree).',
+        'You and your employer apply jointly, generally within four months of your first Dutch workday.',
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The relief is time-limited and the percentage schedule has been changed by parliament more than once in recent years, with step-downs debated for later years — so the exact percentage that applies to you depends on your start date. The Belastingdienst page is the source of truth for the current schedule; do not rely on blog posts (including this one) for the percentage itself.',
+    },
+    { kind: 'h2', text: 'What a Dutch salary is worth without the ruling' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: 2026 parameters, single employee, salary income. Social contributions included.',
+      head: [
+        'Gross salary (2026)',
+        'Income tax + social contributions',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [['€80,000', '€29,532', '€50,467', '36.9%']],
+    },
+    {
+      kind: 'p',
+      text: 'The ruling changes the arithmetic in a way no standard calculator shows: with a 30% allowance, roughly 70% of your salary stays in the taxable base while you keep the allowance tax-free — and the effect compounds with the Dutch system’s high entry tax rate. That second-order interaction (bracket, general credit, labour credit all shifting) is exactly why you should compute both scenarios rather than subtracting 30% mentally.',
+    },
+    { kind: 'h2', text: 'What the ruling does NOT cover' },
+    {
+      kind: 'ul',
+      items: [
+        'It is an employment-income regime — freelance and business income do not qualify.',
+        'It does not exempt Dutch-source income beyond the allowance, and it says nothing about your residency position for other countries.',
+        'It ends when you leave, when the time limit expires, or (since the 2024 tightening) partially when your salary drops below the threshold in later years.',
+      ],
+    },
+    { kind: 'h2', text: 'The honest limit of this page' },
+    {
+      kind: 'p',
+      text: 'Taxmora’s calculator currently computes the standard Dutch position — Box 1 rates and social contributions for 2025 and 2026 — and does not yet model the ruling’s allowance. We would rather show you the honest standard number than a hand-waved ruling number. The Belastingdienst ruling pages and a Dutch payroll adviser can quantify your exact case.',
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Can I apply for the 30% ruling myself?',
+          a: 'No — the application is a joint request filed by your Dutch employer with the Belastingdienst. Your part is the evidence: where you lived before, your contract, and your salary level.',
+        },
+        {
+          q: 'Does the ruling survive a job change?',
+          a: 'Yes, if the new employer continues the request and you keep meeting the conditions. A gap between employers or a drop below the salary threshold can end it.',
+        },
+        {
+          q: 'Is the 30% ruling the same as the Netherlands’ non-resident taxpayer status?',
+          a: 'No. The ruling is an employer-side payroll relief for residents; partial non-resident taxpayer status is a separate election about which Box 2 and Box 3 income the Dutch tax office may tax.',
+        },
+        {
+          q: 'Why does Taxmora not calculate the ruling?',
+          a: 'Because the percentage schedule and thresholds have been amended repeatedly and your case depends on dates we cannot verify. We compute what we can verify; the ruling needs your real dates and payroll.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
+const spainBeckhamLaw: LearnArticle = {
+  slug: 'spain-beckham-law',
+  title: 'Spain’s Beckham Law: the 24% flat tax for new arrivals, with real numbers',
+  metaDescription:
+    'How Spain’s special expat regime (régimen Beckham, Art. 93 LIRPF) works: 24% flat tax, who qualifies, the 6-month deadline, and a real €80,000 take-home comparison.',
+  updated: '2026-09-10',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Spain taxes residents on progressive scales that reach 47% in some regions. The special regime under Article 93 of the Spanish income tax law (LIRPF) — universally called the Beckham Law after the footballer who first used it — replaces that progressive schedule with a flat 24% on Spanish employment income for people who move to Spain in good conditions. For mid-to-high salaries it is usually the best deal on the table.',
+    },
+    { kind: 'h2', text: 'Who qualifies' },
+    {
+      kind: 'ul',
+      items: [
+        'You have not been a Spanish tax resident in the previous five years.',
+        'The move is for work: an employment contract with a Spanish employer, or directorship conditions for startup founders, or you acquire remote-work visa / entrepreneur status.',
+        'You file the election (modelo 149) within six months of registering with Spanish social security — miss this window and the regime is gone.',
+        'The regime then applies in the arrival year and the five following years.',
+      ],
+    },
+    { kind: 'h2', text: 'What the 24% actually does to an €80,000 salary' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: Spain (Madrid) 2025 parameters — the latest fully implemented year. Single employee. The regime taxes Spanish employment income at 24% up to €600,000 (47% above).',
+      head: [
+        'Scenario (€80,000, Madrid)',
+        'Income tax + social contributions',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['Standard progressive schedule', '€23,281', '€56,719', '29.1%'],
+        ['Beckham regime (24% flat)', '€19,200', '€60,800', '24.0%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'That is roughly €4,100 a year back in your pocket at €80,000 — and the gap widens as the salary rises, because the flat 24% competes against brackets that climb past 37% state-plus-regional in Madrid well below €100,000. Regional variation matters too: the same gross income computes differently in Catalonia or Andalusia under the standard schedule, which is why the engine takes the region as an input.',
+    },
+    { kind: 'h2', text: 'The traps people miss' },
+    {
+      kind: 'ul',
+      items: [
+        'The regime taxes Spanish-source employment income at the flat rate — foreign-source income generally escapes Spanish tax, which is a feature for internationally mobile people and a trap for anyone with local investment income.',
+        'Wealth tax still applies to your worldwide assets (regional exceptions exist).',
+        'The six-month model 149 deadline is absolute. There is no retroactive rescue.',
+        'Freelance (autónomo) activity is not covered by the 24% employment-income treatment.',
+      ],
+    },
+    { kind: 'h2', text: 'Why these numbers say 2025' },
+    {
+      kind: 'p',
+      text: 'Taxmora’s Spain engine is calibrated to the 2025 parameters (state scale plus regional scales, cited to the AEAT Manual Práctico and the regional fiscal laws). Spain’s 2026 parameters were still pending final publication when this rule set was last verified, so the engine refuses to invent them — it computes 2025 exactly rather than 2026 approximately. When the official 2026 parameters land, the citation date moves and the calculator gains 2026.',
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Is the Beckham Law only for footballers?',
+          a: 'No — that is folklore. It is a general regime for qualifying inbound employees and certain founders/directors. The nickname stuck; the statute is Article 93 LIRPF.',
+        },
+        {
+          q: 'Can I use it if I work remotely from Spain for a foreign employer?',
+          a: 'The regime was extended to some remote-work visa holders and startup directors under conditions. The critical questions are Spanish social-security registration and the application deadline — check both before you assume.',
+        },
+        {
+          q: 'What happens after the six years?',
+          a: 'You fall back onto the ordinary progressive schedule as a fully resident taxpayer, including worldwide income.',
+        },
+        {
+          q: 'Is 24% computed on gross or on social-security-adjusted income?',
+          a: 'The flat rate applies to employment income after the standard employment expense reduction; social contributions are separate. The engine models both lines — see the breakdown in the calculator.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
+const portugalIficiGuide: LearnArticle = {
+  slug: 'portugal-ifici-guide',
+  title: 'Portugal’s IFICI (NHR 2.0): the 20% flat rate that replaced the NHR',
+  metaDescription:
+    'Portugal’s IFICI regime (NHR 2.0): 20% flat tax on eligible employment income, who qualifies in 2026, how it differs from the old NHR, and real take-home numbers.',
+  updated: '2026-09-10',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Portugal’s famous NHR (Non-Habitual Resident) regime closed to new applicants in 2024. Its successor is the IFICI — named after the scientific-research and innovation incentives list, which everyone calls NHR 2.0. It keeps the most attractive piece of the old regime, a flat 20% rate on eligible employment income, but tightens who can enter and drops the old exemption for foreign income.',
+    },
+    { kind: 'h2', text: 'What IFICI gives you' },
+    {
+      kind: 'ul',
+      items: [
+        'A flat 20% rate on eligible employment and self-employment income for ten years.',
+        'Eligibility tied to your profession and employer: higher-education and scientific-research roles, highly qualified professions (the government publishes the lists), key roles in certified innovative startups, and certain other categories.',
+        'You must become a Portuguese tax resident and must not have been resident in the previous five years.',
+      ],
+    },
+    { kind: 'h2', text: 'The real difference from the old NHR' },
+    {
+      kind: 'p',
+      text: 'The legacy NHR exempted most foreign-source income (pensions, dividends, rent). IFICI does not — foreign income falls under the ordinary rules. IFICI is a rate benefit on your Portuguese professional income, not a blanket shield for your worldwide income. Plan accordingly: for someone living off foreign passive income, IFICI is far weaker than the old NHR.',
+    },
+    { kind: 'h2', text: 'What €80,000 looks like with and without IFICI' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: Portugal 2026 parameters (marked provisional pending final AT publication). Single employee.',
+      head: [
+        'Scenario (€80,000)',
+        'Income tax + social contributions',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['Standard progressive schedule', '€27,238', '€52,761', '34.1%'],
+        ['IFICI 20% flat', '€16,000', '€64,000', '20.0%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The €11,238 difference is the single largest regime swing across the five countries Taxmora covers — Portugal’s ordinary schedule is heavy at this income level, so a flat 20% changes the answer more than any other regime here.',
+    },
+    { kind: 'h2', text: 'What IFICI does not fix' },
+    {
+      kind: 'ul',
+      items: [
+        'Social contributions (Segurança Social) are unchanged — the 20% applies to income tax, not to the employee share.',
+        'Foreign income is fully in scope of Portuguese taxation under ordinary rules.',
+        'The ten-year clock is fixed; there is no extension.',
+        'Professional eligibility is verified at application — a job title change mid-regime does not retroactively break it, but your initial category must be documented.',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'I already have NHR. Am I affected?',
+          a: 'No. Existing NHR holders keep their regime for its original duration. IFICI is only for new applicants from 2024 onward.',
+        },
+        {
+          q: 'Does IFICI cover dividends and rent?',
+          a: 'No — the flat 20% applies to eligible employment and self-employment income. Foreign dividends, interest and rent follow the ordinary Portuguese rules.',
+        },
+        {
+          q: 'Is the 20% rate certain for all ten years?',
+          a: 'The regime sets it for the ten-year window, but Portuguese parliaments have changed regime details before. The engine cites Art. 58.º-A of the EBF and we track amendments.',
+        },
+        {
+          q: 'Why is the 2026 table marked provisional?',
+          a: 'Portugal’s 2026 bracket parameters were not yet finally published when this rule set was verified, so the engine labels the year provisional rather than guessing. The IFICI 20% itself is statutory, not provisional.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
+const ukArrivalsSrtFig: LearnArticle = {
+  slug: 'uk-arrivals-srt-fig',
+  title: 'Moving to the UK: the Statutory Residence Test and the four-year FIG regime',
+  metaDescription:
+    'How UK tax residency is decided (Statutory Residence Test) and how the new FIG regime taxes arrivals from 2025-26 — with real £80,000 take-home numbers from the engine.',
+  updated: '2026-09-10',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Two systems decide what a move to the UK does to your taxes. The Statutory Residence Test (SRT) decides whether you are a UK tax resident at all. If you are a recent arrival, the Foreign Income and Gains (FIG) regime — new from April 2025, replacing the old non-dom remittance basis — decides how your foreign income is treated for your first four years.',
+    },
+    { kind: 'h2', text: 'The Statutory Residence Test in one paragraph' },
+    {
+      kind: 'p',
+      text: 'The SRT (ITA 2007 s.5, with HMRC’s RDR3 guidance) is a decision tree: automatic overseas tests (fewer than 16 UK days with no UK work, or fewer than 46 full days, and so on), automatic UK tests (183+ days, or a UK home plus work), and — between the two — a ties-based middle zone where day counts are checked against five ties: family, accommodation, work, 90-day history, and country presence. You count a day by physical presence at midnight. Split-year treatment can fence off the arrival year so pre-move income stays outside UK tax.',
+    },
+    { kind: 'h2', text: 'FIG: the four-year window' },
+    {
+      kind: 'ul',
+      items: [
+        'If you were not UK-resident in the previous ten consecutive tax years, your first four UK tax years of residence can elect FIG treatment.',
+        'FIG gives 100% relief on foreign-sourced income and gains — dividends, interest, rent, gains — while you remain eligible.',
+        'UK employment income and UK-source income are taxed normally; the regime is about the foreign side.',
+        'After year four, worldwide income falls into the ordinary UK net with no grandfathering.',
+      ],
+    },
+    { kind: 'h2', text: 'Real UK take-home numbers' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: UK 2025-26 parameters (the latest fully implemented UK year). Single employee, England/Wales/NI band structure. National Insurance included.',
+      head: [
+        'Scenario (2025-26)',
+        'Income tax + National Insurance',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['£50,000 salary, standard', '£7,486', '£42,514', '15.0%'],
+        ['£80,000 salary, standard', '£19,432', '£60,568', '24.3%'],
+        ['£80,000 foreign employment income, FIG-eligible', '£0', '£80,000', '0.0%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Read the third row carefully: it describes a FIG-eligible individual whose £80,000 is foreign employment income — a scenario that only exists if the SRT or split-year rules actually put you in the FIG window and the income is genuinely foreign-sourced. Take a UK job with a UK payroll and the standard rows are your reality. The SRT question is not paperwork; it is the difference between rows two and three.',
+    },
+    { kind: 'h2', text: 'What the UK engine does not model yet' },
+    {
+      kind: 'ul',
+      items: [
+        'Scottish and Welsh income-tax band differences (the engine uses the rUK structure).',
+        'Pension contributions, student loans and the child benefit charge.',
+        'The remittance-basis details of mixed funds (relevant to pre-2025 arrivals still within old rules).',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'I spend 150 days a year in the UK — am I resident?',
+          a: 'Between 47 and 182 UK days, the answer depends on your ties. More ties mean fewer days needed to make you resident. Run the day counts against the ties table in RDR3 — or use a tool that implements it.',
+        },
+        {
+          q: 'Does FIG apply to my salary if my employer is British?',
+          a: 'No — UK employment income for UK duties is taxed normally. FIG shelters foreign-sourced income and gains during the four-year window.',
+        },
+        {
+          q: 'What happened to the old non-dom remittance basis?',
+          a: 'It closed to new claimants from April 2025. Long-term residents have transition rules; FIG is the forward-looking regime for arrivals.',
+        },
+        {
+          q: 'Why do the numbers say 2025-26?',
+          a: 'The UK tax year runs April to April and the engine implements 2025-26 exactly rather than projecting 2026-27 from unconfirmed figures. UK numbers without a confirmed HMRC basis are guesswork.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
+const germanyTakeHomeGuide: LearnArticle = {
+  slug: 'germany-take-home-guide',
+  title:
+    'What a salary is really worth in Germany: income tax and social security, with real numbers',
+  metaDescription:
+    'German take-home pay explained: progressive EStG brackets, social-security ceilings, the solidarity surcharge, and real €60,000 / €80,000 net-salary numbers from the 2026 engine.',
+  updated: '2026-09-10',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Germany’s salary-to-net pipeline has three stages: Lohnsteuer (wage income tax under § 32a EStG), employee social-security contributions across four branches with per-branch ceilings, and — only above a threshold — the solidarity surcharge. People tend to overestimate the tax and underestimate the social security; both matter, and the ceilings make the effective rate fall at the very top.',
+    },
+    { kind: 'h2', text: 'Real numbers from the engine' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: Germany 2026 parameters (provisional pending final BMF publication). Single, tax class I equivalent, salary income.',
+      head: [
+        'Gross salary (2026)',
+        'Income tax + social contributions',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['€60,000', '€14,233', '€45,767', '23.7%'],
+        ['€80,000', '€22,763', '€57,236', '28.4%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Notice the effective rate rising from 23.7% to 28.4% between €60,000 and €80,000 — the German social-security ceilings stop growing your contributions somewhere in that range while income tax keeps climbing through the 42% zone. The shape of that curve is the real answer to “is a German raise worth it?”.',
+    },
+    { kind: 'h2', text: 'The moving parts' },
+    {
+      kind: 'ul',
+      items: [
+        'Income tax: progressive from ~14% through 42%, with the 45% reichensteuer on very high incomes; the § 32a formula is famously non-linear in the first brackets.',
+        'Social security: pension, unemployment, health and long-term-care insurance, each with its own contribution rate and its own ceiling (Beitragsbemessungsgrenze) — above a ceiling that branch stops growing.',
+        'Solidarity surcharge: 5.5% of the wage tax, but only above the exemption threshold — most employees pay €0 of it.',
+        'Tax classes (I to VI) change withholding timing for couples, not the annual total.',
+      ],
+    },
+    { kind: 'h2', text: 'What the engine does not model yet' },
+    {
+      kind: 'ul',
+      items: [
+        'Church tax (Kirchensteuer, 8-9% of the wage tax where applicable).',
+        'The Forschungspauschale and other special statuses.',
+        'Private health-insurance premiums that replace the statutory scheme above the insurance threshold.',
+        'Class V/VI withholding oddities within the year (the annual picture is computed, not the payroll months).',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Why is my German payslip different from the annual number?',
+          a: 'Monthly withholding approximates the annual liability and includes items the calculator excludes (church tax, private schemes, benefit conversions). The engine computes the statutory annual picture.',
+        },
+        {
+          q: 'Are the 2026 numbers final?',
+          a: 'The engine labels Germany 2026 provisional until the BMF’s final parameters are formally published; the 2025 numbers are exact. The flag is visible in every result.',
+        },
+        {
+          q: 'Do the ceilings mean rich people pay less social security?',
+          a: 'As a share of income, yes — above each ceiling that branch stops growing. That is why the effective-rate curve flattens at the top.',
+        },
+        {
+          q: 'Is health insurance included?',
+          a: 'The statutory scheme (with its average additional contribution) is included; private full-compression policies above the threshold are not.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
-export const learnArticles: LearnArticle[] = [methodologyArticle];
+export const learnArticles: LearnArticle[] = [
+  methodologyArticle,
+  netherlands30Ruling,
+  spainBeckhamLaw,
+  portugalIficiGuide,
+  ukArrivalsSrtFig,
+  germanyTakeHomeGuide,
+];

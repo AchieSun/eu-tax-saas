@@ -282,15 +282,21 @@ describe('GET /api/public/compare', () => {
     expect(byCountry.UK.effectiveRate).toBeCloseTo(0.1905, 3);
   });
 
-  it('defaults: taxYear→2026, incomeType→salary, filingStatus→single', async () => {
+  it('defaults: taxYear→2025 (all five countries computable), incomeType→salary, filingStatus→single', async () => {
     const res = await request('/api/public/compare?grossIncome=50000');
     expect(res.status).toBe(200);
     const data = (await res.json()) as {
       input: { taxYear: number; incomeType: string; filingStatus: string };
+      results: Array<{ country: string }>;
+      countryErrors: unknown[];
     };
-    expect(data.input.taxYear).toBe(2026);
+    expect(data.input.taxYear).toBe(2025);
     expect(data.input.incomeType).toBe('salary');
     expect(data.input.filingStatus).toBe('single');
+    // All five countries must compute at the default year — a silent ES drop
+    // is exactly the regression this default protects against.
+    expect(data.results.map((r) => r.country).sort()).toEqual(['DE', 'ES', 'NL', 'PT', 'UK']);
+    expect(data.countryErrors).toEqual([]);
   });
 
   it('400: negative grossIncome returns Chinese message', async () => {

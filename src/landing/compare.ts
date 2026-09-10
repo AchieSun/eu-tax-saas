@@ -218,7 +218,11 @@ function buildQuerySchema(lang: CompareLang) {
     ),
     taxYear: z.preprocess(
       (v) => {
-        if (v === undefined || v === null || v === '') return 2026;
+        // Default 2025 (not 2026): the ES engine implements 2025 only, so a
+        // 2026 default would silently drop Spain from the default comparison
+        // (ok:false entry → error card). 2026 stays selectable (four countries
+        // + the explicit ES error card) until ES 2026 parameters ship.
+        if (v === undefined || v === null || v === '') return 2025;
         if (typeof v === 'string') return Number(v);
         return v;
       },
@@ -605,7 +609,7 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
   }
 
   const grossValue = raw.grossIncome !== undefined ? escapeHtml(raw.grossIncome) : '';
-  const taxYearValue = raw.taxYear ?? '2026';
+  const taxYearValue = raw.taxYear ?? '2025';
   const incomeTypeValue = raw.incomeType ?? 'salary';
   const filingStatusValue = raw.filingStatus ?? 'single';
 

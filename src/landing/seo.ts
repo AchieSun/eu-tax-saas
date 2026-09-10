@@ -12,7 +12,7 @@ import { learnArticles } from './learn/content';
 export const SITE_ORIGIN = 'https://taxmora.com';
 
 /** Bump when a static (non-article) page meaningfully changes. */
-export const SITE_LASTMOD = '2026-09-08';
+export const SITE_LASTMOD = '2026-09-10';
 
 export interface SitemapEntry {
   path: string;

@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bindings } from '../api';
 import { app } from '../api';
+import { learnArticles } from './learn/content';
 
 function fakeEnv(): Bindings {
   return {
@@ -112,5 +113,32 @@ describe('GET /learn/:slug 404 handling', () => {
     expect(body).toContain('/learn/this-page-does-not-exist');
     expect(body).toContain('href="/learn"');
     expect(body).toContain('href="/compare?lang=en"');
+  });
+});
+
+describe('article registry invariants (phase 2 seed)', () => {
+  it('every registered article renders 200 with canonical + Article + FAQPage JSON-LD + CTA', async () => {
+    expect(learnArticles.length).toBeGreaterThanOrEqual(6);
+    for (const article of learnArticles) {
+      const res = await request(`/learn/${article.slug}`);
+      expect(res.status, article.slug).toBe(200);
+      const body = await res.text();
+      expect(body).toContain(
+        `<link rel="canonical" href="https://taxmora.com/learn/${article.slug}">`,
+      );
+      expect(body).toContain('"@type":"Article"');
+      expect(body).toContain('"@type":"FAQPage"');
+      expect(body).toContain('constitutes tax advice');
+      expect(body).toContain('Try the free calculator');
+    }
+  });
+
+  it('every worked-example table is year-labelled (2025/2026) so engine years stay honest', async () => {
+    for (const article of learnArticles) {
+      if (!article.blocks.some((b) => b.kind === 'table')) continue;
+      const res = await request(`/learn/${article.slug}`);
+      const body = await res.text();
+      expect(body, article.slug).toMatch(/2025|2026/);
+    }
   });
 });
