@@ -582,6 +582,114 @@ const germanyTakeHomeGuide: LearnArticle = {
   ],
 };
 
+const spainVsPortugalTax: LearnArticle = {
+  slug: 'spain-vs-portugal-tax',
+  title: 'Spain vs Portugal for remote workers: what your salary is really worth after tax',
+  metaDescription:
+    '€80,000 computed both ways: Spain vs Portugal take-home pay under standard rules and arrival regimes (Beckham vs IFICI), with the foreign-income asymmetry most guides skip.',
+  updated: '2026-09-14',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'It is the classic Iberian dilemma for remote workers and relocating employees: Lisbon or Madrid? Both sell sunshine, EU membership and an expat scene — and both sell a special tax regime for arrivals. The honest answer to “which country leaves me more money” is: it depends on which regime you actually get, and on where your income comes from. Here are the numbers, computed rather than vibes.',
+    },
+    { kind: 'h2', text: 'Round one: standard rules, no special regime' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output. Spain: Madrid, 2025 parameters (latest fully implemented year). Portugal: 2026 parameters, marked provisional pending final AT publication. Single employee; social contributions included.',
+      head: ['Gross salary', 'Spain (Madrid) net', 'Portugal net', 'Winner'],
+      rows: [
+        ['€50,000', '€38,586 (22.8%)', '€36,141 (27.7%)', 'Spain by €2,445'],
+        ['€80,000', '€56,719 (29.1%)', '€52,761 (34.1%)', 'Spain by €3,958'],
+        ['€120,000', '€79,519 (33.7%)', '€72,787 (39.3%)', 'Spain by €6,732'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Under plain progressive schedules, Spain wins at every salary level, and the gap widens as income rises. Portugal’s employee social-security share (11% plus solidarity surcharges) stacks on top of brackets that reach 48%, while Madrid’s combined state-plus-regional schedule stays flatter. Two caveats before you book the mover: Spanish regional variation is real (the same €120,000 computes differently in Catalonia), and these tables assume employment income taxed in-country.',
+    },
+    { kind: 'h2', text: 'Round two: the arrival regimes head-to-head' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output. Beckham: 24% flat on Spanish employment income up to €600,000 (2025 parameters). IFICI: 20% flat on eligible Portuguese income (2026, provisional base parameters).',
+      head: ['Gross salary', 'Spain + Beckham net', 'Portugal + IFICI net', 'Winner'],
+      rows: [
+        ['€80,000', '€60,800 (24.0%)', '€64,000 (20.0%)', 'Portugal by €3,200'],
+        ['€120,000', '€91,200 (24.0%)', '€96,000 (20.0%)', 'Portugal by €4,800'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The regimes flip the result. IFICI’s 20% beats Beckham’s 24% at any income, and IFICI lasts ten years against Beckham’s six. If you qualify for both and your income qualifies for both, Portugal comes out ahead on pure rate. But qualifying is the whole game — and the two regimes are not even selling the same product.',
+    },
+    { kind: 'h2', text: 'The asymmetry almost every comparison skips: your income source' },
+    {
+      kind: 'table',
+      caption: 'How each regime treats income depending on where it comes from.',
+      head: ['Your income', 'Spain + Beckham', 'Portugal + IFICI'],
+      rows: [
+        [
+          'Spanish payroll salary',
+          '24% flat — the regime’s core case',
+          '20% flat if the profession qualifies',
+        ],
+        [
+          'Remote work for a foreign company (foreign payroll)',
+          'Generally OUTSIDE Spanish tax scope under the regime',
+          'IN SCOPE at 20% only if it counts as eligible employment income — otherwise ordinary rules',
+        ],
+        [
+          'Foreign dividends, interest, rent',
+          'Generally outside Spanish scope',
+          'Ordinary Portuguese rules (taxed)',
+        ],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'This is where the “Portugal wins on rate” conclusion can invert. A remote worker paid by a foreign company may find that the Beckham regime puts that salary outside Spanish tax entirely (subject to the regime’s own conditions and treaty analysis), while IFICI pulls foreign employment income into a 20% net and leaves non-eligible income on the ordinary schedule. The right question is not “which rate is lower” but “which regime actually touches my income”.',
+    },
+    { kind: 'h2', text: 'The parts that decide it in practice' },
+    {
+      kind: 'ul',
+      items: [
+        'Deadlines are brutal and different: Beckham requires the modelo 149 election within six months of Spanish social-security registration; IFICI is applied for with your residency registration — miss either and the standard tables above are your fate.',
+        'Eligibility: Beckham wants an employment relationship (or startup-director conditions); IFICI wants your profession and employer to fit the published lists.',
+        'Both countries use the 183-day rule and a residency-treaty network, so a mid-year move becomes a split-year analysis in both.',
+        'Wealth tax exists in Spain (regional exceptions) and Portugal has its own quirks — neither regime touches it.',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'So which country is better for a remote worker?',
+          a: 'For Spanish-payroll employment, Beckham is strong and simple. For foreign-payroll remote work, the answer depends on regime eligibility and the source-of-income analysis — run both scenarios and read the scope rules before deciding.',
+        },
+        {
+          q: 'Why are the Spain numbers from 2025 and Portugal from 2026?',
+          a: 'Because that is what the engine can compute exactly. Spain’s 2026 parameters were pending final publication when the rules were last verified, so the engine refuses to estimate. Portugal’s 2026 brackets are marked provisional. Guessing parameters would make the comparison look precise and be wrong.',
+        },
+        {
+          q: 'Do these tables include social security?',
+          a: 'Yes — income tax plus the employee-side contributions, which is why Portugal’s standard numbers look heavy: its employee share is larger.',
+        },
+        {
+          q: 'Can I hold both regimes at once across a relocation?',
+          a: 'In principle you could use Beckham in your Spanish years and IFICI in Portuguese years if you meet both countries’ entry conditions and the treaty assigns residency correctly. That is a genuinely complex case — get advice before attempting it.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
 export const learnArticles: LearnArticle[] = [
   methodologyArticle,
@@ -590,4 +698,5 @@ export const learnArticles: LearnArticle[] = [
   portugalIficiGuide,
   ukArrivalsSrtFig,
   germanyTakeHomeGuide,
+  spainVsPortugalTax,
 ];
