@@ -690,6 +690,129 @@ const spainVsPortugalTax: LearnArticle = {
   ],
 };
 
+const europe183DayResidency: LearnArticle = {
+  slug: 'europe-183-day-tax-residency',
+  title: 'The 183-day rule in Europe: how five countries actually decide you’re a tax resident',
+  metaDescription:
+    'The 183-day rule is not a magic line. How Spain, Portugal, Germany, the Netherlands and the UK really decide tax residency — plus the treaty tiebreaker and the social-security trap.',
+  updated: '2026-09-15',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Every cross-border worker has heard it: “stay 183 days and you become a tax resident.” The rule exists in every one of the five countries Taxmora covers — and in every one of them it is only one of several ways to become a resident, none of them the most common one in practice. People who plan around the day count alone get surprised by exactly the tests they never heard of.',
+    },
+    { kind: 'h2', text: 'How each country actually decides residency' },
+    {
+      kind: 'table',
+      caption:
+        'Domestic law tests, as implemented in the Taxmora residency engine. “>183” means more than 183 days of presence in the calendar year.',
+      head: ['Country', 'Residence test', 'Statute'],
+      rows: [
+        [
+          'Spain',
+          '>183 days; OR centre of economic interests in Spain; OR spouse + dependent minor children resident in Spain (rebuttable presumption)',
+          'art. 9 LIRPF',
+        ],
+        [
+          'Portugal',
+          '>183 days; OR shorter stay with a permanent home there suggesting intent to keep it',
+          'art. 16 CIRS',
+        ],
+        [
+          'Germany',
+          'A dwelling used as residence (Wohnsitz) — no minimum days; OR habitual stay over six months (gewöhnlicher Aufenthalt)',
+          '§ 8 + § 9 AO',
+        ],
+        [
+          'Netherlands',
+          'Facts and circumstances: where your personal and economic life is centred (home, family, work, registrations)',
+          'art. 4 AWR',
+        ],
+        [
+          'United Kingdom',
+          'The Statutory Residence Test: automatic overseas tests, automatic UK tests (183+ days, home + work), and a ties-based middle zone',
+          'ITA 2007 s.5 (HMRC RDR3)',
+        ],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Read that table again and notice what is missing: in Germany there is no day count at all — a flat you keep available counts. In Spain, having your spouse and kids in Spanish schools can make you a resident on day one, days irrelevant. In the Netherlands, no statute even mentions a number — the whole analysis is “where is your life”. The 183-day rule is usually the least of what decides your case.',
+    },
+    { kind: 'h2', text: 'Day counting is its own sport' },
+    {
+      kind: 'ul',
+      items: [
+        'Most countries count a day by physical presence at midnight; split days, transit days and “partial” days are exactly where disputes happen.',
+        'Spain and Portugal count days across the calendar year; the UK uses tax years (6 April – 5 April) and its own UK-day definition — the same travel pattern can produce different counts in different countries.',
+        'Country of residence fights are resolved between states, not by you: when two countries both claim you, the double-taxation treaty’s tiebreaker (OECD Model, art. 4(2)) walks through permanent home → centre of vital interests → habitual abode → nationality.',
+      ],
+    },
+    {
+      kind: 'h2',
+      text: 'The trap nobody warns you about: residency and social security are separate systems',
+    },
+    {
+      kind: 'p',
+      text: 'Tax residency and social-security liability are decided by different rulebooks. Staying under 183 days does not keep you out of a country’s social-security net if you work there — and within the EU/EEA the coordination rules (A1 certificates, the “last employer country” principle for remote workers) decide which system you pay into, independent of the 183-day count. This is the single most common surprise in remote-work setups.',
+    },
+    { kind: 'h2', text: 'What being resident in each country is worth: €80,000 as a resident' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output, standard resident employee, salary income, single. DE/PT 2026 provisional; ES 2025; NL 2026; UK 2025-26 (pounds). See the country guides for details.',
+      head: [
+        'Country (residency year label)',
+        'Tax + social contributions',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['United Kingdom (2025-26)', '£19,432', '£60,568', '24.3%'],
+        ['Germany (2026, provisional)', '€22,763', '€57,236', '28.4%'],
+        ['Spain, Madrid (2025)', '€23,281', '€56,719', '29.1%'],
+        ['Portugal (2026, provisional)', '€27,238', '€52,761', '34.1%'],
+        ['Netherlands (2026)', '€29,532', '€50,467', '36.9%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The same €80,000 spans a €10,000 range across the five systems — and this table is the boring case. Arrival regimes (Beckham, IFICI, the 30% ruling, UK FIG) sit on top of residency, and the country guides cover each one with the same engine-computed approach.',
+    },
+    { kind: 'h2', text: 'How Taxmora assesses residency' },
+    {
+      kind: 'p',
+      text: 'The residency module implements the tests above per country — day counts, economic-interests checks, the Spanish family presumption, the UK ties matrix from RDR3 — and then applies the treaty tiebreaker when two countries both claim you. It is a planning tool with the statute cited on every answer, not a substitute for a ruling. Where the honest answer is “this needs an adviser”, the assessment says so.',
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Is it exactly 183 days or more than 183?',
+          a: 'In Spain and Portugal the threshold is crossed above 183 days of presence. But do not fixate on the number: the economic-interests and habitual-residence tests trigger at any day count.',
+        },
+        {
+          q: 'Can two countries both consider me a tax resident?',
+          a: 'Yes, under domestic law that happens regularly. The double-taxation treaty between the two countries then assigns one residence via the tiebreaker chain. You still have to file correctly in both places in the meantime.',
+        },
+        {
+          q: 'If I stay under 183 days, do I avoid social security too?',
+          a: 'No. Social-security coordination is a separate rule system. In the EU/EEA a remote worker usually owes contributions where the work is performed or where the employer sits, regardless of the day count.',
+        },
+        {
+          q: 'I keep a flat in Germany but live mostly in Spain. Am I a German resident?',
+          a: 'Quite possibly — a dwelling available for your use (Wohnsitz) is enough under § 8 AO, with no minimum days. The treaty tiebreaker may assign residency to Spain, but the German dwelling still needs managing correctly.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
 export const learnArticles: LearnArticle[] = [
   methodologyArticle,
@@ -699,4 +822,5 @@ export const learnArticles: LearnArticle[] = [
   ukArrivalsSrtFig,
   germanyTakeHomeGuide,
   spainVsPortugalTax,
+  europe183DayResidency,
 ];
