@@ -813,6 +813,105 @@ const europe183DayResidency: LearnArticle = {
   ],
 };
 
+const remoteWorkForeignEmployer: LearnArticle = {
+  slug: 'remote-work-foreign-employer-europe',
+  title: 'Remote work for a foreign employer from Europe: where the tax actually lands',
+  metaDescription:
+    'You live in Europe, your employer is abroad. Where income tax and social security really fall, why employers refuse, and what a resident salary nets in DE/NL/PT/ES/UK.',
+  updated: '2026-09-16',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'The setup is the modern default: you live in Germany, Spain, Portugal or the UK, your employer sits in the US or another European country, and your salary arrives in your account every month. Three separate legal questions decide what that costs — and they are answered by three different rule systems that most people (and, frankly, most blog posts) blur together. Income tax, social security, and the employer’s own obligations.',
+    },
+    { kind: 'h2', text: 'Question one: income tax follows you, not your employer' },
+    {
+      kind: 'p',
+      text: 'If you are tax resident where you live — typically through the 183-day test or the centre-of-interests tests — your worldwide employment income is in scope there. Double-taxation treaties exist to stop the same salary being taxed twice, not to let you choose which country taxes it: the OECD Model assigns employment income to the country where the work is physically performed (art. 15), then credit mechanisms relieve the double taxation. Working from your Lisbon flat means the work is performed in Portugal, whatever the payroll says.',
+    },
+    {
+      kind: 'ul',
+      items: [
+        'Your employer withholding tax in their country does not settle your liability where you live — that country will still expect a return, and the foreign withholding becomes a credit at best.',
+        'Being paid as a “contractor” while working full-time for one company is a separate risk: many countries recharacterise that relationship, with back-taxes and social contributions attached.',
+        'A mid-year move splits the year: most systems allocate by residence periods or working days, which is exactly where the arithmetic stops being obvious.',
+      ],
+    },
+    { kind: 'h2', text: 'Question two: social security, the part that surprises everyone' },
+    {
+      kind: 'p',
+      text: 'Social-security liability is decided by coordination rules, not by the 183-day count that governs tax residency — which is why people who carefully stayed under the threshold still find contributions due where they live. Inside the EU/EEA, Regulation 883/2004 assigns you to one system (usually the country where you actually work, or the employer’s country if you work in several), and an A1 certificate is the document proving which one. Between the EU and the US, bilateral totalization agreements play the same role for cross-Atlantic setups.',
+    },
+    {
+      kind: 'ul',
+      items: [
+        'EU/EEA employer: your situation is usually cleanest — one system, A1 certificate, contributions in one country.',
+        'Non-EU employer (US, UK post-Brexit, anywhere else): you often end up inside the local system as if you were locally employed, because the coordination rules only work between participating states.',
+        'No A1 and no totalization agreement leaves you potentially liable in two systems with no offsetting credit — the worst of both worlds.',
+      ],
+    },
+    { kind: 'h2', text: 'Question three: why your employer says no (and what they are afraid of)' },
+    {
+      kind: 'p',
+      text: 'A foreign employer with a person working permanently from another country can create a permanent establishment — a taxable presence — in that country, plus payroll-registration, withholding and filing duties. That is the real reason HR blocks “work from anywhere” requests, and it is not a formality you can wish away by calling yourself remote. Common outcomes: the employer uses an employer-of-record to run local payroll, converts you to a genuine contractor (legal only if the relationship really is one), or declines.',
+    },
+    { kind: 'h2', text: 'What the salary is worth once you are resident' },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: standard resident employee, single, salary income, income tax plus employee social contributions. UK 2025-26 (pounds); ES 2025; DE/PT 2026 provisional; NL 2026.',
+      head: [
+        'Country of residence',
+        'Tax + social contributions on €80,000',
+        'Net take-home',
+        'Effective rate',
+      ],
+      rows: [
+        ['United Kingdom (2025-26)', '£19,432', '£60,568', '24.3%'],
+        ['Germany (2026, provisional)', '€22,763', '€57,236', '28.4%'],
+        ['Spain, Madrid (2025)', '€23,281', '€56,719', '29.1%'],
+        ['Portugal (2026, provisional)', '€27,238', '€52,761', '34.1%'],
+        ['Netherlands (2026)', '€29,532', '€50,467', '36.9%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'This table is the income-tax-plus-contributions half of the story, computed the way a resident employee is computed. It is the number to start from before asking whether a special regime (Beckham, IFICI, the Dutch 30% ruling, UK FIG) changes your case — the country guides cover those.',
+    },
+    { kind: 'h2', text: 'What the calculator does and does not do' },
+    {
+      kind: 'p',
+      text: 'Taxmora computes resident take-home pay with the statute cited, and its residency module runs the domestic tests plus the treaty tiebreaker. It does not model permanent-establishment exposure, A1/totalization filings, contractor recharacterisation, or your employer’s payroll duties. Those decide whether your arrangement works at all; the calculator decides what the numbers look like once it does.',
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'My US employer keeps paying US payroll taxes. Am I done?',
+          a: 'No. Where you live generally taxes your employment income regardless, with a foreign tax credit for what was already paid. The US side and the local side are separate filings.',
+        },
+        {
+          q: 'Can I just invoice my employer as a contractor instead?',
+          a: 'Only if the relationship genuinely is contracting: one client, fixed hours, company equipment and a manager usually looks like employment, and recharacterisation brings back contributions and penalties.',
+        },
+        {
+          q: 'Do I need an A1 certificate?',
+          a: 'If you work across borders within the EU/EEA, yes — it is the document that proves which social-security system applies. Without it, a second country can assess you independently.',
+        },
+        {
+          q: 'Does my employer have to register in my country?',
+          a: 'Often yes, through payroll registration or an employer-of-record, and a permanent employee working permanently from one country can create a corporate tax presence. That analysis is about the company, not your personal return.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
 export const learnArticles: LearnArticle[] = [
   methodologyArticle,
@@ -823,4 +922,5 @@ export const learnArticles: LearnArticle[] = [
   germanyTakeHomeGuide,
   spainVsPortugalTax,
   europe183DayResidency,
+  remoteWorkForeignEmployer,
 ];
