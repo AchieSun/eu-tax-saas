@@ -58,8 +58,19 @@ export interface CalculatorResult {
   taxYear: number;
   grossIncome: number;
   taxOwed: number;
-  netIncome: number;
-  effectiveRate: number; // taxOwed / grossIncome
+  /**
+   * Employee-side social-security contributions (statutory employee share).
+   *
+   * Until 2026-09 this field did not exist and `netIncome` silently meant
+   * "gross minus income tax", overstating take-home pay for DE/ES/PT/UK by
+   * 6-22% of gross. NL reports 0 here because the Dutch employee-side
+   * national-insurance premies (AOW/Anw/Wlz) are levied inside Box 1 and are
+   * therefore already part of `taxOwed`; Dutch employee insurance (WW/WIA/Zvw)
+   * is employer-paid.
+   */
+  socialContributions: number;
+  netIncome: number; // grossIncome - taxOwed - socialContributions
+  effectiveRate: number; // (taxOwed + socialContributions) / grossIncome
   marginalRate: number; // top bracket rate hit
   breakdown: TaxBreakdownItem[];
   source: string; // primary legal citation

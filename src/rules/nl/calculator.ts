@@ -156,13 +156,15 @@ export function calculateBox1(input: CalculatorInput): CalculatorResult {
     },
   ];
 
+  const payableTax = floorEur(taxOwed);
   return {
     country: 'NL',
     taxYear,
     grossIncome,
-    taxOwed: floorEur(taxOwed),
-    netIncome: grossIncome - taxOwed,
-    effectiveRate: round(taxOwed / grossIncome, 4),
+    taxOwed: payableTax,
+    socialContributions: 0, // NL: employee-side premies volksverzekeringen sit inside Box 1 (see header)
+    netIncome: grossIncome - payableTax,
+    effectiveRate: round(payableTax / grossIncome, 4),
     marginalRate: round(marginalRate, 4),
     breakdown,
     source: 'Belastingdienst — Box 1 tarieven + Wet IB 2001',
@@ -179,13 +181,15 @@ export function calculateBox2({ taxYear, income }: Box2Input): CalculatorResult 
   const bracket1 = Math.min(income, p.bracket1Limit);
   const bracket2 = Math.max(0, income - p.bracket1Limit);
   const tax = bracket1 * p.bracket1Rate + bracket2 * p.bracket2Rate;
+  const payableTax = floorEur(tax);
   return {
     country: 'NL',
     taxYear,
     grossIncome: income,
-    taxOwed: floorEur(tax),
-    netIncome: income - tax,
-    effectiveRate: round(tax / income, 4),
+    taxOwed: payableTax,
+    socialContributions: 0, // NL: employee-side premies volksverzekeringen sit inside Box 1 (see header)
+    netIncome: income - payableTax,
+    effectiveRate: round(payableTax / income, 4),
     marginalRate: income > p.bracket1Limit ? p.bracket2Rate : p.bracket1Rate,
     breakdown: [
       { label: 'Box 2 bracket 1', amount: bracket1 * p.bracket1Rate, rate: p.bracket1Rate },
@@ -221,6 +225,7 @@ export function calculateBox3({
       taxYear,
       grossIncome: totalAssets,
       taxOwed: 0,
+      socialContributions: 0, // NL: employee-side premies volksverzekeringen sit inside Box 1 (see header)
       netIncome: totalAssets,
       effectiveRate: 0,
       marginalRate: 0,
@@ -243,13 +248,15 @@ export function calculateBox3({
   const box3Income = taxableBase * effectiveReturnRate;
   const tax = Math.max(0, box3Income * p.rate);
 
+  const payableTax = floorEur(tax);
   return {
     country: 'NL',
     taxYear,
     grossIncome: totalAssets,
-    taxOwed: floorEur(tax),
-    netIncome: totalAssets - tax,
-    effectiveRate: totalAssets > 0 ? round(tax / totalAssets, 4) : 0,
+    taxOwed: payableTax,
+    socialContributions: 0, // NL: employee-side premies volksverzekeringen sit inside Box 1 (see header)
+    netIncome: totalAssets - payableTax,
+    effectiveRate: totalAssets > 0 ? round(payableTax / totalAssets, 4) : 0,
     marginalRate: p.rate,
     breakdown: [
       {

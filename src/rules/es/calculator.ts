@@ -151,7 +151,33 @@ export interface EsCalculatorResult
     baseImponibleAuto: number;
     specialStatus: string | null;
     ccaa: Ccaa | null;
+    /** Employee-side Seguridad Social contributions (see ES_SOCIAL_2025). */
+    socialSecurity: number;
   };
+}
+
+/**
+ * Employee-side Seguridad Social, régimen general (Orden PJC/178/2025):
+ *   contingencias comunes 4,70 % + desempleo (indefinido) 1,55 %
+ *   + formación profesional 0,10 % + MEI 0,13 %  = 6,48 % of the contribution base.
+ * Maximum contribution base 2025: 4.909,50 €/month → 58.914 €/year (12 payments).
+ *
+ * NOT modelled (documented exclusions):
+ *  - the 2025 "cotización adicional de solidaridad" above the maximum base
+ *    (employee share not published in a source we could verify);
+ *  - extra payments (pagas extraordinarias) carry their own bases, so the real
+ *    annual base can exceed 12 × the monthly maximum;
+ *  - the 2025 Beckham branch is a flat regime where social security still applies
+ *    unchanged, which is why it is added outside the IRPF calculation.
+ */
+const ES_SOCIAL_2025 = {
+  employeeRate: 0.0648,
+  maxBaseAnnual: 58914,
+};
+
+function employeeSocialSecurity(grossIncome: number): number {
+  const base = Math.min(grossIncome, ES_SOCIAL_2025.maxBaseAnnual);
+  return floorEur(base * ES_SOCIAL_2025.employeeRate);
 }
 
 function isCcaa(x: string | undefined): x is Ccaa {
@@ -172,14 +198,16 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
     const tax = base * ES_BECKHAM_2025.rateBase + over * ES_BECKHAM_2025.rateOver;
     const totalTax = floorEur(tax);
     const marginalRate = over > 0 ? ES_BECKHAM_2025.rateOver : ES_BECKHAM_2025.rateBase;
+    const socialSecurity = employeeSocialSecurity(grossIncome);
     return {
       country: 'ES',
       taxYear: 2025,
       grossIncome,
       totalTax,
       taxOwed: totalTax,
-      netIncome: grossIncome - totalTax,
-      effectiveRate: grossIncome > 0 ? round(totalTax / grossIncome, 4) : 0,
+      socialContributions: socialSecurity,
+      netIncome: grossIncome - totalTax - socialSecurity,
+      effectiveRate: grossIncome > 0 ? round((totalTax + socialSecurity) / grossIncome, 4) : 0,
       marginalRate,
       breakdown: {
         estatal: totalTax,
@@ -189,6 +217,7 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
         baseImponibleAuto: 0,
         specialStatus: 'beckham',
         ccaa: null,
+        socialSecurity,
       },
       source: SOURCE,
       provisional: false,
@@ -218,6 +247,7 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
 
   const totalTax = floorEur(estatalTax + autoTax);
   const marginalRate = Math.max(marginalEstatal, marginalAuto);
+  const socialSecurity = employeeSocialSecurity(grossIncome);
 
   return {
     country: 'ES',
@@ -225,8 +255,9 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
     grossIncome,
     totalTax,
     taxOwed: totalTax,
-    netIncome: grossIncome - totalTax,
-    effectiveRate: grossIncome > 0 ? round(totalTax / grossIncome, 4) : 0,
+    socialContributions: socialSecurity,
+    netIncome: grossIncome - totalTax - socialSecurity,
+    effectiveRate: grossIncome > 0 ? round((totalTax + socialSecurity) / grossIncome, 4) : 0,
     marginalRate,
     breakdown: {
       estatal: round(estatalTax, 2),
@@ -236,6 +267,7 @@ export function calculateEs(input: CalculatorInput): EsCalculatorResult {
       baseImponibleAuto,
       specialStatus: specialStatus === 'none' ? null : specialStatus,
       ccaa: region,
+      socialSecurity,
     },
     source: SOURCE,
     provisional: false,

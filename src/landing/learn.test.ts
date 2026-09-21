@@ -79,7 +79,7 @@ describe('GET /learn/methodology', () => {
     expect(body).toContain('"@type":"Article"');
     expect(body).toContain('"@type":"BreadcrumbList"');
     expect(body).toContain('"@type":"FAQPage"');
-    expect(body).toContain('"dateModified":"2026-09-08"');
+    expect(body).toContain('"dateModified":"2026-09-21"');
   });
 
   it('renders content blocks: table, note, FAQ, CTA, updated date', async () => {
@@ -92,7 +92,7 @@ describe('GET /learn/methodology', () => {
     expect(body).toContain('class="learn-note"');
     expect(body).toContain('constitutes tax advice');
     expect(body).toContain('Frequently asked questions');
-    expect(body).toContain('Last updated <time datetime="2026-09-08">2026-09-08</time>');
+    expect(body).toContain('Last updated <time datetime="2026-09-21">2026-09-21</time>');
     expect(body).toContain('href="/compare?lang=en"');
     expect(body).toContain('Try the free calculator');
   });

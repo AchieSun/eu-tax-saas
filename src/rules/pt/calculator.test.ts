@@ -67,7 +67,10 @@ describe('PT IFICI flat 20%', () => {
       filingStatus: 'single',
     });
     expect(r.taxOwed).toBe(20_000);
-    expect(r.effectiveRate).toBeCloseTo(0.2, 4);
+    // IFICI changes income tax only — the 11 % employee Segurança Social applies unchanged.
+    expect(r.socialContributions).toBe(11_000);
+    expect(r.netIncome).toBe(100_000 - 20_000 - 11_000);
+    expect(r.effectiveRate).toBeCloseTo(0.31, 4);
     expect(r.source).toContain('IFICI');
   });
 });

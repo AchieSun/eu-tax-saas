@@ -63,7 +63,9 @@ describe('DE calculateDe — full result shape', () => {
     });
     expect(r.country).toBe('DE');
     expect(r.taxOwed).toBeGreaterThan(0);
-    expect(r.netIncome).toBe(r.grossIncome - r.taxOwed);
+    // netIncome = gross − income tax − employee social insurance.
+    expect(r.netIncome).toBe(r.grossIncome - r.taxOwed - r.socialContributions);
+    expect(r.socialContributions).toBeGreaterThan(0);
     expect(r.effectiveRate).toBeGreaterThan(0);
     expect(r.effectiveRate).toBeLessThan(1);
     expect(r.breakdown.length).toBeGreaterThan(0);

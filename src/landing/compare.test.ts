@@ -113,6 +113,9 @@ describe('GET /compare page', () => {
     expect(body).toContain('United Kingdom');
     // European-style formatted net income (€ prefix + thousands separator).
     expect(body).toMatch(/€[0-9,]+/);
+    // Social contributions are a first-class column (added 2026-09): without it
+    // tax + net would not add up to gross for DE/ES/PT/UK.
+    expect(body).toContain('Social contributions');
   });
 
   it('400: invalid query renders error banner with danger palette', async () => {
@@ -240,6 +243,7 @@ describe('GET /api/public/compare', () => {
         flag: string;
         grossIncome: number;
         taxOwed: number;
+        socialContributions: number;
         netIncome: number;
         effectiveRate: number;
         provisional: boolean;
@@ -273,13 +277,28 @@ describe('GET /api/public/compare', () => {
       expect(row.breakdown.length).toBeGreaterThan(0);
     }
     // Exact F1 values at €60k / 2025 / salary / single.
+    // Since 2026-09 netIncome = gross − income tax − employee social
+    // contributions; these values therefore include NL premies (inside Box 1
+    // tax), UK Class 1 NI, ES Seguridad Social, PT Segurança Social and DE
+    // Renten-/Arbeitslosen-/Kranken-/Pflegeversicherung.
     const byCountry = Object.fromEntries(data.results.map((r) => [r.country, r]));
-    expect(byCountry.DE.netIncome).toBe(45585);
-    expect(byCountry.ES.netIncome).toBe(44996);
-    expect(byCountry.UK.netIncome).toBe(48568);
-    expect(byCountry.PT.netIncome).toBeCloseTo(41334.51, 1);
-    // Effective rate is a fraction (0.1905 for UK at €60k 2025).
-    expect(byCountry.UK.effectiveRate).toBeCloseTo(0.1905, 3);
+    expect(byCountry.DE.netIncome).toBe(32655);
+    expect(byCountry.ES.netIncome).toBe(41179);
+    expect(byCountry.UK.netIncome).toBe(45358);
+    expect(byCountry.PT.netIncome).toBe(34735);
+    expect(byCountry.NL.netIncome).toBe(39217);
+    // Social contributions: DE/UK/ES/PT positive, NL zero (premies inside Box 1).
+    expect(byCountry.DE.socialContributions).toBeGreaterThan(0);
+    expect(byCountry.UK.socialContributions).toBeGreaterThan(0);
+    expect(byCountry.ES.socialContributions).toBeGreaterThan(0);
+    expect(byCountry.PT.socialContributions).toBeGreaterThan(0);
+    expect(byCountry.NL.socialContributions).toBe(0);
+    // Reported tax + contributions + net must equal gross for every country.
+    for (const row of data.results) {
+      expect(row.taxOwed + row.socialContributions + row.netIncome).toBeCloseTo(60000, 0);
+    }
+    // Effective rate is a fraction (0.2436 for UK at €60k 2025, NI included).
+    expect(byCountry.UK.effectiveRate).toBeCloseTo(0.2436, 3);
   });
 
   it('defaults: taxYear→2025 (all five countries computable), incomeType→salary, filingStatus→single', async () => {

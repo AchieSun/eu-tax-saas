@@ -41,7 +41,7 @@ export const methodologyArticle: LearnArticle = {
   title: 'How Taxmora calculates your take-home pay',
   metaDescription:
     'The rules, sources and limits behind Taxmora’s five-country take-home pay calculator for Germany, the Netherlands, Portugal, Spain and the UK. Not tax advice.',
-  updated: '2026-09-08',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -96,7 +96,7 @@ export const methodologyArticle: LearnArticle = {
       items: [
         'Standard employment income for the selected tax year (2025 / 2026).',
         'Each country’s statutory income-tax schedule with the year’s brackets.',
-        'Employee-side social-security contributions with ceilings where they apply.',
+        'Employee-side social-security contributions, each line cited: Germany’s pension, unemployment, health (average additional rate) and care contributions with their two separate ceilings; the UK’s Class 1 National Insurance (annualised); Spain’s 6.48% Seguridad Social on a base capped at €58,914; Portugal’s 11% Segurança Social.',
         'The special regimes listed above where the engine supports them.',
       ],
     },
@@ -109,6 +109,9 @@ export const methodologyArticle: LearnArticle = {
         'Self-employment and freelance regimes (different contribution systems entirely).',
         'Regional variations that fall outside the national schedule (for example Spain’s foral territories).',
         'Mid-year moves: the calculator assumes one country of residence for the year.',
+        'Spain’s 2025 “solidarity contribution” on pay above the contribution ceiling — the employee share is not published in a source we could verify, so the contribution base is simply capped instead.',
+        'Germany’s employee allowances (Werbungskostenpauschale, Sonderausgabenpauschale, Vorsorgepauschale): the § 32a tariff is applied to the amount you enter, so the German income-tax line is conservative (slightly high) versus a real payslip.',
+        'Northern Ireland’s and Scotland’s income-tax differences, private health insurance in Germany, and the Saxon split of the care-insurance premium.',
       ],
     },
     { kind: 'h2', text: 'How the rules stay current' },
@@ -167,7 +170,7 @@ const netherlands30Ruling: LearnArticle = {
   title: 'The Netherlands 30% ruling (2026): who qualifies and what it actually saves',
   metaDescription:
     'How the Dutch 30% ruling works in 2026: eligibility criteria, the salary threshold, what it means for take-home pay, and the honest limits of any online calculation.',
-  updated: '2026-09-10',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -191,7 +194,7 @@ const netherlands30Ruling: LearnArticle = {
     {
       kind: 'table',
       caption:
-        'Engine output: 2026 parameters, single employee, salary income. Social contributions included.',
+        'Engine output: 2026 parameters, single employee, salary income. The Dutch employee-side national-insurance premies (AOW/Anw/Wlz) are levied inside Box 1, so they are already part of the income-tax line rather than shown separately.',
       head: [
         'Gross salary (2026)',
         'Income tax + social contributions',
@@ -252,7 +255,7 @@ const spainBeckhamLaw: LearnArticle = {
   title: 'Spain’s Beckham Law: the 24% flat tax for new arrivals, with real numbers',
   metaDescription:
     'How Spain’s special expat regime (régimen Beckham, Art. 93 LIRPF) works: 24% flat tax, who qualifies, the 6-month deadline, and a real €80,000 take-home comparison.',
-  updated: '2026-09-10',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -272,21 +275,27 @@ const spainBeckhamLaw: LearnArticle = {
     {
       kind: 'table',
       caption:
-        'Engine output: Spain (Madrid) 2025 parameters — the latest fully implemented year. Single employee. The regime taxes Spanish employment income at 24% up to €600,000 (47% above).',
+        'Engine output: Spain (Madrid) 2025 parameters — the latest fully implemented year. Single employee. The regime taxes Spanish employment income at 24% up to €600,000 (47% above). Employee Seguridad Social (6.48% of a base capped at €58,914) applies in every row.',
       head: [
-        'Scenario (€80,000, Madrid)',
+        'Scenario (Madrid, 2025)',
         'Income tax + social contributions',
         'Net take-home',
         'Effective rate',
       ],
       rows: [
-        ['Standard progressive schedule', '€23,281', '€56,719', '29.1%'],
-        ['Beckham regime (24% flat)', '€19,200', '€60,800', '24.0%'],
+        ['€80,000 — standard', '€27,098', '€52,902', '33.9%'],
+        ['€80,000 — Beckham (24% flat)', '€23,017', '€56,983', '28.8%'],
+        ['€30,000 — standard', '€7,078', '€22,922', '23.6%'],
+        ['€30,000 — Beckham (24% flat)', '€9,144', '€20,856', '30.5%'],
       ],
     },
     {
       kind: 'p',
       text: 'That is roughly €4,100 a year back in your pocket at €80,000 — and the gap widens as the salary rises, because the flat 24% competes against brackets that climb past 37% state-plus-regional in Madrid well below €100,000. Regional variation matters too: the same gross income computes differently in Catalonia or Andalusia under the standard schedule, which is why the engine takes the region as an input.',
+    },
+    {
+      kind: 'p',
+      text: 'The regime is not automatically a win. At €30,000 the flat 24% costs you about €2,066 a year against the progressive schedule, because Spain’s lower brackets are gentler than a flat rate on the whole salary. The crossover sits around €55,000 — below it Beckham makes you worse off, above it better off, and the further above it the more it pays. That is precisely the kind of arithmetic to compute rather than assume.',
     },
     { kind: 'h2', text: 'The traps people miss' },
     {
@@ -337,7 +346,7 @@ const portugalIficiGuide: LearnArticle = {
   title: 'Portugal’s IFICI (NHR 2.0): the 20% flat rate that replaced the NHR',
   metaDescription:
     'Portugal’s IFICI regime (NHR 2.0): 20% flat tax on eligible employment income, who qualifies in 2026, how it differs from the old NHR, and real take-home numbers.',
-  updated: '2026-09-10',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -361,7 +370,7 @@ const portugalIficiGuide: LearnArticle = {
     {
       kind: 'table',
       caption:
-        'Engine output: Portugal 2026 parameters (marked provisional pending final AT publication). Single employee.',
+        'Engine output: Portugal 2026 parameters (marked provisional pending final AT publication). Single employee. Includes the 11% employee Segurança Social in both rows — IFICI changes the income-tax rate, not social contributions.',
       head: [
         'Scenario (€80,000)',
         'Income tax + social contributions',
@@ -369,8 +378,8 @@ const portugalIficiGuide: LearnArticle = {
         'Effective rate',
       ],
       rows: [
-        ['Standard progressive schedule', '€27,238', '€52,761', '34.1%'],
-        ['IFICI 20% flat', '€16,000', '€64,000', '20.0%'],
+        ['Standard progressive schedule', '€36,038', '€43,962', '45.1%'],
+        ['IFICI 20% flat', '€24,800', '€55,200', '31.0%'],
       ],
     },
     {
@@ -421,7 +430,7 @@ const ukArrivalsSrtFig: LearnArticle = {
   title: 'Moving to the UK: the Statutory Residence Test and the four-year FIG regime',
   metaDescription:
     'How UK tax residency is decided (Statutory Residence Test) and how the new FIG regime taxes arrivals from 2025-26 — with real £80,000 take-home numbers from the engine.',
-  updated: '2026-09-10',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -446,7 +455,7 @@ const ukArrivalsSrtFig: LearnArticle = {
     {
       kind: 'table',
       caption:
-        'Engine output: UK 2025-26 parameters (the latest fully implemented UK year). Single employee, England/Wales/NI band structure. National Insurance included.',
+        'Engine output: UK 2025-26 parameters (the latest fully implemented UK year). Single employee, England/Wales/NI band structure. Class 1 National Insurance is included in the standard rows (annualised). The FIG row zeroes UK income tax on foreign income only — National Insurance is decided by the separate social-security rules and is not covered by FIG.',
       head: [
         'Scenario (2025-26)',
         'Income tax + National Insurance',
@@ -454,8 +463,8 @@ const ukArrivalsSrtFig: LearnArticle = {
         'Effective rate',
       ],
       rows: [
-        ['£50,000 salary, standard', '£7,486', '£42,514', '15.0%'],
-        ['£80,000 salary, standard', '£19,432', '£60,568', '24.3%'],
+        ['£50,000 salary, standard', '£10,480', '£39,520', '21.0%'],
+        ['£80,000 salary, standard', '£23,042', '£56,958', '28.8%'],
         ['£80,000 foreign employment income, FIG-eligible', '£0', '£80,000', '0.0%'],
       ],
     },
@@ -469,6 +478,7 @@ const ukArrivalsSrtFig: LearnArticle = {
       items: [
         'Scottish and Welsh income-tax band differences (the engine uses the rUK structure).',
         'Pension contributions, student loans and the child benefit charge.',
+        'National Insurance is annualised here; employees are assessed per pay period, so an irregular bonus pattern can differ slightly.',
         'The remittance-basis details of mixed funds (relevant to pre-2025 arrivals still within old rules).',
       ],
     },
@@ -507,7 +517,7 @@ const germanyTakeHomeGuide: LearnArticle = {
     'What a salary is really worth in Germany: income tax and social security, with real numbers',
   metaDescription:
     'German take-home pay explained: progressive EStG brackets, social-security ceilings, the solidarity surcharge, and real €60,000 / €80,000 net-salary numbers from the 2026 engine.',
-  updated: '2026-09-10',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -525,13 +535,13 @@ const germanyTakeHomeGuide: LearnArticle = {
         'Effective rate',
       ],
       rows: [
-        ['€60,000', '€14,233', '€45,767', '23.7%'],
-        ['€80,000', '€22,763', '€57,236', '28.4%'],
+        ['€60,000', '€27,283', '€32,717', '45.5%'],
+        ['€80,000', '€39,020', '€40,979', '48.8%'],
       ],
     },
     {
       kind: 'p',
-      text: 'Notice the effective rate rising from 23.7% to 28.4% between €60,000 and €80,000 — the German social-security ceilings stop growing your contributions somewhere in that range while income tax keeps climbing through the 42% zone. The shape of that curve is the real answer to “is a German raise worth it?”.',
+      text: 'The effective burden rises from 45.5% to 48.8% between €60,000 and €80,000, and the composition changes as it climbs: the health and care contributions stop growing once your pay passes their ceiling (€5,812.50 a month in 2026), while pension and unemployment contributions keep applying up to €8,450 a month and income tax keeps climbing through the 42% zone. Above both ceilings the rate flattens again — the shape of that curve is the real answer to “is a German raise worth it?”.',
     },
     { kind: 'h2', text: 'The moving parts' },
     {
@@ -548,8 +558,10 @@ const germanyTakeHomeGuide: LearnArticle = {
       kind: 'ul',
       items: [
         'Church tax (Kirchensteuer, 8-9% of the wage tax where applicable).',
+        'The employee allowances a real payroll run applies (Werbungskostenpauschale, Sonderausgabenpauschale and the Vorsorgepauschale) — the § 32a tariff is applied to the amount you enter, so the German income-tax line here is conservative versus a payslip.',
         'The Forschungspauschale and other special statuses.',
         'Private health-insurance premiums that replace the statutory scheme above the insurance threshold.',
+        'The Saxon split of the care-insurance premium (this engine uses the non-Saxon 1,8 %/2,4 % childless split).',
         'Class V/VI withholding oddities within the year (the annual picture is computed, not the payroll months).',
       ],
     },
@@ -587,7 +599,7 @@ const spainVsPortugalTax: LearnArticle = {
   title: 'Spain vs Portugal for remote workers: what your salary is really worth after tax',
   metaDescription:
     '€80,000 computed both ways: Spain vs Portugal take-home pay under standard rules and arrival regimes (Beckham vs IFICI), with the foreign-income asymmetry most guides skip.',
-  updated: '2026-09-14',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -600,9 +612,9 @@ const spainVsPortugalTax: LearnArticle = {
         'Engine output. Spain: Madrid, 2025 parameters (latest fully implemented year). Portugal: 2026 parameters, marked provisional pending final AT publication. Single employee; social contributions included.',
       head: ['Gross salary', 'Spain (Madrid) net', 'Portugal net', 'Winner'],
       rows: [
-        ['€50,000', '€38,586 (22.8%)', '€36,141 (27.7%)', 'Spain by €2,445'],
-        ['€80,000', '€56,719 (29.1%)', '€52,761 (34.1%)', 'Spain by €3,958'],
-        ['€120,000', '€79,519 (33.7%)', '€72,787 (39.3%)', 'Spain by €6,732'],
+        ['€50,000', '€35,346 (29.3%)', '€30,642 (38.7%)', 'Spain by €4,704'],
+        ['€80,000', '€52,902 (33.9%)', '€43,962 (45.1%)', 'Spain by €8,940'],
+        ['€120,000', '€75,702 (36.9%)', '€59,588 (50.3%)', 'Spain by €16,114'],
       ],
     },
     {
@@ -616,13 +628,13 @@ const spainVsPortugalTax: LearnArticle = {
         'Engine output. Beckham: 24% flat on Spanish employment income up to €600,000 (2025 parameters). IFICI: 20% flat on eligible Portuguese income (2026, provisional base parameters).',
       head: ['Gross salary', 'Spain + Beckham net', 'Portugal + IFICI net', 'Winner'],
       rows: [
-        ['€80,000', '€60,800 (24.0%)', '€64,000 (20.0%)', 'Portugal by €3,200'],
-        ['€120,000', '€91,200 (24.0%)', '€96,000 (20.0%)', 'Portugal by €4,800'],
+        ['€80,000', '€56,983 (28.8%)', '€55,200 (31.0%)', 'Spain by €1,783'],
+        ['€120,000', '€87,383 (27.2%)', '€82,800 (31.0%)', 'Spain by €4,583'],
       ],
     },
     {
       kind: 'p',
-      text: 'The regimes flip the result. IFICI’s 20% beats Beckham’s 24% at any income, and IFICI lasts ten years against Beckham’s six. If you qualify for both and your income qualifies for both, Portugal comes out ahead on pure rate. But qualifying is the whole game — and the two regimes are not even selling the same product.',
+      text: 'Once employee social contributions are counted, the rate comparison alone is misleading. IFICI’s 20% is lower than Beckham’s 24% — but Portugal’s employee Segurança Social is 11% of gross with no ceiling, while Spain’s employee contribution is 6.48% of a base capped at €58,914. That is why Spain wins the regime round above: at €80,000 Beckham leaves you €1,783 ahead, at €120,000 €4,583 ahead, and the gap keeps widening with salary. IFICI still lasts ten years against Beckham’s six, so the honest read is “Spain on money, Portugal on duration” — and eligibility is the whole game for both.',
     },
     { kind: 'h2', text: 'The asymmetry almost every comparison skips: your income source' },
     {
@@ -670,7 +682,7 @@ const spainVsPortugalTax: LearnArticle = {
       items: [
         {
           q: 'So which country is better for a remote worker?',
-          a: 'For Spanish-payroll employment, Beckham is strong and simple. For foreign-payroll remote work, the answer depends on regime eligibility and the source-of-income analysis — run both scenarios and read the scope rules before deciding.',
+          a: 'On the money, Spain wins both rounds once employee social contributions are counted: its contribution base is capped, Portugal’s 11% is not. Portugal’s counter-argument is duration (IFICI runs ten years) and eligibility. For foreign-payroll remote work the answer still depends on regime eligibility and the source-of-income analysis — run both scenarios before deciding.',
         },
         {
           q: 'Why are the Spain numbers from 2025 and Portugal from 2026?',
@@ -695,7 +707,7 @@ const europe183DayResidency: LearnArticle = {
   title: 'The 183-day rule in Europe: how five countries actually decide you’re a tax resident',
   metaDescription:
     'The 183-day rule is not a magic line. How Spain, Portugal, Germany, the Netherlands and the UK really decide tax residency — plus the treaty tiebreaker and the social-security trap.',
-  updated: '2026-09-15',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -768,16 +780,16 @@ const europe183DayResidency: LearnArticle = {
         'Effective rate',
       ],
       rows: [
-        ['United Kingdom (2025-26)', '£19,432', '£60,568', '24.3%'],
-        ['Germany (2026, provisional)', '€22,763', '€57,236', '28.4%'],
-        ['Spain, Madrid (2025)', '€23,281', '€56,719', '29.1%'],
-        ['Portugal (2026, provisional)', '€27,238', '€52,761', '34.1%'],
+        ['United Kingdom (2025-26)', '£23,042', '£56,958', '28.8%'],
+        ['Spain, Madrid (2025)', '€27,098', '€52,902', '33.9%'],
         ['Netherlands (2026)', '€29,532', '€50,467', '36.9%'],
+        ['Portugal (2026, provisional)', '€36,038', '€43,962', '45.1%'],
+        ['Germany (2026, provisional)', '€39,020', '€40,979', '48.8%'],
       ],
     },
     {
       kind: 'p',
-      text: 'The same €80,000 spans a €10,000 range across the five systems — and this table is the boring case. Arrival regimes (Beckham, IFICI, the 30% ruling, UK FIG) sit on top of residency, and the country guides cover each one with the same engine-computed approach.',
+      text: 'The same €80,000 spans roughly €16,000 of take-home across the five systems once employee social contributions are included — and this table is the boring case, before any arrival regime. Note how the ranking moves once contributions are counted: Germany, the country people assume is the most taxed, is last here, because its employee contributions are the heaviest of the five. Arrival regimes (Beckham, IFICI, the 30% ruling, UK FIG) sit on top of residency, and the country guides cover each one with the same engine-computed approach.',
     },
     { kind: 'h2', text: 'How Taxmora assesses residency' },
     {
@@ -818,7 +830,7 @@ const remoteWorkForeignEmployer: LearnArticle = {
   title: 'Remote work for a foreign employer from Europe: where the tax actually lands',
   metaDescription:
     'You live in Europe, your employer is abroad. Where income tax and social security really fall, why employers refuse, and what a resident salary nets in DE/NL/PT/ES/UK.',
-  updated: '2026-09-16',
+  updated: '2026-09-21',
   blocks: [
     {
       kind: 'p',
@@ -867,11 +879,11 @@ const remoteWorkForeignEmployer: LearnArticle = {
         'Effective rate',
       ],
       rows: [
-        ['United Kingdom (2025-26)', '£19,432', '£60,568', '24.3%'],
-        ['Germany (2026, provisional)', '€22,763', '€57,236', '28.4%'],
-        ['Spain, Madrid (2025)', '€23,281', '€56,719', '29.1%'],
-        ['Portugal (2026, provisional)', '€27,238', '€52,761', '34.1%'],
+        ['United Kingdom (2025-26)', '£23,042', '£56,958', '28.8%'],
+        ['Spain, Madrid (2025)', '€27,098', '€52,902', '33.9%'],
         ['Netherlands (2026)', '€29,532', '€50,467', '36.9%'],
+        ['Portugal (2026, provisional)', '€36,038', '€43,962', '45.1%'],
+        ['Germany (2026, provisional)', '€39,020', '€40,979', '48.8%'],
       ],
     },
     {

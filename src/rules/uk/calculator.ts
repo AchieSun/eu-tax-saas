@@ -127,6 +127,8 @@ export interface UkCalculatorResult {
   /** Whole-£ tax. Mirrors `taxOwed` for backwards-compat with CalculatorResult. */
   totalTax: number;
   taxOwed: number;
+  /** Employee Class 1 National Insurance (annualised, see note in breakdown). */
+  socialContributions: number;
   netIncome: number;
   effectiveRate: number;
   marginalRate: number;
@@ -134,12 +136,35 @@ export interface UkCalculatorResult {
     region: 'EWN' | 'SCOT';
     personalAllowance: number;
     taxable: number;
+    nationalInsurance: number;
     specialStatus: string | null;
     note?: string;
   };
   warnings?: string[];
   source: string;
   provisional: boolean;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Employee National Insurance (Class 1)
+// HMRC gov.uk "Rates and allowances: National Insurance contributions":
+//   2025-26 and 2026-27: 8% between the Primary Threshold (£12,570/yr) and the
+//   Upper Earnings Limit (£50,270/yr); 2% above the UEL.
+// SIMPLIFICATION: annualised. Employees are assessed per pay period, so an
+// irregular bonus pattern can differ; company directors are assessed annually.
+// ───────────────────────────────────────────────────────────────────────────
+
+const UK_NI_PRIMARY_THRESHOLD = 12570;
+const UK_NI_UPPER_EARNINGS_LIMIT = 50270;
+const UK_NI_MAIN_RATE = 0.08;
+const UK_NI_UPPER_RATE = 0.02;
+
+export function employeeNationalInsurance(grossIncome: number): number {
+  const mainBand =
+    Math.max(0, Math.min(grossIncome, UK_NI_UPPER_EARNINGS_LIMIT) - UK_NI_PRIMARY_THRESHOLD) *
+    UK_NI_MAIN_RATE;
+  const upperBand = Math.max(0, grossIncome - UK_NI_UPPER_EARNINGS_LIMIT) * UK_NI_UPPER_RATE;
+  return floorEur(mainBand + upperBand);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -175,6 +200,7 @@ export function calculateUk(input: CalculatorInput): UkCalculatorResult {
       grossIncome,
       totalTax: 0,
       taxOwed: 0,
+      socialContributions: 0,
       netIncome: grossIncome,
       effectiveRate: 0,
       marginalRate: 0,
@@ -182,11 +208,13 @@ export function calculateUk(input: CalculatorInput): UkCalculatorResult {
         region,
         personalAllowance: 0,
         taxable: 0,
+        nationalInsurance: 0,
         specialStatus: 'fig',
         note: '4-year FIG relief — foreign income/gains exempt from UK tax for qualifying new residents (FA 2025 Sch.9). Requires SA109 Box 28/29 claim.',
       },
       warnings: [
         'FIG eligibility (10-year prior non-UK residence + 4-year window) not verified — confirm via residency assessment',
+        'National Insurance is NOT covered by FIG: it follows the social-security position (EU 883/2004 / A1 or a totalization agreement), which this calculator does not model',
       ],
       source: SOURCE,
       provisional: false,
@@ -198,6 +226,7 @@ export function calculateUk(input: CalculatorInput): UkCalculatorResult {
   const bands = getBands(region);
   const { tax, marginalRate } = applyBracketsCumulative(bands, taxable);
   const totalTax = floorEur(tax);
+  const ni = employeeNationalInsurance(grossIncome);
 
   return {
     country: 'UK',
@@ -205,13 +234,15 @@ export function calculateUk(input: CalculatorInput): UkCalculatorResult {
     grossIncome,
     totalTax,
     taxOwed: totalTax,
-    netIncome: grossIncome - totalTax,
-    effectiveRate: grossIncome > 0 ? totalTax / grossIncome : 0,
+    socialContributions: ni,
+    netIncome: grossIncome - totalTax - ni,
+    effectiveRate: grossIncome > 0 ? (totalTax + ni) / grossIncome : 0,
     marginalRate,
     breakdown: {
       region,
       personalAllowance: pa,
       taxable,
+      nationalInsurance: ni,
       specialStatus: specialStatus && specialStatus !== 'none' ? specialStatus : null,
     },
     source: SOURCE,

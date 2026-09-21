@@ -117,6 +117,15 @@ const PT_SOLIDARIDADE: SolidarityBracket[] = [
 
 const IFICI_FLAT_RATE = 0.2;
 
+/**
+ * Employee-side Segurança Social contribution rate (trabalhadores por conta
+ * de outrem). Standard rate 11 % of gross employment income, no ceiling —
+ * Código dos Regimes Contributivos do Sistema Previdencial de Segurança
+ * Social, art. 53.º. Self-employed ("trabalhadores independentes") rates are
+ * different and out of scope for this engine.
+ */
+const PT_EMPLOYEE_SS_RATE = 0.11;
+
 type Region = 'continente' | 'acores' | 'madeira';
 
 function getBrackets(year: number, region: Region): Bracket[] {
@@ -163,16 +172,23 @@ export function calculatePt(input: CalculatorInput): CalculatorResult {
   const { grossIncome, taxYear, specialStatus, region } = input;
   const reg: Region = (region as Region) === 'acores' ? 'acores' : 'continente';
 
+  // Employee-side Segurança Social (Código dos Regimes Contributivos, art. 53.º):
+  // 11 % of gross employment income, no ceiling. Applies to the IFICI branch too —
+  // IFICI changes income tax, not social contributions.
+  const socialSecurity = floorEur(grossIncome * PT_EMPLOYEE_SS_RATE);
+
   // IFICI: 20% flat on Cat A/B Portuguese-source income, no parcela, no family quotient.
   if (specialStatus === 'ifici') {
     const tax = grossIncome * IFICI_FLAT_RATE;
+    const totalTax = floorEur(tax);
     return {
       country: 'PT',
       taxYear,
       grossIncome,
-      taxOwed: floorEur(tax),
-      netIncome: grossIncome - tax,
-      effectiveRate: IFICI_FLAT_RATE,
+      taxOwed: totalTax,
+      socialContributions: socialSecurity,
+      netIncome: grossIncome - totalTax - socialSecurity,
+      effectiveRate: round((totalTax + socialSecurity) / grossIncome, 4),
       marginalRate: IFICI_FLAT_RATE,
       breakdown: [
         {
@@ -180,6 +196,12 @@ export function calculatePt(input: CalculatorInput): CalculatorResult {
           amount: tax,
           rate: IFICI_FLAT_RATE,
           citation: 'Art. 58.º-A EBF',
+        },
+        {
+          label: 'Segurança Social (trabalhador)',
+          amount: socialSecurity,
+          rate: PT_EMPLOYEE_SS_RATE,
+          citation: 'Art. 53.º CRC — 11 %',
         },
       ],
       source: 'AT — IFICI regime (art. 58.º-A EBF)',
@@ -190,6 +212,7 @@ export function calculatePt(input: CalculatorInput): CalculatorResult {
   const { tax: irs, marginalRate } = applyIrsSplit(grossIncome, brackets);
   const sol = solidariedade(grossIncome);
   const total = irs + sol;
+  const totalTax = floorEur(total);
   const breakdown: TaxBreakdownItem[] = [
     {
       label: `IRS (art. 68.º CIRS, ${reg})`,
@@ -204,14 +227,21 @@ export function calculatePt(input: CalculatorInput): CalculatorResult {
       citation: 'Art. 68.º-A CIRS',
     });
   }
+  breakdown.push({
+    label: 'Segurança Social (trabalhador)',
+    amount: socialSecurity,
+    rate: PT_EMPLOYEE_SS_RATE,
+    citation: 'Art. 53.º CRC — 11 %',
+  });
 
   return {
     country: 'PT',
     taxYear,
     grossIncome,
-    taxOwed: floorEur(total),
-    netIncome: grossIncome - total,
-    effectiveRate: round(total / grossIncome, 4),
+    taxOwed: totalTax,
+    socialContributions: socialSecurity,
+    netIncome: grossIncome - totalTax - socialSecurity,
+    effectiveRate: round((totalTax + socialSecurity) / grossIncome, 4),
     marginalRate: round(marginalRate, 4),
     breakdown,
     source: 'AT — Autoridade Tributária e Aduaneira, art. 68.º CIRS',

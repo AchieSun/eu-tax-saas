@@ -125,12 +125,14 @@ const MESSAGES = {
     thCountry: '国家',
     thNet: '到手净收入',
     thTax: '税额',
+    thSocial: '社保',
     thRate: '有效税率',
     badge: '到手最高',
     provisionalNote: '注：部分国家该税年税率为暂定值（provisional），官方正式发布后将自动更新。',
     scopeNote:
       '计算口径：基于各国标准税制（不含 Beckham、IFICI、FIG、30% ruling、Forschungspauschale 等特殊人才制度），' +
-      '社保与地区附加视各国规则处理；注册后可解锁特殊制度对比与逐项明细。',
+      '含员工端法定社保（德国按无子女、法定医保含平均附加费率；英国 NI 按年度化；荷兰国民保险已含于 Box 1 税率内故单列为 0；' +
+      '西班牙超过缴费基数上限部分未计入团结缴费）；地区附加视各国规则处理。注册后可解锁特殊制度对比与逐项明细。',
     disclaimer: DISCLAIMER_TEXT,
     ctaTitle: '想知道怎么合法少缴？',
     ctaBody:
@@ -172,13 +174,16 @@ const MESSAGES = {
     thCountry: 'Country',
     thNet: 'Net income',
     thTax: 'Tax',
+    thSocial: 'Social contributions',
     thRate: 'Effective rate',
     badge: 'Highest net',
     provisionalNote:
       "Note: some countries' rates for this tax year are provisional; they will update automatically once officially published.",
     scopeNote:
       "Methodology: based on each country's standard regime (excluding special-status schemes such as Beckham, IFICI, FIG, the 30% ruling and Forschungspauschale); " +
-      "social security and regional surcharges follow each country's rules. Sign up to unlock special-regime comparisons and line-item details.",
+      'employee-side statutory social contributions are included (Germany: childless, statutory health cover at the average additional rate; UK: annualised National Insurance; ' +
+      'NL reports 0 separately because the Dutch premies sit inside Box 1 tax; ES excludes the solidarity contribution above the contribution ceiling). ' +
+      "Regional surcharges follow each country's rules. Sign up to unlock special-regime comparisons and line-item details.",
     disclaimer:
       'Estimates are for information only and do not constitute tax advice; consult a licensed tax advisor before making major decisions.',
     ctaTitle: 'Want to pay less - legally?',
@@ -258,6 +263,8 @@ export interface CompareRow {
   flag: string;
   grossIncome: number;
   taxOwed: number;
+  /** Employee-side social contributions (0 for NL — premies sit inside Box 1). */
+  socialContributions: number;
   netIncome: number;
   effectiveRate: number;
   provisional: boolean;
@@ -317,6 +324,7 @@ export function runPublicCompare(
       flag: meta.flag,
       grossIncome: r.grossIncome,
       taxOwed: r.taxOwed,
+      socialContributions: (r as { socialContributions?: number }).socialContributions ?? 0,
       netIncome: r.netIncome,
       effectiveRate: r.effectiveRate,
       provisional: r.provisional === true,
@@ -463,6 +471,7 @@ function buildPageScript(lang: CompareLang): string {
           thCountry: 'Country',
           thNet: 'Net income',
           thTax: 'Tax',
+          thSocial: 'Social contributions',
           thRate: 'Effective rate',
           calculating: 'Calculating\\u2026',
           errRateLimited: 'Too many requests \\u2014 please try again in a minute.',
@@ -471,8 +480,7 @@ function buildPageScript(lang: CompareLang): string {
         }
       : {
           badge: '\\u5230\\u624B\\u6700\\u9AD8',
-          scopeNote:
-            '\\u8BA1\\u7B97\\u53E3\\u5F84\\uFF1A\\u57FA\\u4E8E\\u5404\\u56FD\\u6807\\u51C6\\u7A0E\\u5236\\uFF08\\u4E0D\\u542B Beckham\\u3001IFICI\\u3001FIG\\u300130% ruling\\u3001Forschungspauschale \\u7B49\\u7279\\u6B8A\\u4EBA\\u624D\\u5236\\u5EA6\\uFF09\\uFF0C\\u793E\\u4FDD\\u4E0E\\u5730\\u533A\\u9644\\u52A0\\u89C6\\u5404\\u56FD\\u89C4\\u5219\\u5904\\u7406\\uFF1B\\u6CE8\\u518C\\u540E\\u53EF\\u89E3\\u9501\\u7279\\u6B8A\\u5236\\u5EA6\\u5BF9\\u6BD4\\u4E0E\\u9010\\u9879\\u660E\\u7EC6\\u3002',
+          scopeNote: MESSAGES.zh.scopeNote.replace(/'/g, "\\'"),
           provisionalNote:
             '\\u6CE8\\uFF1A\\u90E8\\u5206\\u56FD\\u5BB6\\u8BE5\\u7A0E\\u5E74\\u7A0E\\u7387\\u4E3A\\u6682\\u5B9A\\u503C\\uFF08provisional\\uFF09\\uFF0C\\u5B98\\u65B9\\u6B63\\u5F0F\\u53D1\\u5E03\\u540E\\u5C06\\u81EA\\u52A8\\u66F4\\u65B0\\u3002',
           resultsTitle: '\\u5BF9\\u6BD4\\u7ED3\\u679C \\u00B7 ',
@@ -480,6 +488,7 @@ function buildPageScript(lang: CompareLang): string {
           thCountry: '\\u56FD\\u5BB6',
           thNet: '\\u5230\\u624B\\u51C0\\u6536\\u5165',
           thTax: '\\u7A0E\\u989D',
+          thSocial: '\\u793E\\u4FDD',
           thRate: '\\u6709\\u6548\\u7A0E\\u7387',
           calculating: '\\u8BA1\\u7B97\\u4E2D\\u2026',
           errRateLimited:
@@ -499,6 +508,7 @@ function buildPageScript(lang: CompareLang): string {
         thCountry: '${i18n.thCountry}',
         thNet: '${i18n.thNet}',
         thTax: '${i18n.thTax}',
+        thSocial: '${i18n.thSocial}',
         thRate: '${i18n.thRate}',
         calculating: '${i18n.calculating}',
         errRateLimited: '${i18n.errRateLimited}',
@@ -530,6 +540,7 @@ function buildPageScript(lang: CompareLang): string {
             + '<td>' + r.flag + ' ' + (useEnNames && r.countryNameEn ? r.countryNameEn : r.countryName) + (top ? ' <span class="cmp-badge">' + i18n.badge + '</span>' : '') + '</td>'
             + '<td class="num"><strong>' + fmtEur(r.netIncome) + '</strong></td>'
             + '<td class="num">' + fmtEur(r.taxOwed) + '</td>'
+            + '<td class="num">' + fmtEur(r.socialContributions || 0) + '</td>'
             + '<td class="num">' + fmtRate(r.effectiveRate) + '</td>'
             + '</tr>';
         }
@@ -545,7 +556,8 @@ function buildPageScript(lang: CompareLang): string {
           + i18n.taxYearLabel + fmtEur(data.input.grossIncome) + '</h2>'
           + '<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr>'
           + '<th>' + i18n.thCountry + '</th><th class="num">' + i18n.thNet + '</th>'
-          + '<th class="num">' + i18n.thTax + '</th><th class="num">' + i18n.thRate + '</th>'
+          + '<th class="num">' + i18n.thTax + '</th><th class="num">' + i18n.thSocial + '</th>'
+          + '<th class="num">' + i18n.thRate + '</th>'
           + '</tr></thead><tbody>' + rows + '</tbody></table></div>' + notes;
         resultsEl.hidden = false;
         resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -620,6 +632,7 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
             <td>${row.flag} ${row.countryName}${i === 0 ? ` <span class="cmp-badge">${m.badge}</span>` : ''}</td>
             <td class="num"><strong>${formatEur(row.netIncome)}</strong></td>
             <td class="num">${formatEur(row.taxOwed)}</td>
+            <td class="num">${formatEur(row.socialContributions)}</td>
             <td class="num">${formatRate(row.effectiveRate)}</td>
           </tr>`,
     )
@@ -641,6 +654,7 @@ export function comparePage(query: URLSearchParams): { html: string; status: num
                 <th scope="col">${m.thCountry}</th>
                 <th scope="col" class="num">${m.thNet}</th>
                 <th scope="col" class="num">${m.thTax}</th>
+                <th scope="col" class="num">${m.thSocial}</th>
                 <th scope="col" class="num">${m.thRate}</th>
               </tr>
             </thead>

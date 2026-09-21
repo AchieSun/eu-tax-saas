@@ -87,6 +87,61 @@ function getParams(year: number): TariffParams {
 }
 
 /**
+ * Employee-side statutory social insurance (Arbeitnehmeranteile).
+ *
+ * Sources:
+ *  - BBG 2026: Bundesregierung "Rechengrößen in der Sozialversicherung"
+ *    (RV 8.450 €/Monat = 101.400 €/Jahr; KV/PV 5.812,50 €/Monat = 69.750 €/Jahr);
+ *    2025 comparison values from the same page (8.050 €/Monat; 5.512,50 €/Monat).
+ *  - KV average Zusatzbeitrag: 2,9 % for 2026 (Bundesanzeiger, 10.11.2025), 2,5 % for 2025.
+ *  - PV: 3,6 % general rate, +0,6 pp surcharge for childless employees (TK 2026 tables).
+ *  - RV 18,6 % / AV 2,6 % split equally between employer and employee.
+ *
+ * Assumptions surfaced in the breakdown labels: statutory (not private) health
+ * insurance, average Zusatzbeitrag, childless (PV surcharge applies), and the
+ * non-Saxony PV split. Saxony's lower employer share is NOT modelled.
+ */
+interface SocialParams {
+  kvEmployeeRate: number;
+  pvEmployeeRate: number;
+  rvEmployeeRate: number;
+  avEmployeeRate: number;
+  kvPvCeilingAnnual: number;
+  rvAvCeilingAnnual: number;
+}
+
+const DE_SOCIAL: Record<number, SocialParams> = {
+  2025: {
+    kvEmployeeRate: 0.0855, // 7,3 % + half of 2,5 % average Zusatzbeitrag
+    pvEmployeeRate: 0.024, // childless: 1,8 % + 0,6 pp
+    rvEmployeeRate: 0.093,
+    avEmployeeRate: 0.013,
+    kvPvCeilingAnnual: 66150,
+    rvAvCeilingAnnual: 96600,
+  },
+  2026: {
+    kvEmployeeRate: 0.0875, // 7,3 % + half of 2,9 % average Zusatzbeitrag
+    pvEmployeeRate: 0.024,
+    rvEmployeeRate: 0.093,
+    avEmployeeRate: 0.013,
+    kvPvCeilingAnnual: 69750,
+    rvAvCeilingAnnual: 101400,
+  },
+};
+
+function employeeSocialContributions(gross: number, year: number) {
+  const p = DE_SOCIAL[year];
+  if (!p) throw new Error(`DE social insurance not coded for year ${year}`);
+  const kvPvBase = Math.min(gross, p.kvPvCeilingAnnual);
+  const rvAvBase = Math.min(gross, p.rvAvCeilingAnnual);
+  const kv = kvPvBase * p.kvEmployeeRate;
+  const pv = kvPvBase * p.pvEmployeeRate;
+  const rv = rvAvBase * p.rvEmployeeRate;
+  const av = rvAvBase * p.avEmployeeRate;
+  return { kv, pv, rv, av, total: floorEur(kv + pv + rv + av) };
+}
+
+/**
  * Pure tariff function T(x) per § 32a EStG. Returns whole-EUR floor-rounded tax.
  * Input must already be the taxable income (zvE), rounded DOWN to whole EUR.
  */
@@ -154,7 +209,8 @@ export function calculateDe(input: CalculatorInput): CalculatorResult {
 
   const solz = solidaritaetszuschlag(incomeTax, year, isJoint);
   const totalTax = incomeTax + solz;
-  const netIncome = grossIncome - totalTax;
+  const social = employeeSocialContributions(grossIncome, year);
+  const netIncome = grossIncome - totalTax - social.total;
 
   const breakdown: TaxBreakdownItem[] = [
     {
@@ -171,14 +227,41 @@ export function calculateDe(input: CalculatorInput): CalculatorResult {
       citation: 'SolZG § 3, § 4',
     });
   }
+  breakdown.push(
+    {
+      label: 'Rentenversicherung (Arbeitnehmeranteil)',
+      amount: social.rv,
+      rate: DE_SOCIAL[year].rvEmployeeRate,
+      citation: '§ 158 SGB VI (18,6 % geteilt)',
+    },
+    {
+      label: 'Arbeitslosenversicherung (Arbeitnehmeranteil)',
+      amount: social.av,
+      rate: DE_SOCIAL[year].avEmployeeRate,
+      citation: '§ 341 SGB III (2,6 % geteilt)',
+    },
+    {
+      label: 'Krankenversicherung (Arbeitnehmeranteil, Ø Zusatzbeitrag)',
+      amount: social.kv,
+      rate: DE_SOCIAL[year].kvEmployeeRate,
+      citation: '§ 241 SGB V (14,6 % + Ø Zusatzbeitrag)',
+    },
+    {
+      label: 'Pflegeversicherung (Arbeitnehmeranteil, kinderlos)',
+      amount: social.pv,
+      rate: DE_SOCIAL[year].pvEmployeeRate,
+      citation: '§ 55 SGB XI (3,6 % + 0,6 % Zuschlag)',
+    },
+  );
 
   return {
     country: 'DE',
     taxYear: year,
     grossIncome,
     taxOwed: totalTax,
+    socialContributions: social.total,
     netIncome,
-    effectiveRate: round(totalTax / grossIncome, 4),
+    effectiveRate: round((totalTax + social.total) / grossIncome, 4),
     marginalRate: round(marginalRate(isJoint ? grossIncome / 2 : grossIncome, year), 4),
     breakdown,
     source: 'BMF — Bundesministerium der Finanzen, § 32a EStG',
