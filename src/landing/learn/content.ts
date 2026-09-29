@@ -219,7 +219,7 @@ const netherlands30Ruling: LearnArticle = {
     { kind: 'h2', text: 'The honest limit of this page' },
     {
       kind: 'p',
-      text: 'Taxmora’s calculator currently computes the standard Dutch position — Box 1 rates and social contributions for 2025 and 2026 — and does not yet model the ruling’s allowance. We would rather show you the honest standard number than a hand-waved ruling number. The Belastingdienst ruling pages and a Dutch payroll adviser can quantify your exact case.',
+      text: 'Note the split between the two surfaces. The public five-country calculator shows the standard Dutch position — Box 1 rates and social contributions for 2025 and 2026 — because the ruling is opt-in and depends on a decision your employer has to obtain. The ruling itself is modelled in Taxmora’s strategy layer: it reduces the taxable base to 70% and reports the resulting saving, and it is available once you declare that your employer has the 30%-regeling. The comparison article “Netherlands 30% ruling vs Spain’s Beckham law vs Portugal’s IFICI” uses exactly that computation.',
     },
     {
       kind: 'note',
@@ -241,8 +241,8 @@ const netherlands30Ruling: LearnArticle = {
           a: 'No. The ruling is an employer-side payroll relief for residents; partial non-resident taxpayer status is a separate election about which Box 2 and Box 3 income the Dutch tax office may tax.',
         },
         {
-          q: 'Why does Taxmora not calculate the ruling?',
-          a: 'Because the percentage schedule and thresholds have been amended repeatedly and your case depends on dates we cannot verify. We compute what we can verify; the ruling needs your real dates and payroll.',
+          q: 'Where can I see the ruling calculated?',
+          a: 'In Taxmora’s strategy layer, which models the allowance as a taxable base of 70% and reports the annual saving — the same computation used in the three-regime comparison. The public calculator deliberately shows the standard position, because whether you actually hold the ruling depends on your employer’s application and your dates.',
         },
       ],
     },
@@ -924,6 +924,136 @@ const remoteWorkForeignEmployer: LearnArticle = {
   ],
 };
 
+const arrivalRegimesCompared: LearnArticle = {
+  slug: 'arrival-regimes-compared',
+  title:
+    'The Netherlands’ 30% ruling vs Spain’s Beckham law vs Portugal’s IFICI: which one actually pays',
+  metaDescription:
+    'Computed take-home pay under the three big European arrival regimes at €60,000, €80,000 and €120,000 — including the social contributions most comparisons leave out, and the three different shapes their tax curves take.',
+  updated: '2026-09-29',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Three countries sell a special regime to people who arrive from abroad: the Netherlands’ 30% ruling, Spain’s Beckham law and Portugal’s IFICI. They are not three versions of one idea. Published comparisons usually stop at the headline — 30% tax-free, 24% flat, 20% flat — but those rates sit on different bases, and the social contributions underneath them differ: Spain charges 6.48% on a base capped at €58,914, Portugal charges 11% with no ceiling at all, and the Netherlands folds its employee premies into the Box 1 rate.',
+    },
+    {
+      kind: 'p',
+      text: 'Below is the same person — single, no children, employment income, Madrid for the Spanish figures — run through the engine at three salaries. The Dutch line applies the ruling the way Dutch payroll does: 30% of gross is paid as a tax-free allowance, so income tax is charged on the remaining 70%.',
+    },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: net annual take-home after income tax and employee social contributions; the bracket is the effective rate on gross. Spain uses 2025 parameters (the latest fully implemented Spanish year), Portugal’s 2026 figures are provisional pending final publication, the Netherlands uses 2026 parameters.',
+      head: ['Regime', '€60,000 salary', '€80,000 salary', '€120,000 salary'],
+      rows: [
+        ['Netherlands — 30% ruling', '€47,259 (21.2%)', '€61,105 (23.6%)', '€88,488 (26.3%)'],
+        ['Spain — Beckham law (Madrid)', '€41,783 (30.4%)', '€56,983 (28.8%)', '€87,383 (27.2%)'],
+        ['Portugal — IFICI', '€41,400 (31.0%)', '€55,200 (31.0%)', '€82,800 (31.0%)'],
+        ['Netherlands — no ruling', '€39,347 (34.4%)', '€50,468 (36.9%)', '€70,668 (41.1%)'],
+        ['Spain — no regime (Madrid)', '€41,179 (31.4%)', '€52,902 (33.9%)', '€75,702 (36.9%)'],
+        ['Portugal — no regime', '€35,082 (41.5%)', '€43,962 (45.1%)', '€59,588 (50.3%)'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The Dutch regime wins at every salary level here, and the reason is structural rather than a matter of a better percentage: the ruling removes 30% of gross from the taxable base entirely. That money is not taxed, does not consume tax credits, and is not merely taxed at a lower rate. A flat 24% or 20% still pays tax on the whole salary.',
+    },
+    { kind: 'h2', text: 'The three curves run in different directions' },
+    {
+      kind: 'p',
+      text: 'Read the percentage column instead of the euro column and the three regimes stop looking alike. The Dutch effective rate rises with salary (21.2% → 23.6% → 26.3%) because Box 1 is progressive and a fixed 30% allowance removes proportionally less of a higher income. Beckham’s rate falls (30.4% → 28.8% → 27.2%): the 24% is flat, while Spain’s employee contribution is charged on a base capped at €58,914, so the social-security share shrinks as pay grows. IFICI is constant at 31.0% — 20% income tax plus 11% Segurança Social with no ceiling — which is why Portugal’s regime looks strongest at €60,000 and weakest at €120,000.',
+    },
+    {
+      kind: 'p',
+      text: 'The gap at the top is where that matters: at €120,000 the Netherlands leads Spain by €1,105, while at €60,000 it leads by €5,476. If your salary will grow, the ranking you compute today is not the ranking you will live with.',
+    },
+    { kind: 'h2', text: 'What each regime is worth to its own country' },
+    {
+      kind: 'table',
+      caption:
+        'Extra net income per year compared with staying on the same country’s standard regime at the same salary.',
+      head: ['Regime', 'at €60,000', 'at €80,000', 'at €120,000'],
+      rows: [
+        ['Netherlands — 30% ruling', '+€7,912', '+€10,637', '+€17,820'],
+        ['Portugal — IFICI', '+€6,318', '+€11,238', '+€23,212'],
+        ['Spain — Beckham law', '+€604', '+€4,081', '+€11,681'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'This table answers a different question: not “which country leaves the most money” but “which regime changes your outcome most”. IFICI is the most powerful of the three from €80,000 upwards — it lifts a Portuguese salary by €23,212 at €120,000 — because Portugal’s standard schedule is the harshest of the three. It still leaves Portugal in last place. Beckham is close to worthless at €60,000 (€604) and only becomes serious above €80,000.',
+    },
+    { kind: 'h2', text: 'Duration and eligibility' },
+    {
+      kind: 'table',
+      caption: 'The three regimes differ more in who they admit than in what they pay.',
+      head: ['Regime', 'Duration', 'The condition people fail'],
+      rows: [
+        [
+          'Netherlands — 30% ruling',
+          '5 years',
+          'You must have lived more than 150 km from the Dutch border for most of the 24 months before your first Dutch working day, meet the annual salary threshold (€46,660 for 2025, indexed each year), and your employer must file the joint request — you cannot apply alone.',
+        ],
+        [
+          'Spain — Beckham law',
+          '6 years (year of arrival plus five)',
+          'You must not have been Spanish tax resident in the five years before the move, and the regime covers employment income or a director role up to €600,000.',
+        ],
+        [
+          'Portugal — IFICI',
+          '10 years',
+          'You must not have been Portuguese tax resident in the previous five years, and your activity must appear on the qualifying list — this is a regime for specific professions and activities, not for anyone who moves to Lisbon.',
+        ],
+      ],
+    },
+    { kind: 'h2', text: 'The traps in the Dutch headline' },
+    {
+      kind: 'ul',
+      items: [
+        '“30%” is an allowance, not a discount. Dutch payroll pays 30% of gross as a tax-free reimbursement and taxes the remaining 70% — that is the computation used above. If an employer instead applies the 30/70 variant (30% of the taxable salary rather than of total gross), the tax-free part is smaller and the advantage shrinks. The number to trust is a payslip simulation with your own contract, not a percentage from a blog.',
+        'The allowance is capped at the WNT norm, a statutory maximum salary that is adjusted annually. That cap sits far above every salary in these tables, so it changes nothing here — but it does bind at the top of the market.',
+        'The regimes are time-limited by statute: five years in the Netherlands, six in Spain, ten in Portugal. The country with the weakest rate has the longest runway, which is a real consideration if you plan to stay.',
+        'None of the three changes your social-security position for other countries. An A1 certificate and the applicable social-security rules decide contributions independently of an income-tax regime.',
+      ],
+    },
+    { kind: 'h2', text: 'What this comparison leaves out' },
+    {
+      kind: 'ul',
+      items: [
+        'The cost of living, housing and childcare that decide whether a higher net figure is actually more money in your pocket. At €120,000 the Netherlands leads Spain by €1,105 a year.',
+        'Asset taxation: the Netherlands charges Box 3 tax on a deemed return on savings and investments, which no salary comparison shows.',
+        'The UK’s four-year FIG regime is deliberately absent from this table. It exempts foreign income from UK income tax rather than restating a domestic salary, and National Insurance continues to apply, so it does not belong in a same-salary comparison — the UK guide covers it on its own terms.',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Can I qualify for two of these regimes at once?',
+          a: 'No. Each one requires being tax resident in that country, and the Spanish and Portuguese regimes additionally require that you were not resident there in the previous five years. Residence has a single answer at a time.',
+        },
+        {
+          q: 'Which regime increases take-home pay the most?',
+          a: 'In absolute terms IFICI, from €80,000 upwards — it is worth €23,212 a year at €120,000 against Portugal’s standard schedule. But the country still finishes behind the Netherlands and Spain in net pay, so “best regime” and “best country” are different questions.',
+        },
+        {
+          q: 'Does the Dutch ruling also reduce social contributions?',
+          a: 'Yes, indirectly: the employee national-insurance premies are levied inside Box 1 on the taxable base, so reducing that base by 30% reduces them too. In Spain and Portugal the regimes change the income-tax rate only; social contributions are untouched.',
+        },
+        {
+          q: 'Why do the Spanish figures use 2025 and the Portuguese ones say provisional?',
+          a: 'Because we publish what the engine has verified. Spain’s 2025 schedule is fully implemented; Portugal’s 2026 parameters are marked provisional until the final official publication, and the pages update automatically when that lands.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
 export const learnArticles: LearnArticle[] = [
   methodologyArticle,
@@ -935,4 +1065,5 @@ export const learnArticles: LearnArticle[] = [
   spainVsPortugalTax,
   europe183DayResidency,
   remoteWorkForeignEmployer,
+  arrivalRegimesCompared,
 ];
