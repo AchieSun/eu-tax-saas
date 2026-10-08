@@ -1054,6 +1054,109 @@ const arrivalRegimesCompared: LearnArticle = {
   ],
 };
 
+const whenRegimesEnd: LearnArticle = {
+  slug: 'when-expat-tax-regimes-end',
+  title:
+    'When your arrival tax regime ends: the Netherlands’ year-6 cliff, Spain’s year-7 and Portugal’s year-11',
+  metaDescription:
+    'Every European arrival regime has an end date. Engine-computed numbers for the year the Netherlands’ 30% ruling, Spain’s Beckham law and Portugal’s IFICI stop — and what the drop looks like at €60,000, €80,000 and €120,000.',
+  updated: '2026-10-08',
+  blocks: [
+    {
+      kind: 'p',
+      text: 'Arrival regimes are sold as a rate. They are better understood as a period, because every one of them has a statutory end date and the year it stops is the year your take-home pay falls. The fall is not a rounding error: on the numbers below it is the largest single change most people will experience in their net pay outside a job loss.',
+    },
+    {
+      kind: 'table',
+      caption:
+        'Engine output: annual net take-home in the final year of the regime and in the first year after it ends, same salary, single, no children. Spain uses 2025 parameters (Madrid), Portugal 2026 parameters (provisional), the Netherlands 2026 parameters.',
+      head: ['Case', 'Last year under the regime', 'First year after it ends', 'Annual drop'],
+      rows: [
+        ['Netherlands — €60,000 (ends after year 5)', '€47,259', '€39,347', '−€7,912'],
+        ['Netherlands — €80,000', '€61,105', '€50,468', '−€10,637'],
+        ['Netherlands — €120,000', '€88,488', '€70,668', '−€17,820'],
+        ['Spain — €60,000 (ends after year 6)', '€41,783', '€41,179', '−€604'],
+        ['Spain — €80,000', '€56,983', '€52,902', '−€4,081'],
+        ['Spain — €120,000', '€87,383', '€75,702', '−€11,681'],
+        ['Portugal — €60,000 (ends after year 10)', '€41,400', '€35,082', '−€6,318'],
+        ['Portugal — €80,000', '€55,200', '€43,962', '−€11,238'],
+        ['Portugal — €120,000', '€82,800', '€59,588', '−€23,212'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Two patterns are worth extracting. The first is that the cliff scales with salary, because these regimes all replace a progressive schedule with something flatter, and a flat rate helps more the higher you climb. The second is that the size of the cliff depends on how harsh the country’s standard regime is, not on how good the special one looks. Portugal’s IFICI charges 20% flat, which sounds generous next to the Dutch 30% ruling, yet its expiry costs €23,212 at €120,000 — the steepest of the three — because the standard Portuguese schedule it returns you to reaches 48%, while the 11% employee contribution applied either way.',
+    },
+    { kind: 'h2', text: 'Why the Dutch cliff is the one people misjudge' },
+    {
+      kind: 'p',
+      text: 'The 30% ruling removes 30% of gross from the Box 1 base, so the end of the ruling is not “30% more tax” and it is not a change of rate. It is the difference between taxing 70% of your salary and taxing all of it through a progressive schedule in which the upper brackets are already biting. At €80,000 that difference is €10,637 a year, about €886 a month — usually more than the raise people hope to negotiate to offset it, and it arrives in January without a payslip explanation.',
+    },
+    { kind: 'h2', text: 'What “year 6” means in each country' },
+    {
+      kind: 'ul',
+      items: [
+        'Netherlands: the ruling is granted for a maximum of five years (the maximum was cut from eight years for grants made since 2024). If your grant predates that change, the transitional rules decide your end date — the “beschikking” letter from the Belastingdienst states it, and that letter, not a blog, is the date that governs you.',
+        'Spain: the Beckham law covers the year of arrival plus the following five, so the sixth year is the first one computed on the standard state-plus-regional schedule.',
+        'Portugal: IFICI runs for ten years, which makes it the longest runway of the three and, on our figures, the steepest landing.',
+        'United Kingdom: the four-year FIG regime is a different shape rather than a shorter version — it exempts foreign income from UK income tax while National Insurance continues to apply, so it cannot be compared on the same salary. The UK guide covers it separately.',
+        'Germany has no general arrival regime of this kind to expire, and its special statuses are not modelled in the engine, so there is no German cliff to compute here.',
+      ],
+    },
+    { kind: 'h2', text: 'What you can do with a number this predictable' },
+    {
+      kind: 'p',
+      text: 'The rare advantage of this problem is that the date is known years in advance and the arithmetic does not depend on markets. That supports a few concrete moves, none of which this page can decide for you:',
+    },
+    {
+      kind: 'ul',
+      items: [
+        'Budget the drop a year ahead instead of discovering it in January. The figures above are the size of the adjustment.',
+        'Time salary conversations before the cliff, while the argument for an expat premium still exists, rather than after your cost to the employer has already risen.',
+        'Re-examine deductible contributions for the year after the regime ends: your marginal rate is higher then, which is exactly when pension and similar deductions are worth more. The country strategy pages cover the instruments (Dutch lijfrente, Portuguese PPR, German Riester, Spanish pension plans).',
+        'Check the parts of the regime that are not about salary. In the Netherlands, partial non-resident taxpayer status for Box 2 and Box 3 is a separate election from the ruling, with its own rules and its own end date.',
+        'If the cliff is what pushes you to consider moving, read the residency rules before the tax rates: the 183-day analysis decides when the next country starts taxing you, and the two countries can overlap for a period.',
+      ],
+    },
+    { kind: 'h2', text: 'What this article does not model' },
+    {
+      kind: 'ul',
+      items: [
+        'Salary growth between today and the year the regime ends, which will change both numbers in the table.',
+        'The non-salary effects of losing a regime: Box 2 and Box 3 treatment in the Netherlands, Spain’s wealth tax and regional deductions, and the asset side of Portuguese residency.',
+        'Anything your employer does at company level — expat allowances, tax equalisation or gross-up arrangements, which often absorb part of the change.',
+        'Legislative change. These regimes have been amended repeatedly in the last five years (the Dutch sliding scale was reversed, the Portuguese NHR closed to new entrants), so treat an end date as current law rather than as a promise.',
+      ],
+    },
+    {
+      kind: 'note',
+      text: 'Taxmora is a calculation and planning tool, not a tax adviser, and nothing on this page constitutes tax advice. Cross-border situations almost always have specifics that change the answer - confirm anything important with a qualified adviser in the countries involved.',
+    },
+    {
+      kind: 'faq',
+      items: [
+        {
+          q: 'Does my Dutch five-year clock pause if I change jobs?',
+          a: 'No. A new employer can continue the ruling, but it does not restart the period. The clock runs from the first working day of the grant, and job changes, leave and absence do not stop it.',
+        },
+        {
+          q: 'Can I just reapply for the 30% ruling when it ends?',
+          a: 'Not as a renewal of the same grant. The ruling is awarded for a maximum period; when that period is used up, a later return to the Netherlands is assessed under whatever conditions exist at that time. Do not plan on a second run.',
+        },
+        {
+          q: 'Is the Spanish cliff really only €604 at €60,000?',
+          a: 'Yes, on our 2025 Madrid figures. Beckham is a flat 24%, and at €60,000 the progressive schedule with its lower brackets is barely worse than a flat rate on the whole salary. The regime earns its keep above €80,000, which is also where losing it hurts.',
+        },
+        {
+          q: 'Why is the Portuguese drop the biggest when its rate looks the lowest?',
+          a: 'Because the comparison is not the headline rate but the standard regime you return to. Portugal’s standard schedule reaches 48% and its 11% employee contribution applies with no ceiling either way, so the expiry undoes the largest improvement — €23,212 a year at €120,000 on our provisional 2026 figures.',
+        },
+      ],
+    },
+    { kind: 'cta' },
+  ],
+};
+
 /** Registry - hub pages and the sitemap are derived from this list. */
 export const learnArticles: LearnArticle[] = [
   methodologyArticle,
@@ -1066,4 +1169,5 @@ export const learnArticles: LearnArticle[] = [
   europe183DayResidency,
   remoteWorkForeignEmployer,
   arrivalRegimesCompared,
+  whenRegimesEnd,
 ];
